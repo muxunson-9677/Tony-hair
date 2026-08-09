@@ -29,7 +29,7 @@ describe('app shell', () => {
     expect(paths).toEqual(expect.arrayContaining(['/', '/try', '/archive', '/me']))
   })
 
-  test('shows the brand promise, two main actions, and local-only notice on home', async () => {
+  test('shows the brand promise, main actions, and local data risks on home', async () => {
     await renderAt('/')
 
     expect(screen.getByRole('heading', { level: 1, name: '咋剪发' })).toBeTruthy()
@@ -37,6 +37,9 @@ describe('app shell', () => {
     expect(screen.getByRole('link', { name: '准备去剪' })).toBeTruthy()
     expect(screen.getByRole('link', { name: '记录这次理发' })).toBeTruthy()
     expect(screen.getByText('仅保存在当前设备')).toBeTruthy()
+    expect(
+      screen.getByText('清理浏览器数据、使用无痕模式或更换设备，都可能让记录丢失。'),
+    ).toBeTruthy()
   })
 
   test('keeps the four destinations visible and exposes the current route', async () => {

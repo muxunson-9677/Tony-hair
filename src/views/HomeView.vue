@@ -49,7 +49,10 @@
           class="local-note__dot"
           aria-hidden="true"
         />
-        <span>仅保存在当前设备</span>
+        <span>
+          <span>仅保存在当前设备</span><br>
+          <span>清理浏览器数据、使用无痕模式或更换设备，都可能让记录丢失。</span>
+        </span>
       </p>
     </div>
   </section>
