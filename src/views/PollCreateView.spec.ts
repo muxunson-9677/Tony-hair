@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/vue'
 import { createPinia, setActivePinia } from 'pinia'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, onMounted, onUnmounted } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
 import type { Candidate, HaircutPlan } from '../features/archive/types'
+import { PollDraftCandidatesChangedError } from '../features/polls/PollDraftRepository'
 import {
   POLL_DRAFT_REPOSITORY_KEY,
   POLL_SERVICE_KEY,
@@ -86,12 +87,16 @@ const exportResult = {
 }
 
 let emitExportTwice = false
+let editorMounts = 0
+let editorUnmounts = 0
 
 const MaskEditorStub = defineComponent({
   name: 'MaskEditor',
   props: { initialBlob: Blob },
   emits: ['exported'],
   setup(_, { emit }) {
+    onMounted(() => { editorMounts += 1 })
+    onUnmounted(() => { editorUnmounts += 1 })
     return () => h('div', { 'data-testid': 'mask-editor' }, [
       h('button', { onClick: () => {
         emit('exported', exportResult)
@@ -109,6 +114,8 @@ describe('PollCreateView', () => {
 
   beforeEach(() => {
     emitExportTwice = false
+    editorMounts = 0
+    editorUnmounts = 0
     currentDraft = draft()
     callOrder = []
     repository = {
@@ -117,6 +124,7 @@ describe('PollCreateView', () => {
         callOrder.push('persist-draft')
         return currentDraft
       }),
+      restartDraft: vi.fn(async () => currentDraft),
       saveMaskedImage: vi.fn(async (_draftId, candidateId, result) => {
         currentDraft = {
           ...currentDraft,
@@ -244,10 +252,13 @@ describe('PollCreateView', () => {
 
     expect(await screen.findByText('01 / 02')).toBeTruthy()
     expect(screen.getAllByTestId('mask-editor')).toHaveLength(1)
+    expect(editorMounts).toBe(1)
     await fireEvent.click(screen.getByRole('button', { name: '确认这张遮罩图' }))
 
     expect(await screen.findByText('02 / 02')).toBeTruthy()
     expect(screen.getAllByTestId('mask-editor')).toHaveLength(1)
+    expect(editorMounts).toBe(1)
+    expect(editorUnmounts).toBe(0)
     await fireEvent.click(screen.getByRole('button', { name: '确认这张遮罩图' }))
     expect(await screen.findByRole('button', { name: '上传并创建投票' })).toBeTruthy()
   })
@@ -313,5 +324,49 @@ describe('PollCreateView', () => {
       'upload_2_1234567890',
     ])
     await waitFor(() => expect(repository.createDraft).toHaveBeenCalledOnce())
+  })
+
+  test('requires explicit confirmation before replacing a draft whose plan candidates changed', async () => {
+    vi.mocked(repository.createDraft).mockRejectedValue(new PollDraftCandidatesChangedError('draft'))
+    await renderView()
+    await fireEvent.update(screen.getByLabelText('体验码'), 'demo-code')
+    await fireEvent.click(screen.getByRole('button', { name: '验证体验码' }))
+    await fireEvent.click(await screen.findByRole('checkbox', { name: /已满 18 岁/ }))
+    await fireEvent.click(screen.getByRole('button', { name: '开始逐张遮罩' }))
+
+    expect(await screen.findByText('计划候选已经变化，请确认是否放弃旧草稿并按当前候选重新开始。')).toBeTruthy()
+    await fireEvent.click(screen.getByRole('button', { name: '按当前候选重新开始' }))
+
+    expect(repository.restartDraft).toHaveBeenCalledOnce()
+    expect(await screen.findByText('01 / 02')).toBeTruthy()
+  })
+
+  test('reconciles a creating draft with its original idempotency identity before considering changed candidates', async () => {
+    currentDraft = {
+      ...currentDraft,
+      status: 'creating',
+      options: currentDraft.options.map((option, index) => ({
+        ...option,
+        uploadStatus: 'uploaded',
+        maskedImage: exportResult.blob,
+        maskedMimeType: exportResult.mimeType,
+        assetId: index === 0
+          ? '123e4567-e89b-42d3-a456-426614174000'
+          : '223e4567-e89b-42d3-a456-426614174000',
+      })),
+    }
+    vi.mocked(repository.createDraft).mockRejectedValue(new PollDraftCandidatesChangedError('creating'))
+    vi.mocked(repository.getByPlanId).mockResolvedValue(currentDraft)
+    await renderView()
+    await fireEvent.update(screen.getByLabelText('体验码'), 'demo-code')
+    await fireEvent.click(screen.getByRole('button', { name: '验证体验码' }))
+    await fireEvent.click(await screen.findByRole('checkbox', { name: /已满 18 岁/ }))
+    await fireEvent.click(screen.getByRole('button', { name: '开始逐张遮罩' }))
+
+    expect(await screen.findByText('上次创建请求的响应可能丢失。请先用原管理密钥和 clientRequestId 重试确认结果。')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '上传并创建投票' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '按当前候选重新开始' })).toBeNull()
+    expect(currentDraft.managementToken).toBe('management_token_that_stays_local_1234567890')
+    expect(currentDraft.clientRequestId).toBe('client_request_1234567890')
   })
 })

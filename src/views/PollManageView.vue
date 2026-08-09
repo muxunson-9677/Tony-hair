@@ -11,7 +11,7 @@ import {
 import { PollServiceError, type PollResults, type PublicPoll } from '../features/polls/PollService'
 import type { PollDraft } from '../features/polls/types'
 
-type ManageState = 'loading' | 'missing-local' | 'active' | 'revoked' | 'gone' | 'offline' | 'error'
+type ManageState = 'loading' | 'missing-local' | 'active' | 'revoked' | 'gone' | 'local-cleanup-error' | 'offline' | 'error'
 
 const route = useRoute()
 const repository = inject(POLL_DRAFT_REPOSITORY_KEY, defaultPollDraftRepository)
@@ -23,12 +23,27 @@ const results = ref<PollResults | null>(null)
 const state = ref<ManageState>('loading')
 const busy = ref(false)
 const errorMessage = ref('')
+const cleanupTargetState = ref<'gone' | 'revoked'>('gone')
 
 const resultRows = computed(() => publicPoll.value?.options.map((option) => ({
   ...option,
   votes: results.value?.options.find(({ optionId }) => optionId === option.id)?.votes ?? 0,
 })) ?? [])
 const shareLink = computed(() => `${window.location.origin}/p/${pollId.value}`)
+const isTrustedGone = (error: unknown) => error instanceof PollServiceError
+  && error.status === 410
+  && error.code === 'POLL_GONE'
+
+const finishLocalRevocation = async (local: PollDraft, nextState: 'gone' | 'revoked') => {
+  try {
+    draft.value = await repository.markRevoked(local.id)
+    state.value = nextState
+  } catch {
+    cleanupTargetState.value = nextState
+    state.value = 'local-cleanup-error'
+    errorMessage.value = '云端投票已经失效，但本机管理信息未能清除。请稍后刷新重试，或清理本站浏览器数据。'
+  }
+}
 
 const loadResults = async () => {
   state.value = 'loading'
@@ -56,8 +71,9 @@ const loadResults = async () => {
     results.value = loadedResults
     state.value = 'active'
   } catch (error) {
-    if (error instanceof PollServiceError && error.code === 'POLL_GONE') {
-      state.value = 'gone'
+    if (isTrustedGone(error)) {
+      if (draft.value) await finishLocalRevocation(draft.value, 'gone')
+      else state.value = 'gone'
     } else if (error instanceof PollServiceError && error.kind === 'offline') {
       state.value = 'offline'
     } else {
@@ -76,12 +92,11 @@ const revokePoll = async () => {
   errorMessage.value = ''
   try {
     await service.revoke(pollId.value, local.managementToken)
-    draft.value = await repository.markRevoked(local.id)
-    state.value = 'revoked'
+    await finishLocalRevocation(local, 'revoked')
   } catch (error) {
-    if (error instanceof PollServiceError && error.code === 'BLOB_DELETE_PENDING') {
-      draft.value = await repository.markRevoked(local.id)
-      state.value = 'revoked'
+    if ((error instanceof PollServiceError && error.code === 'BLOB_DELETE_PENDING')
+      || isTrustedGone(error)) {
+      await finishLocalRevocation(local, 'revoked')
     } else {
       errorMessage.value = error instanceof PollServiceError && error.kind === 'offline'
         ? '网络不可用，投票尚未撤销。请联网后重试。'
@@ -90,6 +105,11 @@ const revokePoll = async () => {
   } finally {
     busy.value = false
   }
+}
+
+const retryLocalCleanup = async () => {
+  if (!draft.value) return
+  await finishLocalRevocation(draft.value, cleanupTargetState.value)
 }
 
 onMounted(loadResults)
@@ -146,6 +166,23 @@ onMounted(loadResults)
     >
       <h2>投票已结束</h2>
       <p>它可能已经过期，或已在另一页面撤销。</p>
+    </section>
+
+    <section
+      v-else-if="state === 'local-cleanup-error'"
+      class="poll-manage-terminal"
+    >
+      <h2>云端投票已失效</h2>
+      <p role="alert">
+        {{ errorMessage }}
+      </p>
+      <button
+        class="poll-primary-button"
+        type="button"
+        @click="retryLocalCleanup"
+      >
+        重试本机清理
+      </button>
     </section>
 
     <section

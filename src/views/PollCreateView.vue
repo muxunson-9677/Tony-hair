@@ -6,6 +6,7 @@ import { useArchiveStore } from '../features/archive/archiveStore'
 import type { Candidate } from '../features/archive/types'
 import MaskEditor from '../features/privacy/MaskEditor.vue'
 import type { MaskExportResult } from '../features/privacy/types'
+import { PollDraftCandidatesChangedError } from '../features/polls/PollDraftRepository'
 import {
   defaultPollDraftRepository,
   defaultPollService,
@@ -38,6 +39,7 @@ const busy = ref(false)
 const errorMessage = ref('')
 const statusMessage = ref('')
 const copied = ref(false)
+const candidateMismatch = ref(false)
 
 const nextOptionIndex = computed(() => draft.value?.options.findIndex(({ maskedImage }) => !maskedImage) ?? -1)
 const currentOption = computed(() => (
@@ -117,20 +119,59 @@ const startQueue = async () => {
   busy.value = true
   errorMessage.value = ''
   try {
-    draft.value = await repository.createDraft(
+    const savedDraft = await repository.createDraft(
       { planId: plan.value.id, title: title.value.trim() || '帮我选下次发型' },
       buildPollCandidateSeeds(candidates.value),
     )
-    if (draft.value.status === 'active' && draft.value.pollId) {
-      stage.value = 'done'
-      return
+    await enterDraftQueue(savedDraft)
+  } catch (error) {
+    if (error instanceof PollDraftCandidatesChangedError) {
+      if (error.draftStatus === 'creating') {
+        const uncertainDraft = await repository.getByPlanId(plan.value.id)
+        if (uncertainDraft?.status === 'creating') {
+          await enterDraftQueue(uncertainDraft)
+          statusMessage.value = '上次创建请求的响应可能丢失。请先用原管理密钥和 clientRequestId 重试确认结果。'
+        } else {
+          errorMessage.value = '上次创建状态无法确认，请刷新后重试。'
+        }
+      } else {
+        candidateMismatch.value = true
+        errorMessage.value = '计划候选已经变化，请确认是否放弃旧草稿并按当前候选重新开始。'
+      }
+    } else {
+      errorMessage.value = '本机无法保存投票草稿。请退出无痕模式或清理浏览器空间后重试。'
     }
-    if (nextOptionIndex.value < 0) {
-      stage.value = 'publish'
-      return
-    }
-    stage.value = 'mask'
-    await prepareCandidate(currentCandidate.value)
+  } finally {
+    busy.value = false
+  }
+}
+
+const enterDraftQueue = async (savedDraft: PollDraft) => {
+  draft.value = savedDraft
+  candidateMismatch.value = false
+  errorMessage.value = ''
+  if (savedDraft.status === 'active' && savedDraft.pollId) {
+    stage.value = 'done'
+    return
+  }
+  if (nextOptionIndex.value < 0) {
+    stage.value = 'publish'
+    return
+  }
+  stage.value = 'mask'
+  await prepareCandidate(currentCandidate.value)
+}
+
+const restartChangedDraft = async () => {
+  if (!authorized.value || !plan.value) return
+  busy.value = true
+  errorMessage.value = ''
+  try {
+    const savedDraft = await repository.restartDraft(
+      { planId: plan.value.id, title: title.value.trim() || '帮我选下次发型' },
+      buildPollCandidateSeeds(candidates.value),
+    )
+    await enterDraftQueue(savedDraft)
   } catch {
     errorMessage.value = '本机无法保存投票草稿。请退出无痕模式或清理浏览器空间后重试。'
   } finally {
@@ -330,6 +371,15 @@ onMounted(async () => {
         >
           开始逐张遮罩
         </button>
+        <button
+          v-if="candidateMismatch"
+          class="poll-secondary-link"
+          type="button"
+          :disabled="busy"
+          @click="restartChangedDraft"
+        >
+          按当前候选重新开始
+        </button>
       </section>
 
       <section
@@ -354,12 +404,16 @@ onMounted(async () => {
         >
           正在准备候选图片…
         </p>
-        <MaskEditor
-          v-if="currentCandidateBlob"
-          :initial-blob="currentCandidateBlob"
-          :allow-selection="false"
-          @exported="acceptMaskedImage"
-        />
+        <div
+          v-show="currentCandidateBlob && !loadingCandidate"
+          class="poll-mask-editor-slot"
+        >
+          <MaskEditor
+            :initial-blob="currentCandidateBlob ?? undefined"
+            :allow-selection="false"
+            @exported="acceptMaskedImage"
+          />
+        </div>
       </section>
 
       <section

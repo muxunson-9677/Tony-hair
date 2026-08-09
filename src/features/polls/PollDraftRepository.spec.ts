@@ -57,6 +57,48 @@ describe('PollDraftRepository', () => {
     expect(restored).toEqual(original)
   })
 
+  test('requires an explicit restart when the plan candidates changed', async () => {
+    const original = await repository.createDraft({ planId: 'plan-1', title: '第一次' }, candidates)
+    const changedCandidates = [
+      candidates[0]!,
+      { candidateId: 'candidate-3', label: '新候选', disclosure: 'demo' as const },
+    ]
+
+    await expect(repository.createDraft({ planId: 'plan-1', title: '第二次' }, changedCandidates))
+      .rejects.toThrow('计划候选已变化')
+
+    const restarted = await repository.restartDraft(
+      { planId: 'plan-1', title: '第二次' },
+      changedCandidates,
+    )
+    expect(restarted.status).toBe('draft')
+    expect(restarted.options.map(({ candidateId }) => candidateId)).toEqual(['candidate-1', 'candidate-3'])
+    expect(restarted.managementToken).not.toBe(original.managementToken)
+    expect(restarted.clientRequestId).not.toBe(original.clientRequestId)
+    expect(restarted.options.map(({ uploadId }) => uploadId))
+      .not.toEqual(original.options.map(({ uploadId }) => uploadId))
+  })
+
+  test('never replaces a creating draft whose create response may have been lost', async () => {
+    const original = await repository.createDraft({ planId: 'plan-1', title: '第一次' }, candidates)
+    await repository.markCreating(original.id)
+    const changedCandidates = [
+      candidates[0]!,
+      { candidateId: 'candidate-3', label: '新候选', disclosure: 'demo' as const },
+    ]
+
+    await expect(repository.createDraft({ planId: 'plan-1', title: '第二次' }, changedCandidates))
+      .rejects.toMatchObject({ draftStatus: 'creating' })
+    await expect(repository.restartDraft({ planId: 'plan-1', title: '第二次' }, changedCandidates))
+      .rejects.toThrow('Creating polls must be reconciled before restart')
+
+    expect(await repository.getByPlanId('plan-1')).toMatchObject({
+      status: 'creating',
+      managementToken: original.managementToken,
+      clientRequestId: original.clientRequestId,
+    })
+  })
+
   test('persists a flattened image and uploaded asset for refresh recovery', async () => {
     const draft = await repository.createDraft({ planId: 'plan-1', title: '帮我选一个' }, candidates)
     const maskedImage = new NodeBlob(['masked'], { type: 'image/webp' }) as unknown as Blob

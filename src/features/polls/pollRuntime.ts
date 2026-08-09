@@ -18,6 +18,10 @@ export interface PollDraftRepositoryPort {
     input: { planId: string; title: string },
     candidates: readonly PollCandidateSeed[],
   ): Promise<PollDraft>
+  restartDraft(
+    input: { planId: string; title: string },
+    candidates: readonly PollCandidateSeed[],
+  ): Promise<PollDraft>
   saveMaskedImage(draftId: string, candidateId: string, result: MaskExportResult): Promise<PollDraft>
   markOptionUploading(draftId: string, candidateId: string): Promise<PollDraft>
   markOptionFailed(draftId: string, candidateId: string, errorCode: string): Promise<PollDraft>

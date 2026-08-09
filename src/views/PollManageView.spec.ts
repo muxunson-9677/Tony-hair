@@ -9,6 +9,7 @@ import {
   type PollServicePort,
 } from '../features/polls/pollRuntime'
 import type { PollDraft } from '../features/polls/types'
+import { PollServiceError } from '../features/polls/PollService'
 import PollManageView from './PollManageView.vue'
 
 const localDraft: PollDraft = {
@@ -53,13 +54,18 @@ describe('PollManageView', () => {
       getByPlanId: vi.fn(),
       getByPollId: vi.fn(async () => localDraft),
       createDraft: vi.fn(),
+      restartDraft: vi.fn(),
       saveMaskedImage: vi.fn(),
       markOptionUploading: vi.fn(),
       markOptionFailed: vi.fn(),
       saveUploadedAsset: vi.fn(),
       markCreating: vi.fn(),
       markActive: vi.fn(),
-      markRevoked: vi.fn(async () => ({ ...localDraft, status: 'revoked' as const })),
+      markRevoked: vi.fn(async () => ({
+        ...localDraft,
+        status: 'revoked' as const,
+        managementToken: undefined,
+      })),
     }
     service = {
       verifyAccess: vi.fn(),
@@ -147,6 +153,70 @@ describe('PollManageView', () => {
 
     expect(service.revoke).toHaveBeenCalledWith(localDraft.pollId, localDraft.managementToken)
     expect(repository.markRevoked).toHaveBeenCalledWith(localDraft.id)
+    expect(await screen.findByText('投票已撤销，分享图正在删除')).toBeTruthy()
+  })
+
+  test('clears the local management record when an active poll is already gone', async () => {
+    vi.mocked(service.getPoll).mockRejectedValue(new PollServiceError('http', 'POLL_GONE', 'gone', 410))
+
+    await renderView()
+
+    expect(await screen.findByText('投票已结束')).toBeTruthy()
+    expect(repository.markRevoked).toHaveBeenCalledWith(localDraft.id)
+  })
+
+  test('does not clear the local management token for a non-410 POLL_GONE response', async () => {
+    vi.mocked(service.getPoll).mockRejectedValue(new PollServiceError('http', 'POLL_GONE', 'temporary', 503))
+
+    await renderView()
+
+    expect(await screen.findByText('暂时无法读取结果')).toBeTruthy()
+    expect(screen.getByText('temporary')).toBeTruthy()
+    expect(repository.markRevoked).not.toHaveBeenCalled()
+  })
+
+  test('does not accept a non-410 POLL_GONE as a completed revoke retry', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.mocked(service.revoke).mockRejectedValue(new PollServiceError('http', 'POLL_GONE', 'temporary', 503))
+    await renderView()
+    await screen.findByText('3 票')
+
+    await fireEvent.click(screen.getByRole('button', { name: '撤销并删除投票' }))
+
+    expect(repository.markRevoked).not.toHaveBeenCalled()
+    expect(await screen.findByText('撤销没有完成，请稍后重试。')).toBeTruthy()
+  })
+
+  test('accepts POLL_GONE as a completed revoke retry and clears the local secret', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.mocked(service.revoke).mockRejectedValue(new PollServiceError('http', 'POLL_GONE', 'gone', 410))
+    await renderView()
+    await screen.findByText('3 票')
+
+    await fireEvent.click(screen.getByRole('button', { name: '撤销并删除投票' }))
+
+    expect(repository.markRevoked).toHaveBeenCalledWith(localDraft.id)
+    expect(await screen.findByText('投票已撤销，分享图正在删除')).toBeTruthy()
+  })
+
+  test('reports local cleanup failure honestly after the remote revoke succeeded', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.mocked(repository.markRevoked).mockRejectedValueOnce(new Error('storage full'))
+    await renderView()
+    await screen.findByText('3 票')
+
+    await fireEvent.click(screen.getByRole('button', { name: '撤销并删除投票' }))
+
+    expect(service.revoke).toHaveBeenCalledOnce()
+    expect(await screen.findByRole('heading', { name: '云端投票已失效' })).toBeTruthy()
+    expect(screen.getByText('云端投票已经失效，但本机管理信息未能清除。请稍后刷新重试，或清理本站浏览器数据。')).toBeTruthy()
+    expect(screen.queryByText('撤销没有完成，请稍后重试。')).toBeNull()
+
+    await fireEvent.click(screen.getByRole('button', { name: '重试本机清理' }))
+
+    expect(service.getPoll).toHaveBeenCalledOnce()
+    expect(service.getResults).toHaveBeenCalledOnce()
+    expect(repository.markRevoked).toHaveBeenCalledTimes(2)
     expect(await screen.findByText('投票已撤销，分享图正在删除')).toBeTruthy()
   })
 })

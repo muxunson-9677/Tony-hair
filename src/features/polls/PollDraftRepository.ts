@@ -26,6 +26,14 @@ const defaultDependencies = {
   randomToken: randomBase64Url,
 }
 
+export class PollDraftCandidatesChangedError extends Error {
+  readonly name = 'PollDraftCandidatesChangedError'
+
+  constructor(readonly draftStatus: PollDraft['status']) {
+    super('计划候选已变化，需要确认后重新开始投票草稿')
+  }
+}
+
 export class PollDraftRepository {
   constructor(
     private readonly db = new PollDraftDb(),
@@ -39,29 +47,29 @@ export class PollDraftRepository {
     input: { planId: string; title: string },
     candidates: readonly PollCandidateSeed[],
   ): Promise<PollDraft> {
-    if (candidates.length < 2 || candidates.length > 4) {
-      throw new RangeError('A poll draft must contain between 2 and 4 candidates')
-    }
+    this.assertCandidateCount(candidates)
     return this.db.transaction('rw', this.db.drafts, async () => {
       const existing = await this.db.drafts.where('planId').equals(input.planId).first()
-      if (existing && existing.status !== 'revoked') return existing
-
-      const timestamp = this.dependencies.now()
-      const draft: PollDraft = {
-        id: `poll-draft:${input.planId}`,
-        planId: input.planId,
-        title: input.title.trim(),
-        managementToken: this.dependencies.randomToken(32),
-        clientRequestId: this.dependencies.randomToken(18),
-        status: 'draft',
-        options: candidates.map((candidate) => ({
-          ...candidate,
-          uploadId: this.dependencies.randomToken(18),
-          uploadStatus: 'pending',
-        })),
-        createdAt: timestamp,
-        updatedAt: timestamp,
+      if (existing && existing.status !== 'revoked') {
+        if (existing.status === 'active' || this.candidatesMatch(existing, candidates)) return existing
+        throw new PollDraftCandidatesChangedError(existing.status)
       }
+      const draft = this.newDraft(input, candidates)
+      await this.db.drafts.put(draft)
+      return draft
+    })
+  }
+
+  async restartDraft(
+    input: { planId: string; title: string },
+    candidates: readonly PollCandidateSeed[],
+  ): Promise<PollDraft> {
+    this.assertCandidateCount(candidates)
+    return this.db.transaction('rw', this.db.drafts, async () => {
+      const existing = await this.db.drafts.where('planId').equals(input.planId).first()
+      if (existing?.status === 'active') throw new Error('Active polls must be revoked before restart')
+      if (existing?.status === 'creating') throw new Error('Creating polls must be reconciled before restart')
+      const draft = this.newDraft(input, candidates)
       await this.db.drafts.put(draft)
       return draft
     })
@@ -177,6 +185,43 @@ export class PollDraftRepository {
     maskedBytes: undefined,
     maskedAt: undefined,
   })
+
+  private assertCandidateCount(candidates: readonly PollCandidateSeed[]) {
+    if (candidates.length < 2 || candidates.length > 4) {
+      throw new RangeError('A poll draft must contain between 2 and 4 candidates')
+    }
+  }
+
+  private candidatesMatch(draft: PollDraft, candidates: readonly PollCandidateSeed[]) {
+    return draft.options.length === candidates.length && draft.options.every((option, index) => {
+      const candidate = candidates[index]
+      return option.candidateId === candidate?.candidateId
+        && option.label === candidate.label
+        && option.disclosure === candidate.disclosure
+    })
+  }
+
+  private newDraft(
+    input: { planId: string; title: string },
+    candidates: readonly PollCandidateSeed[],
+  ): PollDraft {
+    const timestamp = this.dependencies.now()
+    return {
+      id: `poll-draft:${input.planId}`,
+      planId: input.planId,
+      title: input.title.trim(),
+      managementToken: this.dependencies.randomToken(32),
+      clientRequestId: this.dependencies.randomToken(18),
+      status: 'draft',
+      options: candidates.map((candidate) => ({
+        ...candidate,
+        uploadId: this.dependencies.randomToken(18),
+        uploadStatus: 'pending',
+      })),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }
+  }
 
   private async updateDraft(
     draftId: string,
