@@ -100,6 +100,23 @@ describe('PollDraftRepository', () => {
     })
   })
 
+  test('persists upload failure and creation retry states without replacing stable ids', async () => {
+    const draft = await repository.createDraft({ planId: 'plan-1', title: '帮我选一个' }, candidates)
+
+    await repository.markOptionUploading(draft.id, 'candidate-1')
+    await repository.markOptionFailed(draft.id, 'candidate-1', 'BLOB_UNAVAILABLE')
+    const creating = await repository.markCreating(draft.id)
+
+    expect(creating.status).toBe('creating')
+    expect(creating.managementToken).toBe(draft.managementToken)
+    expect(creating.clientRequestId).toBe(draft.clientRequestId)
+    expect(creating.options[0]).toMatchObject({
+      uploadId: draft.options[0]?.uploadId,
+      uploadStatus: 'failed',
+      errorCode: 'BLOB_UNAVAILABLE',
+    })
+  })
+
   test('revocation clears local image blobs but retains the minimal management record', async () => {
     const draft = await repository.createDraft({ planId: 'plan-1', title: '帮我选一个' }, candidates)
     const maskedImage = new NodeBlob(['masked'], { type: 'image/webp' }) as unknown as Blob

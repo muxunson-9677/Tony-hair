@@ -42,4 +42,3 @@ export interface UploadedMaskedAsset {
   readonly assetId: string
   readonly imageUrl: string
 }
-

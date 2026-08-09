@@ -121,6 +121,34 @@ export class PollDraftRepository {
     }))
   }
 
+  async markOptionUploading(draftId: string, candidateId: string): Promise<PollDraft> {
+    return this.updateDraft(draftId, (draft) => ({
+      ...draft,
+      status: 'uploading',
+      options: draft.options.map((option) => option.candidateId === candidateId ? {
+        ...option,
+        uploadStatus: 'uploading',
+        errorCode: undefined,
+      } : option),
+    }))
+  }
+
+  async markOptionFailed(draftId: string, candidateId: string, errorCode: string): Promise<PollDraft> {
+    return this.updateDraft(draftId, (draft) => ({
+      ...draft,
+      status: 'uploading',
+      options: draft.options.map((option) => option.candidateId === candidateId ? {
+        ...option,
+        uploadStatus: 'failed',
+        errorCode,
+      } : option),
+    }))
+  }
+
+  async markCreating(draftId: string): Promise<PollDraft> {
+    return this.updateDraft(draftId, (draft) => ({ ...draft, status: 'creating' }))
+  }
+
   async markActive(draftId: string, pollId: string, expiresAt: string): Promise<PollDraft> {
     return this.updateDraft(draftId, (draft) => ({
       ...draft,
