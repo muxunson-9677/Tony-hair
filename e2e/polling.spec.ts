@@ -16,13 +16,13 @@ const publicPoll = {
       id: optionIds[0],
       label: '齐颌短鲍伯',
       disclosure: 'demo',
-      imageUrl: '/demo/persona-lin-bob.webp',
+      imageUrl: `/masked/${optionIds[0]}.webp`,
     },
     {
       id: optionIds[1],
       label: '纹理短碎发',
       disclosure: 'demo',
-      imageUrl: '/demo/persona-ran-crop.webp',
+      imageUrl: `/masked/${optionIds[1]}.webp`,
     },
   ],
 }
@@ -69,7 +69,9 @@ const expectPublicPollVisualReady = async (page: Page) => {
 const createLifecycleApi = () => {
   const uploadIds: string[] = []
   const uploadedBodies: Buffer[] = []
+  const sourceBodies: Buffer[] = []
   const assets = new Map<string, string>()
+  const uploadedAssets = new Map<string, { body: Buffer; contentType: string }>()
   let uploadAttempts = 0
   let viewerHasVoted = false
   let revoked = false
@@ -77,6 +79,21 @@ const createLifecycleApi = () => {
 
   const install = async (context: BrowserContext) => {
     await context.route('**/mediapipe/models/**', async (route) => route.abort())
+    await context.route('**/demo/*.webp', async (route) => {
+      const response = await route.fetch()
+      const body = await response.body()
+      sourceBodies.push(body)
+      await route.fulfill({ response, body })
+    })
+    await context.route('**/masked/*.webp', async (route) => {
+      const assetId = new URL(route.request().url()).pathname.split('/').at(-1)?.replace(/\.webp$/u, '') ?? ''
+      const uploaded = uploadedAssets.get(assetId)
+      if (!uploaded) {
+        await route.fulfill({ status: 404 })
+        return
+      }
+      await route.fulfill({ status: 200, contentType: uploaded.contentType, body: uploaded.body })
+    })
     await context.route('**/api/**', async (route) => {
     const request = route.request()
     const url = new URL(request.url())
@@ -108,6 +125,10 @@ const createLifecycleApi = () => {
       const wasExisting = assets.has(uploadId)
       const assetId = assets.get(uploadId) ?? optionIds[assets.size]!
       assets.set(uploadId, assetId)
+      uploadedAssets.set(assetId, {
+        body,
+        contentType: request.headers()['content-type'] ?? 'image/webp',
+      })
       await route.fulfill({
         status: 201,
         json: {
@@ -131,6 +152,8 @@ const createLifecycleApi = () => {
       }
       expect(managementToken.length).toBeGreaterThanOrEqual(40)
       expect(JSON.stringify(body)).not.toContain(managementToken)
+      expect(uploadedBodies.every((uploaded) => !uploaded.includes(Buffer.from(managementToken)))).toBe(true)
+      expect(uploadedBodies.every((uploaded) => sourceBodies.every((source) => !uploaded.equals(source)))).toBe(true)
       expect(body.clientRequestId.length).toBeGreaterThanOrEqual(20)
       expect(body.title).toBe(publicPoll.title)
       expect(body.options.map(({ disclosure }) => disclosure)).toEqual(['demo', 'demo'])
@@ -240,6 +263,34 @@ test('completes create, failed-upload recovery, cross-context friend vote, resul
   await expect(friend.getByRole('heading', { name: '只能在创建投票的这台设备管理' })).toBeVisible()
   await friend.goto(`/p/${pollId}`)
   await expect(friend.getByRole('navigation', { name: '主导航' })).toBeHidden()
+  const friendImageSources = await friend.locator('.public-poll-option img').evaluateAll((images) => (
+    images.map((image) => (image as HTMLImageElement).getAttribute('src'))
+  ))
+  expect(friendImageSources).toEqual(optionIds.map((assetId) => `/masked/${assetId}.webp`))
+  expect(friendImageSources.every((source) => !source?.includes('/demo/') && !source?.startsWith('blob:'))).toBe(true)
+  const darkMaskPixelRatio = await friend.getByRole('img', { name: '齐颌短鲍伯候选图' }).evaluate(async (image) => {
+    const bitmap = image as HTMLImageElement
+    await bitmap.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = bitmap.naturalWidth
+    canvas.height = bitmap.naturalHeight
+    const context = canvas.getContext('2d', { willReadFrequently: true })
+    if (!context) return 0
+    context.drawImage(bitmap, 0, 0)
+    const x = Math.floor(canvas.width * 0.15)
+    const y = Math.floor(canvas.height * 0.3)
+    const width = Math.floor(canvas.width * 0.7)
+    const height = Math.floor(canvas.height * 0.4)
+    const pixels = context.getImageData(x, y, width, height).data
+    let darkMaskPixels = 0
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index]! < 35 && pixels[index + 1]! < 35 && pixels[index + 2]! < 35 && pixels[index + 3] === 255) {
+        darkMaskPixels += 1
+      }
+    }
+    return darkMaskPixels / (pixels.length / 4)
+  })
+  expect(darkMaskPixelRatio).toBeGreaterThan(0.08)
   await friend.getByRole('img', { name: '齐颌短鲍伯候选图' }).click()
   await expect(friend.getByRole('radio', { name: /齐颌短鲍伯/ })).toBeChecked()
   await friend.getByPlaceholder('一句话说说原因').fill('第一张更利落')
@@ -251,6 +302,10 @@ test('completes create, failed-upload recovery, cross-context friend vote, resul
   await page.reload()
   await expect(page.getByText('1 票')).toBeVisible()
   await expect(page.getByText('第一张更利落')).toBeVisible()
+  const resultImageSources = await page.locator('.poll-result-list img').evaluateAll((images) => (
+    images.map((image) => (image as HTMLImageElement).getAttribute('src'))
+  ))
+  expect(resultImageSources).toEqual(optionIds.map((assetId) => `/masked/${assetId}.webp`))
   await page.screenshot({ path: testInfo.outputPath('poll-results-1280x900.png'), fullPage: true })
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByRole('button', { name: '撤销并删除投票' }).click()
@@ -290,6 +345,12 @@ test('renders duplicate, expired-or-revoked, and offline public states without a
 
 test.describe('polling visual shell', () => {
   test.beforeEach(async ({ page }) => {
+    await page.route('**/masked/*.webp', async (route) => {
+      const demoPath = route.request().url().includes(optionIds[0]!)
+        ? '/demo/persona-lin-bob.webp'
+        : '/demo/persona-ran-crop.webp'
+      await route.continue({ url: new URL(demoPath, route.request().url()).href })
+    })
     await page.route(/\/api\/polls\//u, async (route) => {
       await route.fulfill({ status: 200, json: publicPoll })
     })
