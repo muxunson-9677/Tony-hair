@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/vue'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/vue'
 import { createPinia } from 'pinia'
 import { createMemoryHistory } from 'vue-router'
 import { describe, expect, test } from 'vitest'
@@ -39,6 +39,12 @@ describe('app shell', () => {
     expect(screen.getByText('当前阶段不创建记录；后续记录仅保存在当前设备')).toBeTruthy()
     expect(
       screen.getByText('清理浏览器数据、使用无痕模式或更换设备，都可能让记录丢失。'),
+    ).toBeTruthy()
+
+    const visualLink = screen.getByRole('link', { name: '查看短发示例并进入试发型' })
+    expect(visualLink.getAttribute('href')).toBe('/try')
+    expect(
+      within(visualLink).getByRole('img', { name: /AI 生成的虚构成年人物短发造型示例/ }),
     ).toBeTruthy()
   })
 
@@ -82,8 +88,43 @@ describe('app shell', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: '试发型' })).toBeTruthy()
     expect(screen.getByText('示例体验')).toBeTruthy()
-    expect(screen.getByText('当前阶段不调用真实 AI，也不会生成发型图。')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /生成/ })).toBeNull()
+    expect(screen.getByText('预先制作的合成人物素材，不会处理你的照片')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /上传|生成/ })).toBeNull()
+    expect(screen.queryByRole('link', { name: /上传|生成/ })).toBeNull()
+    expect(document.querySelector('input[type="file"]')).toBeNull()
+  })
+
+  test('switches the fictional adult and hairstyle details together', async () => {
+    await renderAt('/try')
+
+    const resultImage = screen.getByTestId('try-result-image')
+    expect(resultImage.getAttribute('src')).toBe('/demo/persona-lin-bob.webp')
+    expect(resultImage.getAttribute('alt')).toContain('林澄的齐颌短鲍伯')
+
+    await fireEvent.click(screen.getByRole('button', { name: '选择人物：乔衡' }))
+    await fireEvent.click(screen.getByRole('button', { name: '选择方案：清爽渐层' }))
+
+    expect(resultImage.getAttribute('src')).toBe('/demo/persona-qiao-taper.webp')
+    expect(resultImage.getAttribute('alt')).toContain('乔衡的清爽渐层')
+    expect(screen.getByText('厚硬直发的支撑力适合做清楚的顶部纹理，缩短两侧会更利落。')).toBeTruthy()
+    expect(screen.getByText('低至中：吹干后用少量哑光发泥抓出方向。')).toBeTruthy()
+    expect(screen.getByText('需理发师现场确认')).toBeTruthy()
+  })
+
+  test('offers three prewritten micro-adjustments through an aria-live status', async () => {
+    await renderAt('/try')
+
+    const adjustments = screen.getAllByRole('button', { name: /微调示例：/ })
+    const liveStatus = screen.getByRole('status')
+
+    expect(adjustments).toHaveLength(3)
+    expect(liveStatus.getAttribute('aria-live')).toBe('polite')
+
+    await fireEvent.click(screen.getByRole('button', { name: '微调示例：刘海更轻' }))
+
+    expect(liveStatus.textContent).toContain(
+      '请把刘海末端做轻，保留参差感，不要剪成整齐的一条线。需理发师现场确认。',
+    )
   })
 
   test('gives the archive route honest first-stage copy', async () => {

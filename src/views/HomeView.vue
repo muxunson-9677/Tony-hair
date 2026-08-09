@@ -17,13 +17,19 @@
         剪前看看，剪时说清，剪后记住
       </p>
 
-      <div
-        class="hero-mark"
-        aria-hidden="true"
+      <RouterLink
+        class="home-visual"
+        to="/try"
+        aria-label="查看短发示例并进入试发型"
       >
-        <span class="hero-mark__type">看<br>清</span>
-        <span class="hero-mark__note">BEFORE<br>THE CUT</span>
-      </div>
+        <img
+          :src="'/demo/persona-ran-sidepart.webp'"
+          alt="AI 生成的虚构成年人物短发造型示例"
+          fetchpriority="high"
+        >
+        <span class="home-visual__index">01 / DEMO</span>
+        <span class="home-visual__caption">从一张示例开始，看清短发方向 <b aria-hidden="true">↗</b></span>
+      </RouterLink>
     </header>
 
     <div
