@@ -5,7 +5,14 @@ import vue from 'eslint-plugin-vue'
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'coverage', 'playwright-report', 'test-results', 'public/mediapipe'],
+    ignores: [
+      'dist',
+      'coverage',
+      'playwright-report',
+      'test-results',
+      'public/mediapipe',
+      '.vercel',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

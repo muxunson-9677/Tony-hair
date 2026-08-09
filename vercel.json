@@ -14,9 +14,15 @@
       ]
     }
   ],
+  "crons": [
+    {
+      "path": "/api/internal/cleanup",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "rewrites": [
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api(?:/|$)).*)",
       "destination": "/index.html"
     }
   ]
