@@ -5,11 +5,13 @@ import { ArchiveStorageError } from './ArchiveRepository'
 import {
   createArchiveStore,
   type ArchiveRepositoryPort,
+  type BarberBriefDraft,
   type HairProfileDraft,
   type HaircutPlanDraft,
 } from './archiveStore'
 import type {
   AvoidRule,
+  BarberBrief,
   Candidate,
   HairProfile,
   HaircutPhoto,
@@ -56,6 +58,24 @@ const fullCandidate = (order: number, overrides: Partial<Candidate> = {}): Candi
   ...overrides,
 })
 
+const fullBrief = (overrides: Partial<BarberBrief> = {}): BarberBrief => ({
+  id: 'brief-existing',
+  profileId: 'profile-existing',
+  planId: 'plan-existing',
+  targetCandidateId: 'candidate-existing-1',
+  overall: '整体保留轻盈轮廓',
+  top: '顶部保留支撑',
+  fringe: '刘海自然露额',
+  sides: '两侧贴合但不推白',
+  sideburns: '鬓角保留自然尖角',
+  back: '后脑连接自然',
+  topPriorities: ['两侧不要炸'],
+  absoluteAvoids: ['不要推白'],
+  createdAt: '2026-08-09T01:00:00.000Z',
+  updatedAt: '2026-08-09T01:00:00.000Z',
+  ...overrides,
+})
+
 const fullRecord = (overrides: Partial<HaircutRecord> = {}): HaircutRecord => ({
   id: 'record-existing',
   profileId: 'profile-existing',
@@ -89,6 +109,7 @@ class MemoryRepository implements ArchiveRepositoryPort {
   profiles: HairProfile[] = []
   plans: HaircutPlan[] = []
   candidates: Candidate[] = []
+  briefs: BarberBrief[] = []
   records: HaircutRecord[] = []
   photos: HaircutPhoto[] = []
   avoidRules: AvoidRule[] = []
@@ -98,7 +119,9 @@ class MemoryRepository implements ArchiveRepositoryPort {
   deferredProfiles: Promise<HairProfile[]> | null = null
   listProfilesCalls = 0
   savePlanCalls = 0
+  saveBriefCalls = 0
   saveRecordCalls = 0
+  briefSaveGate: Promise<void> | null = null
   recordSaveGate: Promise<void> | null = null
 
   private failIfRequested() {
@@ -141,6 +164,7 @@ class MemoryRepository implements ArchiveRepositoryPort {
     this.profiles = this.profiles.filter(({ id }) => id !== profileId)
     this.plans = this.plans.filter(({ profileId: id }) => id !== profileId)
     this.candidates = this.candidates.filter(({ planId }) => !planIds.has(planId))
+    this.briefs = this.briefs.filter(({ profileId: id }) => id !== profileId)
     const recordIds = new Set(this.records.filter(({ profileId: id }) => id === profileId).map(({ id }) => id))
     this.records = this.records.filter(({ profileId: id }) => id !== profileId)
     this.photos = this.photos.filter(({ recordId }) => !recordIds.has(recordId))
@@ -173,6 +197,32 @@ class MemoryRepository implements ArchiveRepositoryPort {
     this.failIfRequested()
     this.plans = this.plans.filter(({ id }) => id !== planId)
     this.candidates = this.candidates.filter(({ planId: id }) => id !== planId)
+    this.briefs = this.briefs.filter(({ planId: id }) => id !== planId)
+  }
+
+  async listBriefs(profileId: string) {
+    this.failIfRequested()
+    return this.briefs.filter(({ profileId: id }) => id === profileId)
+  }
+
+  async getBrief(planId: string) {
+    this.failIfRequested()
+    return this.briefs.find(({ planId: id }) => id === planId)
+  }
+
+  async saveBrief(brief: BarberBrief) {
+    this.saveBriefCalls += 1
+    if (this.briefSaveGate) {
+      await this.briefSaveGate
+    }
+    this.failIfRequested()
+    this.briefs = [...this.briefs.filter(({ planId }) => planId !== brief.planId), brief]
+    return brief
+  }
+
+  async deleteBrief(planId: string) {
+    this.failIfRequested()
+    this.briefs = this.briefs.filter(({ planId: id }) => id !== planId)
   }
 
   async listRecords(profileId: string) {
@@ -269,6 +319,19 @@ const planDraft = (overrides: Partial<HaircutPlanDraft> = {}): HaircutPlanDraft 
       demoImagePath: '/demo/persona-ran-crop.webp',
     },
   ],
+  ...overrides,
+})
+
+const briefDraft = (overrides: Partial<BarberBriefDraft> = {}): BarberBriefDraft => ({
+  targetCandidateId: 'candidate-existing-1',
+  overall: ' 整体保留轻盈轮廓 ',
+  top: '顶部保留支撑',
+  fringe: '刘海自然露额',
+  sides: '两侧贴合但不推白',
+  sideburns: '鬓角保留自然尖角',
+  back: '后脑连接自然',
+  topPriorities: [' 两侧不要炸 '],
+  absoluteAvoids: [' 不要推白 '],
   ...overrides,
 })
 
@@ -412,6 +475,111 @@ describe('archive store', () => {
     await refreshed.deletePlan(created?.plan.id ?? '')
     expect(refreshed.plans).toEqual([])
     expect(refreshed.profile?.id).toBe('profile-existing')
+  })
+
+  test('loads, creates, edits, reloads, and deletes a brief mapped by plan id', async () => {
+    repository.profiles = [fullProfile()]
+    repository.plans = [fullPlan()]
+    repository.candidates = [fullCandidate(1), fullCandidate(2)]
+    repository.briefs = [fullBrief()]
+    ids = ['brief-new']
+    const store = useTestStore()
+
+    await store.load()
+    expect(store.briefsByPlanId['plan-existing']).toEqual(fullBrief())
+
+    const edited = await store.saveBrief('plan-existing', briefDraft({
+      overall: ' 更新后的整体要求 ',
+      topPriorities: [' 第一条 ', ' 第二条 '],
+    }))
+    expect(edited).toMatchObject({
+      id: 'brief-existing',
+      overall: '更新后的整体要求',
+      topPriorities: ['第一条', '第二条'],
+      createdAt: fullBrief().createdAt,
+      updatedAt: '2026-08-10T10:00:00.000Z',
+    })
+
+    setActivePinia(createPinia())
+    const refreshed = createArchiveStore(repository)()
+    await refreshed.load()
+    expect(refreshed.briefsByPlanId['plan-existing']?.overall).toBe('更新后的整体要求')
+    expect(await refreshed.deleteBrief('plan-existing')).toBe(true)
+    expect(refreshed.briefsByPlanId['plan-existing']).toBeUndefined()
+    expect(refreshed.plans[0]?.id).toBe('plan-existing')
+  })
+
+  test('validates brief target ownership and both 1..3 non-empty lists before writing', async () => {
+    repository.profiles = [fullProfile()]
+    repository.plans = [fullPlan()]
+    repository.candidates = [fullCandidate(1), fullCandidate(2)]
+    ids = ['brief-new']
+    const store = useTestStore()
+    await store.load()
+
+    for (const invalid of [
+      briefDraft({ targetCandidateId: 'not-in-plan' }),
+      briefDraft({ top: '   ' }),
+      briefDraft({ topPriorities: [] }),
+      briefDraft({ topPriorities: ['1', '2', '3', '4'] }),
+      briefDraft({ absoluteAvoids: ['   '] }),
+      briefDraft({ absoluteAvoids: ['1', '2', '3', '4'] }),
+    ]) {
+      expect(await store.saveBrief('plan-existing', invalid)).toBeNull()
+    }
+
+    expect(repository.saveBriefCalls).toBe(0)
+    expect(store.error).toMatch(/1 到 3 条|目标候选/)
+  })
+
+  test('prevents concurrent brief saves and keeps failed save or delete state visible', async () => {
+    repository.profiles = [fullProfile()]
+    repository.plans = [fullPlan()]
+    repository.candidates = [fullCandidate(1), fullCandidate(2)]
+    repository.briefs = [fullBrief()]
+    let releaseSave!: () => void
+    repository.briefSaveGate = new Promise((resolve) => {
+      releaseSave = resolve
+    })
+    const store = useTestStore()
+    await store.load()
+
+    const first = store.saveBrief('plan-existing', briefDraft({ overall: '第一次更新' }))
+    expect(await store.saveBrief('plan-existing', briefDraft({ overall: '不应并发写入' }))).toBeNull()
+    expect(repository.saveBriefCalls).toBe(1)
+    releaseSave()
+    await first
+    repository.briefSaveGate = null
+
+    repository.nextFailure = new ArchiveStorageError('unavailable', new Error('technical'))
+    expect(await store.saveBrief('plan-existing', briefDraft({ overall: '失败更新' }))).toBeNull()
+    expect(store.briefsByPlanId['plan-existing']?.overall).toBe('第一次更新')
+    expect(store.error).toMatch(/不可用|无痕/)
+    expect(store.saving).toBe(false)
+
+    repository.nextFailure = new ArchiveStorageError('unavailable', new Error('technical'))
+    expect(await store.deleteBrief('plan-existing')).toBe(false)
+    expect(store.briefsByPlanId['plan-existing']).toBeDefined()
+    expect(store.saving).toBe(false)
+  })
+
+  test('synchronizes brief state after plan and profile cascades', async () => {
+    repository.profiles = [fullProfile()]
+    repository.plans = [fullPlan()]
+    repository.candidates = [fullCandidate(1), fullCandidate(2)]
+    repository.briefs = [fullBrief()]
+    const store = useTestStore()
+    await store.load()
+
+    expect(await store.deletePlan('plan-existing')).toBe(true)
+    expect(store.briefsByPlanId).toEqual({})
+
+    repository.plans = [fullPlan()]
+    repository.candidates = [fullCandidate(1), fullCandidate(2)]
+    repository.briefs = [fullBrief()]
+    await store.load()
+    expect(await store.deleteProfile('profile-existing')).toBe(true)
+    expect(store.briefsByPlanId).toEqual({})
   })
 
   test('loads real records, photos, avoid rules, and standard styles for the active profile', async () => {

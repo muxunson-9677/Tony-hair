@@ -47,6 +47,7 @@ export interface BarberBrief {
   readonly id: string
   readonly profileId: string
   readonly planId: string
+  readonly targetCandidateId?: string
   readonly overall: string
   readonly top: string
   readonly fringe: string
@@ -55,6 +56,12 @@ export interface BarberBrief {
   readonly back: string
   readonly topPriorities: readonly string[]
   readonly absoluteAvoids: readonly string[]
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+export type BarberBriefWrite = Omit<BarberBrief, 'targetCandidateId'> & {
+  readonly targetCandidateId: string
 }
 
 interface HaircutRecordBase {

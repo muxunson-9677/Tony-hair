@@ -11,7 +11,9 @@ import App from '../../App.vue'
 import { createAppRouter } from '../../router'
 import { ArchiveStorageError } from './ArchiveRepository'
 import { defaultArchiveDb, defaultArchiveRepository } from './archiveStore'
+import * as briefExport from './briefExport'
 import type {
+  BarberBrief,
   Candidate,
   HairProfile,
   HaircutPhoto,
@@ -66,6 +68,7 @@ describe('archive routes and forms', () => {
       '/archive/plans/new',
       '/archive/plans/:id',
       '/archive/plans/:id/edit',
+      '/archive/plans/:id/brief',
       '/archive/records/new',
       '/archive/records/:id',
       '/archive/records/:id/edit',
@@ -101,6 +104,22 @@ describe('archive routes and forms', () => {
     expect(heading.closest('section')?.getAttribute('aria-labelledby')).toBe(heading.id)
   })
 
+  test('gives brief loading and missing states real h1 headings', async () => {
+    vi.spyOn(defaultArchiveRepository, 'listProfiles').mockRejectedValueOnce(
+      new ArchiveStorageError('unavailable', new Error('technical')),
+    )
+    await renderAt('/archive/plans/missing/brief')
+    const errorHeading = await screen.findByRole('heading', {
+      level: 1,
+      name: '暂时无法读取沟通卡',
+    })
+    expect(errorHeading.closest('section')?.getAttribute('aria-labelledby')).toBe(errorHeading.id)
+
+    await defaultArchiveRepository.createProfile(existingProfile)
+    await renderAt('/archive/plans/missing/brief')
+    expect(await screen.findByRole('heading', { level: 1, name: '没有找到这个计划' })).toBeTruthy()
+  })
+
   test('creates, updates, and explicitly deletes the real device profile', async () => {
     const router = await renderAt('/archive')
 
@@ -128,7 +147,7 @@ describe('archive routes and forms', () => {
     expect(await screen.findByRole('heading', { level: 2, name: '小林的发型档案' })).toBeTruthy()
     expect(screen.getByText('微卷 · 细 · 发量适中')).toBeTruthy()
     expect(screen.getByRole('heading', { name: '最近剪后记录' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '沟通卡暂不展示' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '还没有沟通卡' })).toBeTruthy()
     expect(screen.getByText('还没有剪后记录。记录至少一张照片和满意度，之后才能形成复刻或避雷提醒。')).toBeTruthy()
 
     await fireEvent.click(screen.getByRole('link', { name: '编辑档案' }))
@@ -183,6 +202,166 @@ describe('archive routes and forms', () => {
     expect(confirmDelete).toHaveBeenCalledWith(expect.stringMatching(/删除.*计划/))
     expect(await screen.findByRole('heading', { level: 2, name: '阿青的发型档案' })).toBeTruthy()
     expect(screen.getByText(/还没有发型计划/)).toBeTruthy()
+  })
+
+  test('creates, reloads, previews, prints, reports export failure, edits, and deletes only a brief', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const plan: HaircutPlan = {
+      id: 'brief-plan',
+      profileId: existingProfile.id,
+      title: '夏末短发计划',
+      date: '2026-08-22',
+      status: 'ready',
+      createdAt: '2026-08-10T01:00:00.000Z',
+      updatedAt: '2026-08-10T01:00:00.000Z',
+    }
+    const candidates: Candidate[] = [
+      {
+        id: 'brief-candidate-1',
+        planId: plan.id,
+        order: 1,
+        name: '齐颌短鲍伯',
+        notes: '保留耳前重量',
+        source: 'demo_ai',
+        demoImagePath: '/demo/persona-lin-bob.webp',
+      },
+      {
+        id: 'brief-candidate-2',
+        planId: plan.id,
+        order: 2,
+        name: '纹理短碎发',
+        notes: '顺着自然卷向剪',
+        source: 'demo_ai',
+        demoImagePath: '/demo/persona-ran-crop.webp',
+      },
+    ]
+    await defaultArchiveRepository.savePlanWithCandidates(plan, candidates)
+    const router = await renderAt(`/archive/plans/${plan.id}`)
+
+    expect(await screen.findByRole('link', { name: '创建沟通卡' })).toBeTruthy()
+    await fireEvent.click(screen.getByRole('link', { name: '创建沟通卡' }))
+    expect(await screen.findByRole('heading', { level: 1, name: '创建理发师沟通卡' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '返回计划' }).getAttribute('href')).toBe(`/archive/plans/${plan.id}`)
+    expect(screen.getByRole('link', { name: '档案' }).getAttribute('aria-current')).toBe('page')
+
+    const targetRadio = screen.getByLabelText('目标候选：纹理短碎发') as HTMLInputElement
+    await fireEvent.click(targetRadio)
+    expect(targetRadio.checked).toBe(true)
+    const plainText = '<img src=x onerror=alert(1)>整体保持轻盈'
+    await fireEvent.update(screen.getByLabelText('整体'), plainText)
+    await fireEvent.update(screen.getByLabelText('顶部'), '顶部保留自然支撑')
+    await fireEvent.update(screen.getByLabelText('刘海'), '刘海轻薄并自然露额')
+    await fireEvent.update(screen.getByLabelText('两侧'), '两侧贴合但不要推白')
+    await fireEvent.update(screen.getByLabelText('鬓角'), '鬓角保留自然尖角')
+    await fireEvent.update(screen.getByLabelText('后脑'), '后脑连接自然')
+    await fireEvent.update(screen.getByLabelText('最在意 1'), '两侧不要炸')
+    await fireEvent.click(screen.getByRole('button', { name: '添加最在意' }))
+    await fireEvent.update(screen.getByLabelText('最在意 2'), '顶部不要塌')
+    await fireEvent.click(screen.getByRole('button', { name: '添加最在意' }))
+    await fireEvent.update(screen.getByLabelText('最在意 3'), '保留自然发流')
+    expect((screen.getByRole('button', { name: '添加最在意' }) as HTMLButtonElement).disabled).toBe(true)
+    await fireEvent.click(screen.getByRole('button', { name: '删除最在意 2' }))
+    expect(screen.queryByLabelText('最在意 3')).toBeNull()
+    await fireEvent.update(screen.getByLabelText('绝对不要 1'), '不要推白')
+    await fireEvent.click(screen.getByRole('button', { name: '保存沟通卡' }))
+
+    expect(await screen.findByRole('heading', { level: 1, name: '编辑理发师沟通卡' })).toBeTruthy()
+    expect((await defaultArchiveRepository.getBrief(plan.id))?.targetCandidateId).toBe('brief-candidate-2')
+    const preview = screen.getByRole('region', { name: '理发师沟通卡预览' })
+    expect(within(preview).getByText(plainText)).toBeTruthy()
+    expect(await within(preview).findByRole('img', { name: /纹理短碎发/ })).toBeTruthy()
+    expect(preview.querySelector('img[src="x"]')).toBeNull()
+    expect(preview.querySelector('[onerror]')).toBeNull()
+
+    await router.push('/archive')
+    expect(await screen.findByRole('heading', { name: '已保存 1 张沟通卡' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /夏末短发计划.*纹理短碎发/ })).toBeTruthy()
+    await router.push(`/archive/plans/${plan.id}`)
+    expect(await screen.findByRole('link', { name: '查看沟通卡' })).toBeTruthy()
+    await router.push(`/archive/plans/${plan.id}/brief`)
+    expect(await screen.findByDisplayValue(plainText)).toBeTruthy()
+
+    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined)
+    await fireEvent.click(screen.getByRole('button', { name: '打印沟通卡' }))
+    expect(print).toHaveBeenCalledOnce()
+
+    vi.spyOn(briefExport, 'exportBriefPng').mockRejectedValueOnce(new Error('canvas blocked'))
+    await fireEvent.click(screen.getByRole('button', { name: '导出 PNG' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/导出失败/)
+    expect(screen.queryByText(/已导出/)).toBeNull()
+
+    vi.spyOn(defaultArchiveRepository, 'saveBrief').mockRejectedValueOnce(
+      new ArchiveStorageError('unavailable', new Error('technical')),
+    )
+    await fireEvent.update(screen.getByLabelText('整体'), '不应持久化的修改')
+    await fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
+    const editHeading = await screen.findByRole('heading', { level: 1, name: '编辑理发师沟通卡' })
+    expect(editHeading.closest('section')?.getAttribute('aria-labelledby')).toBe(editHeading.id)
+
+    await fireEvent.update(screen.getByLabelText('整体'), '编辑后的整体要求')
+    await fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
+    expect(within(screen.getByRole('region', { name: '理发师沟通卡预览' })).getByText('编辑后的整体要求')).toBeTruthy()
+    await waitFor(async () => {
+      expect((await defaultArchiveRepository.getBrief(plan.id))?.overall).toBe('编辑后的整体要求')
+    })
+
+    const confirmDelete = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    await fireEvent.click(screen.getByRole('button', { name: '删除沟通卡' }))
+    expect(confirmDelete).toHaveBeenCalled()
+    await waitFor(() => expect(router.currentRoute.value.path).toBe(`/archive/plans/${plan.id}`))
+    expect(await defaultArchiveRepository.getBrief(plan.id)).toBeUndefined()
+    expect(await defaultArchiveRepository.getPlan(plan.id)).toBeDefined()
+  })
+
+  test('shows a legacy brief instead of claiming it does not exist', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const plan: HaircutPlan = {
+      id: 'legacy-brief-plan',
+      profileId: existingProfile.id,
+      title: '旧版计划',
+      date: '2025-08-01',
+      status: 'ready',
+      createdAt: '2025-08-01T00:00:00.000Z',
+      updatedAt: '2025-08-01T00:00:00.000Z',
+    }
+    await defaultArchiveRepository.savePlanWithCandidates(plan, [1, 2].map((order) => ({
+      id: `legacy-brief-candidate-${order}`,
+      planId: plan.id,
+      order,
+      name: `旧候选 ${order}`,
+      notes: '',
+      source: 'demo_ai' as const,
+      demoImagePath: order === 1
+        ? '/demo/persona-lin-bob.webp'
+        : '/demo/persona-ran-crop.webp',
+    })))
+    await defaultArchiveDb.briefs.add({
+      id: 'legacy-brief',
+      profileId: existingProfile.id,
+      planId: plan.id,
+      overall: '旧版整体要求',
+      top: '旧版顶部要求',
+      fringe: '旧版刘海要求',
+      sides: '旧版两侧要求',
+      sideburns: '旧版鬓角要求',
+      back: '旧版后脑要求',
+      topPriorities: ['旧版最在意'],
+      absoluteAvoids: ['旧版绝对不要'],
+    } as unknown as BarberBrief)
+
+    const router = await renderAt('/archive')
+    const legacyBriefLink = await screen.findByRole('link', {
+      name: '旧版计划 · 旧版未记录目标候选 · 查看沟通卡',
+    })
+    expect(within(legacyBriefLink).getByText('旧版未记录目标候选')).toBeTruthy()
+    expect(within(legacyBriefLink).queryByText('旧候选 1')).toBeNull()
+
+    await router.push(`/archive/plans/${plan.id}/brief`)
+    expect(await screen.findByRole('heading', { level: 1, name: '编辑理发师沟通卡' })).toBeTruthy()
+    expect(screen.getByText('旧版沟通卡未记录目标候选，已预选计划中的第一项；保存后才会更新。')).toBeTruthy()
+    expect(await screen.findByDisplayValue('旧版整体要求')).toBeTruthy()
+    expect((await screen.findAllByText('旧版整体要求')).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/没有.*沟通卡/)).toBeNull()
   })
 
   test('keeps legacy-source and completed plans read-only instead of replacing their candidates', async () => {

@@ -8,6 +8,8 @@ import {
 } from './ArchiveRepository'
 import type {
   AvoidRule,
+  BarberBrief,
+  BarberBriefWrite,
   Candidate,
   HairProfile,
   HaircutPhoto,
@@ -28,6 +30,10 @@ export interface ArchiveRepositoryPort {
     candidates: readonly Candidate[],
   ): Promise<{ plan: HaircutPlan, candidates: Candidate[] }>
   deletePlan(planId: string): Promise<void>
+  listBriefs(profileId: string): Promise<BarberBrief[]>
+  getBrief(planId: string): Promise<BarberBrief | undefined>
+  saveBrief(brief: BarberBriefWrite): Promise<BarberBrief>
+  deleteBrief(planId: string): Promise<void>
   listRecords(profileId: string): Promise<HaircutRecord[]>
   listPhotos(recordId: string): Promise<HaircutPhoto[]>
   listAvoidRulesByProfile(profileId: string): Promise<AvoidRule[]>
@@ -52,6 +58,13 @@ export interface HaircutPlanDraft {
   readonly date: string
   readonly status: 'draft' | 'ready'
   readonly candidates: readonly CandidateDraft[]
+}
+
+export type BarberBriefDraft = Omit<
+  BarberBrief,
+  'id' | 'profileId' | 'planId' | 'targetCandidateId' | 'createdAt' | 'updatedAt'
+> & {
+  readonly targetCandidateId: string
 }
 
 export type HaircutPhotoDraft = Pick<HaircutPhoto, 'stage' | 'image'> & Partial<Pick<
@@ -145,6 +158,7 @@ export const createArchiveStore = (
   const profiles = ref<HairProfile[]>([])
   const plans = ref<HaircutPlan[]>([])
   const candidatesByPlanId = ref<Record<string, Candidate[]>>({})
+  const briefsByPlanId = ref<Record<string, BarberBrief>>({})
   const records = ref<HaircutRecord[]>([])
   const photosByRecordId = ref<Record<string, HaircutPhoto[]>>({})
   const avoidRules = ref<AvoidRule[]>([])
@@ -165,6 +179,7 @@ export const createArchiveStore = (
         profiles: loadedProfiles,
         plans: [] as HaircutPlan[],
         candidatesByPlanId: {} as Record<string, Candidate[]>,
+        briefsByPlanId: {} as Record<string, BarberBrief>,
         records: [] as HaircutRecord[],
         photosByRecordId: {} as Record<string, HaircutPhoto[]>,
         avoidRules: [] as AvoidRule[],
@@ -172,8 +187,15 @@ export const createArchiveStore = (
       }
     }
 
-    const [loadedPlans, loadedRecords, loadedAvoidRules, loadedStandardStyles] = await Promise.all([
+    const [
+      loadedPlans,
+      loadedBriefs,
+      loadedRecords,
+      loadedAvoidRules,
+      loadedStandardStyles,
+    ] = await Promise.all([
       repository.listPlans(primaryProfile.id).then(sortPlans),
+      repository.listBriefs(primaryProfile.id),
       repository.listRecords(primaryProfile.id).then(sortRecords),
       repository.listAvoidRulesByProfile(primaryProfile.id).then(sortCreated),
       repository.listStandardStylesByProfile(primaryProfile.id).then(sortCreated),
@@ -189,6 +211,7 @@ export const createArchiveStore = (
       profiles: loadedProfiles,
       plans: loadedPlans,
       candidatesByPlanId: Object.fromEntries(candidateEntries),
+      briefsByPlanId: Object.fromEntries(loadedBriefs.map((brief) => [brief.planId, brief])),
       records: loadedRecords,
       photosByRecordId: Object.fromEntries(photoEntries),
       avoidRules: loadedAvoidRules,
@@ -200,6 +223,7 @@ export const createArchiveStore = (
     profiles.value = snapshot.profiles
     plans.value = snapshot.plans
     candidatesByPlanId.value = snapshot.candidatesByPlanId
+    briefsByPlanId.value = snapshot.briefsByPlanId
     records.value = snapshot.records
     photosByRecordId.value = snapshot.photosByRecordId
     avoidRules.value = snapshot.avoidRules
@@ -291,6 +315,7 @@ export const createArchiveStore = (
       profiles.value = profiles.value.filter(({ id }) => id !== profileId)
       plans.value = []
       candidatesByPlanId.value = {}
+      briefsByPlanId.value = {}
       records.value = []
       photosByRecordId.value = {}
       avoidRules.value = []
@@ -406,6 +431,107 @@ export const createArchiveStore = (
       const nextCandidates = { ...candidatesByPlanId.value }
       delete nextCandidates[planId]
       candidatesByPlanId.value = nextCandidates
+      const nextBriefs = { ...briefsByPlanId.value }
+      delete nextBriefs[planId]
+      briefsByPlanId.value = nextBriefs
+      return true
+    } catch (caught) {
+      error.value = archiveErrorMessage(caught)
+      return false
+    } finally {
+      saving.value = false
+    }
+  }
+
+  const saveBrief = async (
+    planId: string,
+    draft: BarberBriefDraft,
+  ): Promise<BarberBrief | null> => {
+    const currentProfile = profile.value
+    const plan = plans.value.find(({ id }) => id === planId)
+    if (!currentProfile || !plan || plan.profileId !== currentProfile.id) {
+      error.value = '没有找到要保存沟通卡的计划。'
+      return null
+    }
+    const candidates = candidatesByPlanId.value[planId] ?? []
+    if (!candidates.some(({ id }) => id === draft.targetCandidateId)) {
+      error.value = '请选择属于当前计划的目标候选。'
+      return null
+    }
+    const sections = [
+      draft.overall,
+      draft.top,
+      draft.fringe,
+      draft.sides,
+      draft.sideburns,
+      draft.back,
+    ]
+    if (sections.some((section) => section.trim().length === 0)) {
+      error.value = '请填写整体、顶部、刘海、两侧、鬓角和后脑要求。'
+      return null
+    }
+    const topPriorities = draft.topPriorities.map((item) => item.trim())
+    const absoluteAvoids = draft.absoluteAvoids.map((item) => item.trim())
+    if (
+      topPriorities.length < 1
+      || topPriorities.length > 3
+      || topPriorities.some((item) => item.length === 0)
+      || absoluteAvoids.length < 1
+      || absoluteAvoids.length > 3
+      || absoluteAvoids.some((item) => item.length === 0)
+    ) {
+      error.value = '“最在意”和“绝对不要”都需要 1 到 3 条非空内容。'
+      return null
+    }
+    if (saving.value) {
+      return null
+    }
+
+    beginMutation()
+    try {
+      const existing = briefsByPlanId.value[planId]
+      const timestamp = now().toISOString()
+      const brief: BarberBriefWrite = {
+        id: existing?.id ?? createId(),
+        profileId: currentProfile.id,
+        planId,
+        targetCandidateId: draft.targetCandidateId,
+        overall: draft.overall.trim(),
+        top: draft.top.trim(),
+        fringe: draft.fringe.trim(),
+        sides: draft.sides.trim(),
+        sideburns: draft.sideburns.trim(),
+        back: draft.back.trim(),
+        topPriorities,
+        absoluteAvoids,
+        createdAt: existing?.createdAt ?? timestamp,
+        updatedAt: timestamp,
+      }
+      const saved = await repository.saveBrief(brief)
+      briefsByPlanId.value = {
+        ...briefsByPlanId.value,
+        [planId]: saved,
+      }
+      return saved
+    } catch (caught) {
+      error.value = archiveErrorMessage(caught)
+      return null
+    } finally {
+      saving.value = false
+    }
+  }
+
+  const deleteBrief = async (planId: string): Promise<boolean> => {
+    if (saving.value) {
+      return false
+    }
+
+    beginMutation()
+    try {
+      await repository.deleteBrief(planId)
+      const nextBriefs = { ...briefsByPlanId.value }
+      delete nextBriefs[planId]
+      briefsByPlanId.value = nextBriefs
       return true
     } catch (caught) {
       error.value = archiveErrorMessage(caught)
@@ -573,6 +699,7 @@ export const createArchiveStore = (
     profile,
     plans,
     candidatesByPlanId,
+    briefsByPlanId,
     records,
     photosByRecordId,
     avoidRules,
@@ -585,6 +712,8 @@ export const createArchiveStore = (
     deleteProfile,
     savePlan,
     deletePlan,
+    saveBrief,
+    deleteBrief,
     saveRecord,
     deleteRecord,
   }

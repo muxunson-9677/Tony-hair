@@ -3,6 +3,7 @@ import Dexie, { type DexieOptions, type Table } from 'dexie'
 import type {
   AvoidRule,
   BarberBrief,
+  BarberBriefWrite,
   Candidate,
   HairProfile,
   HaircutPhoto,
@@ -78,6 +79,12 @@ export class ZajianfaDb extends Dexie {
       notes: candidate.notes ?? '',
     }))
     this.briefs = this.table('briefs')
+    this.briefs.hook('reading', (brief) => brief && ({
+      ...brief,
+      targetCandidateId: brief.targetCandidateId || undefined,
+      createdAt: brief.createdAt ?? LEGACY_TIMESTAMP,
+      updatedAt: brief.updatedAt ?? brief.createdAt ?? LEGACY_TIMESTAMP,
+    }))
     this.records = this.table('records')
     this.records.hook('reading', (record) => {
       if (!record) {
@@ -319,8 +326,14 @@ const validateBriefItems = (label: string, items: readonly string[]) => {
 }
 
 const validateBrief = (brief: BarberBrief) => {
+  if (!brief.targetCandidateId?.trim()) {
+    throw new Error('Target candidate is required')
+  }
   validateBriefItems('top priorities', brief.topPriorities)
   validateBriefItems('absolute avoids', brief.absoluteAvoids)
+  if (!isDateValue(brief.createdAt) || !isDateValue(brief.updatedAt)) {
+    throw new RangeError('brief timestamps must be valid dates')
+  }
 }
 
 const validateRecord = (
@@ -445,10 +458,17 @@ export class ArchiveRepository {
     validatePlanCandidates(plan, candidates)
     return this.run(() => this.db.transaction(
       'rw',
-      [this.db.profiles, this.db.plans, this.db.candidates],
+      [this.db.profiles, this.db.plans, this.db.candidates, this.db.briefs],
       async () => {
         if (!(await this.db.profiles.get(plan.profileId))) {
           throw new Error(`Profile not found: ${plan.profileId}`)
+        }
+        const brief = await this.db.briefs.where('planId').equals(plan.id).first()
+        if (
+          brief?.targetCandidateId
+          && !candidates.some(({ id }) => id === brief.targetCandidateId)
+        ) {
+          throw new Error('Plan candidates must retain the brief target')
         }
         await this.db.plans.put(plan)
         await this.db.candidates.where('planId').equals(plan.id).delete()
@@ -486,11 +506,11 @@ export class ArchiveRepository {
     ))
   }
 
-  async saveBrief(brief: BarberBrief): Promise<BarberBrief> {
+  async saveBrief(brief: BarberBriefWrite): Promise<BarberBrief> {
     validateBrief(brief)
     return this.run(() => this.db.transaction(
       'rw',
-      [this.db.plans, this.db.briefs],
+      [this.db.plans, this.db.candidates, this.db.briefs],
       async () => {
         const plan = await this.db.plans.get(brief.planId)
         if (!plan || plan.profileId !== brief.profileId) {
@@ -505,6 +525,10 @@ export class ArchiveRepository {
           )
         ) {
           throw new Error('Brief id already belongs to another plan')
+        }
+        const target = await this.db.candidates.get(brief.targetCandidateId)
+        if (!target || target.planId !== brief.planId) {
+          throw new Error('Target candidate must belong to the brief plan')
         }
         const existing = await this.db.briefs.where('planId').equals(brief.planId).first()
         if (existing && existing.id !== brief.id) {

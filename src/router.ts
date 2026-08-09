@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, type RouterHistory } from 'vue-router'
 
 import ArchiveView from './views/ArchiveView.vue'
 import ArchivePlanDetailView from './views/ArchivePlanDetailView.vue'
+import ArchiveBriefView from './views/ArchiveBriefView.vue'
 import ArchivePlanFormView from './views/ArchivePlanFormView.vue'
 import ArchiveProfileView from './views/ArchiveProfileView.vue'
 import ArchiveRecordDetailView from './views/ArchiveRecordDetailView.vue'
@@ -50,6 +51,12 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         name: 'archive-plan-edit',
         component: ArchivePlanFormView,
         meta: { title: '编辑发型计划｜咋剪发' },
+      },
+      {
+        path: '/archive/plans/:id/brief',
+        name: 'archive-plan-brief',
+        component: ArchiveBriefView,
+        meta: { title: '理发师沟通卡｜咋剪发' },
       },
       {
         path: '/archive/plans/:id',

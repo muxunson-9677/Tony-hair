@@ -13,6 +13,7 @@ import {
 } from './index'
 import type {
   BarberBrief,
+  BarberBriefWrite,
   Candidate,
   HairProfile,
   HaircutPhoto,
@@ -64,10 +65,11 @@ const candidate = (
   ...overrides,
 })
 
-const brief = (overrides: Partial<BarberBrief> = {}): BarberBrief => ({
+const brief = (overrides: Partial<BarberBrief> = {}): BarberBriefWrite => ({
   id: 'brief-1',
   profileId: 'profile-1',
   planId: 'plan-1',
+  targetCandidateId: 'candidate-1',
   overall: '整体轻盈、利落',
   top: '保留支撑感',
   fringe: '自然露额',
@@ -76,8 +78,10 @@ const brief = (overrides: Partial<BarberBrief> = {}): BarberBrief => ({
   back: '后颈收干净',
   topPriorities: ['两侧不要炸'],
   absoluteAvoids: ['不要推白'],
+  createdAt: '2026-08-10T02:30:00.000Z',
+  updatedAt: '2026-08-10T02:30:00.000Z',
   ...overrides,
-})
+} as BarberBriefWrite)
 
 const repeatRecord = (
   overrides: Partial<HaircutRecord> = {},
@@ -323,9 +327,81 @@ describe('ArchiveRepository', () => {
     ]) {
       await expect(repository.saveBrief(invalid)).rejects.toThrow('between 1 and 3')
     }
+    await expect(repository.saveBrief(brief({ updatedAt: 'not-a-date' })))
+      .rejects.toThrow('brief timestamps must be valid dates')
 
     await repository.deleteBrief('plan-1')
     expect(await repository.getBrief('plan-1')).toBeUndefined()
+  })
+
+  test('requires the target candidate to belong to the brief plan without replacing the saved brief', async () => {
+    await seedPlan()
+    const saved = brief()
+    await repository.saveBrief(saved)
+
+    await expect(repository.saveBrief(brief({
+      targetCandidateId: undefined,
+      overall: '缺少目标时不应写入',
+    }))).rejects.toThrow('Target candidate is required')
+    await expect(repository.saveBrief(brief({
+      targetCandidateId: 'missing-candidate',
+      overall: '不应写入',
+    }))).rejects.toThrow('Target candidate must belong to the brief plan')
+
+    expect(await repository.getBrief('plan-1')).toEqual(saved)
+  })
+
+  test('rejects a plan edit that would orphan the saved brief target', async () => {
+    await seedPlan()
+    const savedPlan = plan()
+    const savedCandidates = [candidate(1), candidate(2)]
+    const savedBrief = brief()
+    await repository.saveBrief(savedBrief)
+
+    await expect(repository.savePlanWithCandidates(
+      plan({ title: '不应写入的计划标题', updatedAt: '2026-08-10T04:00:00.000Z' }),
+      [
+        candidate(1, {
+          id: 'candidate-2',
+          name: '保留的候选',
+          demoImagePath: '/demo/candidate-2.webp',
+        }),
+        candidate(2, {
+          id: 'candidate-3',
+          name: '新候选',
+          demoImagePath: '/demo/candidate-3.webp',
+        }),
+      ],
+    )).rejects.toThrow('Plan candidates must retain the brief target')
+
+    expect(await repository.getPlan('plan-1')).toEqual(savedPlan)
+    expect(await repository.listCandidates('plan-1')).toEqual(savedCandidates)
+    expect(await repository.getBrief('plan-1')).toEqual(savedBrief)
+  })
+
+  test('reads a legacy brief with timestamp and target defaults without dropping its content', async () => {
+    await seedPlan()
+    const legacyBrief = {
+      id: 'legacy-brief',
+      profileId: 'profile-1',
+      planId: 'plan-1',
+      overall: '旧版整体要求',
+      top: '旧版顶部要求',
+      fringe: '旧版刘海要求',
+      sides: '旧版两侧要求',
+      sideburns: '旧版鬓角要求',
+      back: '旧版后脑要求',
+      topPriorities: ['旧版最在意'],
+      absoluteAvoids: ['旧版绝对不要'],
+    }
+    await db.briefs.add(legacyBrief as unknown as BarberBrief)
+
+    expect(await repository.getBrief('plan-1')).toEqual({
+      ...legacyBrief,
+      targetCandidateId: undefined,
+      createdAt: '1970-01-01T00:00:00.000Z',
+      updatedAt: '1970-01-01T00:00:00.000Z',
+    })
   })
 
   test('rejects reusing a brief id across plans without changing either brief', async () => {
@@ -338,13 +414,18 @@ describe('ArchiveRepository', () => {
       ],
     )
     const firstBrief = brief()
-    const secondBrief = brief({ id: 'brief-2', planId: 'plan-2' })
+    const secondBrief = brief({
+      id: 'brief-2',
+      planId: 'plan-2',
+      targetCandidateId: 'plan-2-candidate-1',
+    })
     await repository.saveBrief(firstBrief)
     await repository.saveBrief(secondBrief)
 
     await expect(repository.saveBrief(brief({
       id: 'brief-1',
       planId: 'plan-2',
+      targetCandidateId: 'plan-2-candidate-1',
       overall: '不应覆盖任何计划',
     }))).rejects.toThrow('Brief id already belongs to another plan')
 
@@ -651,7 +732,11 @@ describe('ArchiveRepository', () => {
         candidate(2, { id: 'plan-2-candidate-2', planId: 'plan-2' }),
       ],
     )
-    const siblingBrief = brief({ id: 'brief-2', planId: 'plan-2' })
+    const siblingBrief = brief({
+      id: 'brief-2',
+      planId: 'plan-2',
+      targetCandidateId: 'plan-2-candidate-1',
+    })
     await repository.saveBrief(siblingBrief)
     await repository.saveRecordWithPhotos(repeatRecord(), [photo()])
 
@@ -689,6 +774,7 @@ describe('ArchiveRepository', () => {
       id: 'brief-2',
       profileId: 'profile-2',
       planId: 'plan-2',
+      targetCandidateId: 'plan-2-candidate-1',
     })
     await repository.saveBrief(siblingBrief)
     await repository.saveRecordWithPhotos(
@@ -795,6 +881,19 @@ describe('ArchiveRepository', () => {
         source: 'demo_ai',
       },
     ])
+    await legacy.table('briefs').add({
+      id: 'legacy-v1-brief',
+      profileId: 'legacy-profile',
+      planId: 'legacy-plan',
+      overall: 'v1 整体要求',
+      top: 'v1 顶部要求',
+      fringe: 'v1 刘海要求',
+      sides: 'v1 两侧要求',
+      sideburns: 'v1 鬓角要求',
+      back: 'v1 后脑要求',
+      topPriorities: ['v1 最在意'],
+      absoluteAvoids: ['v1 绝对不要'],
+    })
     await legacy.table('records').add({
       id: 'legacy-record',
       profileId: 'legacy-profile',
@@ -818,6 +917,7 @@ describe('ArchiveRepository', () => {
     const migratedProfile = await upgradedRepository.getProfile('legacy-profile')
     const migratedPlan = await upgradedRepository.getPlan('legacy-plan')
     const migratedCandidates = await upgradedRepository.listCandidates('legacy-plan')
+    const migratedBrief = await upgradedRepository.getBrief('legacy-plan')
 
     expect(upgraded.verno).toBe(2)
     expect(migratedProfile).toMatchObject({
@@ -840,6 +940,13 @@ describe('ArchiveRepository', () => {
     expect(migratedPlan?.createdAt).toBe(migratedPlan?.updatedAt)
     expect(migratedCandidates.map(({ notes }) => notes)).toEqual(['', ''])
     expect(await migratedCandidates[0]?.referenceImage?.text()).toBe('legacy-reference')
+    expect(migratedBrief).toMatchObject({
+      id: 'legacy-v1-brief',
+      targetCandidateId: undefined,
+      overall: 'v1 整体要求',
+      createdAt: '1970-01-01T00:00:00.000Z',
+      updatedAt: '1970-01-01T00:00:00.000Z',
+    })
     expect(await upgradedRepository.getRecord('legacy-record')).toMatchObject({
       outcome: 'repeat',
       styleName: '旧发型',
@@ -896,6 +1003,19 @@ describe('ArchiveRepository', () => {
       recordId: 'legacy-v2-record',
       text: '不要推白',
     })
+    await legacy.table('briefs').add({
+      id: 'legacy-v2-brief',
+      profileId: 'legacy-profile',
+      planId: 'legacy-plan',
+      overall: 'v2 整体要求',
+      top: 'v2 顶部要求',
+      fringe: 'v2 刘海要求',
+      sides: 'v2 两侧要求',
+      sideburns: 'v2 鬓角要求',
+      back: 'v2 后脑要求',
+      topPriorities: ['v2 最在意'],
+      absoluteAvoids: ['v2 绝对不要'],
+    })
     legacy.close()
 
     const upgraded = openDatabase()
@@ -903,6 +1023,7 @@ describe('ArchiveRepository', () => {
     const record = await upgradedRepository.getRecord('legacy-v2-record')
     const photos = await upgradedRepository.listPhotos('legacy-v2-record')
     const rules = await upgradedRepository.listAvoidRules('legacy-v2-record')
+    const legacyBrief = await upgradedRepository.getBrief('legacy-plan')
 
     expect(upgraded.verno).toBe(2)
     expect(record).toMatchObject({
@@ -927,6 +1048,13 @@ describe('ArchiveRepository', () => {
       active: true,
       createdAt: '1970-01-01T00:00:00.000Z',
     }])
+    expect(legacyBrief).toMatchObject({
+      id: 'legacy-v2-brief',
+      targetCandidateId: undefined,
+      overall: 'v2 整体要求',
+      createdAt: '1970-01-01T00:00:00.000Z',
+      updatedAt: '1970-01-01T00:00:00.000Z',
+    })
   })
 
   test('uses the legacy timestamp when an old record date is unreadable', async () => {

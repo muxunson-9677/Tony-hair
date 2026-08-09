@@ -11,6 +11,7 @@ const store = useArchiveStore()
 const planId = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
 const plan = computed(() => store.plans.find(({ id }) => id === planId.value))
 const candidates = computed(() => store.candidatesByPlanId[planId.value] ?? [])
+const brief = computed(() => store.briefsByPlanId[planId.value])
 const canEdit = computed(() => (
   plan.value?.status !== 'completed'
   && candidates.value.length >= 2
@@ -108,6 +109,12 @@ onMounted(async () => {
         </h1>
         <p>{{ plan.date }} · {{ statusLabel }}</p>
         <div class="detail-actions">
+          <RouterLink
+            class="text-link"
+            :to="`/archive/plans/${plan.id}/brief`"
+          >
+            {{ brief ? '查看沟通卡' : '创建沟通卡' }}
+          </RouterLink>
           <RouterLink
             v-if="canEdit"
             class="text-link"

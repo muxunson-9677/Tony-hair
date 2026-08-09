@@ -1,11 +1,23 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
 import type { HairProfile, HaircutPlan } from '../features/archive/types'
 
 const store = useArchiveStore()
 const recordPhotoUrls = ref<Record<string, string>>({})
+const savedBriefs = computed(() => store.plans.flatMap((plan) => {
+  const brief = store.briefsByPlanId[plan.id]
+  if (!brief) {
+    return []
+  }
+  const candidates = store.candidatesByPlanId[plan.id] ?? []
+  const candidate = candidates.find(({ id }) => id === brief.targetCandidateId)
+  const candidateLabel = candidate?.name ?? (
+    brief.targetCandidateId ? '目标候选需重新确认' : '旧版未记录目标候选'
+  )
+  return [{ plan, brief, candidate, candidateLabel }]
+}))
 
 const textureLabels: Record<HairProfile['hairTexture'], string> = {
   straight: '直发',
@@ -315,16 +327,52 @@ onBeforeUnmount(revokeRecordUrls)
       </section>
 
       <section
-        class="archive-future"
+        class="archive-briefs"
         aria-labelledby="archive-brief-title"
       >
         <p class="section-index">
           06 / 沟通卡
         </p>
         <h2 id="archive-brief-title">
-          沟通卡暂不展示
+          {{ savedBriefs.length > 0 ? `已保存 ${savedBriefs.length} 张沟通卡` : '还没有沟通卡' }}
         </h2>
-        <p>本阶段暂不读取、编辑或导出沟通卡；下一任务再接入，不会把未检查的数据描述成空记录。</p>
+        <p
+          v-if="savedBriefs.length === 0"
+          class="archive-inline-empty"
+        >
+          先打开一个包含 2—4 个候选的计划，创建可编辑、可导出的理发师沟通卡。
+        </p>
+        <ol
+          v-else
+          class="brief-list"
+        >
+          <li
+            v-for="item in savedBriefs"
+            :key="item.brief.id"
+          >
+            <RouterLink
+              :to="`/archive/plans/${item.plan.id}/brief`"
+              :aria-label="`${item.plan.title} · ${item.candidateLabel} · 查看沟通卡`"
+            >
+              <img
+                v-if="item.candidate?.demoImagePath"
+                :src="item.candidate.demoImagePath"
+                :alt="`${item.candidate.name}目标缩略图`"
+              >
+              <span
+                v-else
+                class="brief-list__image-missing"
+                aria-hidden="true"
+              >旧版</span>
+              <span class="brief-list__copy">
+                <span>{{ formatDate(item.plan.date) }} · 仅当前设备</span>
+                <b>{{ item.plan.title }}</b>
+                <small>{{ item.candidateLabel }}</small>
+              </span>
+              <span aria-hidden="true">→</span>
+            </RouterLink>
+          </li>
+        </ol>
       </section>
 
       <p class="archive-trust-note archive-trust-note--content">
