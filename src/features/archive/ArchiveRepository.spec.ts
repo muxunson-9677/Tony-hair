@@ -1,0 +1,618 @@
+/// <reference types="node" />
+
+import { Blob as NodeBlob } from 'node:buffer'
+
+import Dexie from 'dexie'
+import { IDBKeyRange, indexedDB } from 'fake-indexeddb'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+
+import {
+  ArchiveRepository,
+  ArchiveStorageError,
+  ZajianfaDb,
+} from './index'
+import type {
+  BarberBrief,
+  Candidate,
+  HairProfile,
+  HaircutPhoto,
+  HaircutPlan,
+  HaircutRecord,
+} from './types'
+
+const defaultPhotoImage = new NodeBlob(
+  ['local-photo'],
+  { type: 'image/webp' },
+) as unknown as Blob
+
+const profile = (overrides: Partial<HairProfile> = {}): HairProfile => ({
+  id: 'profile-1',
+  name: '我的档案',
+  ...overrides,
+})
+
+const plan = (overrides: Partial<HaircutPlan> = {}): HaircutPlan => ({
+  id: 'plan-1',
+  profileId: 'profile-1',
+  date: '2026-08-10T02:00:00.000Z',
+  status: 'draft',
+  ...overrides,
+})
+
+const candidate = (
+  order: number,
+  overrides: Partial<Candidate> = {},
+): Candidate => ({
+  id: `candidate-${order}`,
+  planId: 'plan-1',
+  order,
+  name: `候选 ${order}`,
+  source: 'demo_ai',
+  ...overrides,
+})
+
+const brief = (overrides: Partial<BarberBrief> = {}): BarberBrief => ({
+  id: 'brief-1',
+  profileId: 'profile-1',
+  planId: 'plan-1',
+  overall: '整体轻盈、利落',
+  top: '保留支撑感',
+  fringe: '自然露额',
+  sides: '贴合但不推白',
+  sideburns: '保留自然尖角',
+  back: '后颈收干净',
+  topPriorities: ['两侧不要炸'],
+  absoluteAvoids: ['不要推白'],
+  ...overrides,
+})
+
+const repeatRecord = (
+  overrides: Partial<HaircutRecord> = {},
+): HaircutRecord => ({
+  id: 'record-1',
+  profileId: 'profile-1',
+  planId: 'plan-1',
+  date: '2026-08-10T03:00:00.000Z',
+  status: 'completed',
+  satisfaction: 5,
+  outcome: 'repeat',
+  styleName: '清爽短碎发',
+  ...overrides,
+} as HaircutRecord)
+
+const avoidRecord = (
+  overrides: Partial<HaircutRecord> = {},
+): HaircutRecord => ({
+  id: 'record-1',
+  profileId: 'profile-1',
+  planId: 'plan-1',
+  date: '2026-08-10T03:00:00.000Z',
+  status: 'completed',
+  satisfaction: 2,
+  outcome: 'avoid',
+  styleName: '过短渐层',
+  avoidRules: ['两侧不要推白'],
+  ...overrides,
+} as HaircutRecord)
+
+const photo = (
+  overrides: Partial<HaircutPhoto> = {},
+): HaircutPhoto => ({
+  id: 'photo-1',
+  recordId: 'record-1',
+  stage: 'unstyled',
+  image: defaultPhotoImage,
+  ...overrides,
+})
+
+describe('ArchiveRepository', () => {
+  let dbName: string
+  let databases: ZajianfaDb[]
+  let db: ZajianfaDb
+  let repository: ArchiveRepository
+
+  const openDatabase = () => {
+    const next = new ZajianfaDb(dbName, { indexedDB, IDBKeyRange })
+    databases.push(next)
+    return next
+  }
+
+  const seedPlan = async () => {
+    await repository.createProfile(profile())
+    await repository.savePlanWithCandidates(plan(), [candidate(1), candidate(2)])
+  }
+
+  beforeEach(() => {
+    dbName = `zajianfa-archive-${crypto.randomUUID()}`
+    databases = []
+    db = openDatabase()
+    repository = new ArchiveRepository(db)
+  })
+
+  afterEach(async () => {
+    vi.restoreAllMocks()
+    for (const database of databases) {
+      database.close()
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(dbName)
+      request.onerror = () => reject(request.error)
+      request.onsuccess = () => resolve()
+      request.onblocked = () => reject(new Error(`Database deletion blocked: ${dbName}`))
+    })
+  })
+
+  test('keeps a profile, plan, candidates, and reference Blob after closing and reopening the database', async () => {
+    const referenceImage = new NodeBlob(
+      ['reference-image'],
+      { type: 'image/webp' },
+    ) as unknown as Blob
+    await repository.createProfile(profile())
+    await repository.savePlanWithCandidates(plan(), [
+      candidate(1, { source: 'user_reference', referenceImage }),
+      candidate(2, { source: 'past_record' }),
+    ])
+    await repository.saveRecordWithPhotos(repeatRecord(), [photo()])
+
+    db.close()
+    db = openDatabase()
+    repository = new ArchiveRepository(db)
+
+    expect(await repository.getProfile('profile-1')).toEqual(profile())
+    expect(await repository.getPlan('plan-1')).toEqual(plan())
+    expect(await repository.listCandidates('plan-1')).toHaveLength(2)
+
+    const restored = await repository.getCandidate('candidate-1')
+    expect(restored?.source).toBe('user_reference')
+    expect(restored?.referenceImage?.type).toBe('image/webp')
+    expect(await restored?.referenceImage?.text()).toBe('reference-image')
+    const restoredPhoto = await repository.getPhoto('photo-1')
+    expect(restoredPhoto?.image.type).toBe('image/webp')
+    expect(restoredPhoto?.image.size).toBeGreaterThan(0)
+    expect(await restoredPhoto?.image.text()).toBe('local-photo')
+  })
+
+  test('supports profile create, list, read, update, and delete', async () => {
+    await repository.createProfile(profile())
+    expect(await repository.listProfiles()).toEqual([profile()])
+    expect(await repository.getProfile('profile-1')).toEqual(profile())
+
+    const updated = profile({ name: '更新后的档案' })
+    await repository.updateProfile(updated)
+    expect(await repository.getProfile('profile-1')).toEqual(updated)
+
+    await repository.deleteProfile('profile-1')
+    expect(await repository.getProfile('profile-1')).toBeUndefined()
+  })
+
+  test('accepts exactly two through four candidates', async () => {
+    await repository.createProfile(profile())
+    await repository.savePlanWithCandidates(plan(), [candidate(1), candidate(2)])
+    await repository.savePlanWithCandidates(
+      plan({ id: 'plan-4' }),
+      [1, 2, 3, 4].map((order) => candidate(order, {
+        id: `plan-4-candidate-${order}`,
+        planId: 'plan-4',
+      })),
+    )
+
+    expect(await repository.listCandidates('plan-1')).toHaveLength(2)
+    expect(await repository.listCandidates('plan-4')).toHaveLength(4)
+
+    for (const count of [1, 5]) {
+      const invalidPlan = plan({ id: `invalid-plan-${count}` })
+      const invalidCandidates = Array.from({ length: count }, (_, index) => candidate(index + 1, {
+        id: `plan-${count}-candidate-${index + 1}`,
+        planId: invalidPlan.id,
+      }))
+
+      await expect(
+        repository.savePlanWithCandidates(invalidPlan, invalidCandidates),
+      ).rejects.toThrow('between 2 and 4 candidates')
+      expect(await repository.getPlan(invalidPlan.id)).toBeUndefined()
+    }
+  })
+
+  test('rejects duplicate candidate order without writing the plan or candidates', async () => {
+    await repository.createProfile(profile())
+    const duplicates = [candidate(1), candidate(1, { id: 'candidate-2' })]
+
+    await expect(
+      repository.savePlanWithCandidates(plan(), duplicates),
+    ).rejects.toThrow('candidate order must be unique')
+
+    expect(await repository.getPlan('plan-1')).toBeUndefined()
+    expect(await repository.listCandidates('plan-1')).toEqual([])
+  })
+
+  test('rolls back a plan when a candidate write fails inside the transaction', async () => {
+    await repository.createProfile(profile())
+    await db.candidates.add(candidate(9, {
+      id: 'occupied-candidate',
+      planId: 'other-plan',
+    }))
+
+    await expect(repository.savePlanWithCandidates(plan(), [
+      candidate(1, { id: 'new-candidate' }),
+      candidate(2, { id: 'occupied-candidate' }),
+    ])).rejects.toThrow()
+
+    expect(await repository.getPlan('plan-1')).toBeUndefined()
+    expect(await repository.getCandidate('new-candidate')).toBeUndefined()
+    expect(await repository.getCandidate('occupied-candidate')).toMatchObject({
+      planId: 'other-plan',
+    })
+  })
+
+  test('supports plan list, read, update, and delete through the atomic candidate save', async () => {
+    await seedPlan()
+    expect(await repository.listPlans('profile-1')).toEqual([plan()])
+    expect(await repository.getPlan('plan-1')).toEqual(plan())
+
+    const updatedPlan = plan({ status: 'ready' })
+    await repository.savePlanWithCandidates(updatedPlan, [
+      candidate(1, { id: 'replacement-1' }),
+      candidate(2, { id: 'replacement-2' }),
+    ])
+    expect(await repository.getPlan('plan-1')).toEqual(updatedPlan)
+    expect((await repository.listCandidates('plan-1')).map(({ id }) => id)).toEqual([
+      'replacement-1',
+      'replacement-2',
+    ])
+
+    await repository.deletePlan('plan-1')
+    expect(await repository.getPlan('plan-1')).toBeUndefined()
+    expect(await repository.listCandidates('plan-1')).toEqual([])
+  })
+
+  test('supports brief create, list, read, update, delete, and 1..3 item limits', async () => {
+    await seedPlan()
+    await repository.saveBrief(brief())
+    expect(await repository.listBriefs('profile-1')).toEqual([brief()])
+    expect(await repository.getBrief('plan-1')).toEqual(brief())
+
+    const updated = brief({ overall: '更新后的整体要求' })
+    await repository.saveBrief(updated)
+    expect(await repository.getBrief('plan-1')).toEqual(updated)
+
+    const upperBoundary = brief({
+      topPriorities: ['最在意 1', '最在意 2', '最在意 3'],
+      absoluteAvoids: ['绝对不要 1', '绝对不要 2', '绝对不要 3'],
+    })
+    await repository.saveBrief(upperBoundary)
+    expect(await repository.getBrief('plan-1')).toEqual(upperBoundary)
+
+    for (const invalid of [
+      brief({ id: 'brief-empty-priorities', topPriorities: [] }),
+      brief({ id: 'brief-many-priorities', topPriorities: ['1', '2', '3', '4'] }),
+      brief({ id: 'brief-empty-avoids', absoluteAvoids: [] }),
+      brief({ id: 'brief-many-avoids', absoluteAvoids: ['1', '2', '3', '4'] }),
+    ]) {
+      await expect(repository.saveBrief(invalid)).rejects.toThrow('between 1 and 3')
+    }
+
+    await repository.deleteBrief('plan-1')
+    expect(await repository.getBrief('plan-1')).toBeUndefined()
+  })
+
+  test('rejects reusing a brief id across plans without changing either brief', async () => {
+    await seedPlan()
+    await repository.savePlanWithCandidates(
+      plan({ id: 'plan-2' }),
+      [
+        candidate(1, { id: 'plan-2-candidate-1', planId: 'plan-2' }),
+        candidate(2, { id: 'plan-2-candidate-2', planId: 'plan-2' }),
+      ],
+    )
+    const firstBrief = brief()
+    const secondBrief = brief({ id: 'brief-2', planId: 'plan-2' })
+    await repository.saveBrief(firstBrief)
+    await repository.saveBrief(secondBrief)
+
+    await expect(repository.saveBrief(brief({
+      id: 'brief-1',
+      planId: 'plan-2',
+      overall: '不应覆盖任何计划',
+    }))).rejects.toThrow('Brief id already belongs to another plan')
+
+    expect(await repository.getBrief('plan-1')).toEqual(firstBrief)
+    expect(await repository.getBrief('plan-2')).toEqual(secondBrief)
+  })
+
+  test('returns the minimum record and its one photo', async () => {
+    await seedPlan()
+    const record = repeatRecord({ satisfaction: 1 })
+    const recordPhoto = photo()
+
+    const saved = await repository.saveRecordWithPhotos(record, [recordPhoto])
+
+    expect(saved.record).toEqual(record)
+    expect(saved.photos).toHaveLength(1)
+    expect(await repository.getRecord('record-1')).toEqual(record)
+    expect(await repository.listRecords('profile-1')).toEqual([record])
+    expect(await repository.getPhoto('photo-1')).toMatchObject({
+      recordId: 'record-1',
+      stage: 'unstyled',
+    })
+    expect(await repository.listPhotos('record-1')).toHaveLength(1)
+  })
+
+  test('creates one standard style for a repeat outcome', async () => {
+    await seedPlan()
+    await repository.saveRecordWithPhotos(repeatRecord(), [photo()])
+
+    expect(await repository.listStandardStyles('record-1')).toEqual([{
+      id: 'standard-style:record-1',
+      profileId: 'profile-1',
+      recordId: 'record-1',
+      name: '清爽短碎发',
+    }])
+    expect(await repository.listAvoidRules('record-1')).toEqual([])
+  })
+
+  test('creates one to three avoid rules for an avoid outcome', async () => {
+    await seedPlan()
+    const record = avoidRecord({
+      avoidRules: ['两侧不要推白', '顶部不要打得太薄', '后颈不要留长尾'],
+    })
+    await repository.saveRecordWithPhotos(record, [photo()])
+
+    expect(await repository.listAvoidRules('record-1')).toEqual([
+      {
+        id: 'avoid-rule:record-1:1',
+        profileId: 'profile-1',
+        recordId: 'record-1',
+        text: '两侧不要推白',
+      },
+      {
+        id: 'avoid-rule:record-1:2',
+        profileId: 'profile-1',
+        recordId: 'record-1',
+        text: '顶部不要打得太薄',
+      },
+      {
+        id: 'avoid-rule:record-1:3',
+        profileId: 'profile-1',
+        recordId: 'record-1',
+        text: '后颈不要留长尾',
+      },
+    ])
+    expect(await repository.listStandardStyles('record-1')).toEqual([])
+  })
+
+  test('rejects invalid satisfaction and an empty photo set without partial writes', async () => {
+    await seedPlan()
+
+    for (const satisfaction of [0, 6, 1.5, Number.NaN]) {
+      const invalid = repeatRecord({
+        id: `record-${String(satisfaction)}`,
+        satisfaction,
+      } as Partial<HaircutRecord>)
+      await expect(
+        repository.saveRecordWithPhotos(invalid, [photo({
+          id: `photo-${String(satisfaction)}`,
+          recordId: invalid.id,
+        })]),
+      ).rejects.toThrow('satisfaction must be an integer from 1 to 5')
+      expect(await repository.getRecord(invalid.id)).toBeUndefined()
+    }
+
+    await expect(
+      repository.saveRecordWithPhotos(repeatRecord(), []),
+    ).rejects.toThrow('at least one photo')
+    expect(await repository.getRecord('record-1')).toBeUndefined()
+  })
+
+  test('atomically updates record photos and outcome-derived data', async () => {
+    await seedPlan()
+    await repository.saveRecordWithPhotos(repeatRecord(), [photo()])
+    const updated = avoidRecord({ avoidRules: ['不要推白', '不要打薄'] })
+
+    await repository.saveRecordWithPhotos(updated, [photo({
+      id: 'photo-updated',
+      stage: 'after_wash',
+    })])
+
+    expect(await repository.getRecord('record-1')).toEqual(updated)
+    expect(await repository.getPhoto('photo-1')).toBeUndefined()
+    expect(await repository.listPhotos('record-1')).toHaveLength(1)
+    expect(await repository.listStandardStyles('record-1')).toEqual([])
+    expect(await repository.listAvoidRules('record-1')).toHaveLength(2)
+  })
+
+  test('rolls back the old record, photos, and derived data when an update write fails', async () => {
+    await seedPlan()
+    const original = repeatRecord()
+    await repository.saveRecordWithPhotos(original, [photo()])
+    await db.photos.add(photo({
+      id: 'occupied-photo',
+      recordId: 'other-record',
+    }))
+
+    const updated = avoidRecord({ avoidRules: ['不要推白'] })
+    await expect(repository.saveRecordWithPhotos(updated, [
+      photo({ id: 'new-photo' }),
+      photo({ id: 'occupied-photo' }),
+    ])).rejects.toThrow()
+
+    expect(await repository.getRecord('record-1')).toEqual(original)
+    expect(await repository.getPhoto('photo-1')).toMatchObject({ recordId: 'record-1' })
+    expect(await repository.getPhoto('new-photo')).toBeUndefined()
+    expect(await repository.getPhoto('occupied-photo')).toMatchObject({
+      recordId: 'other-record',
+    })
+    expect(await repository.listStandardStyles('record-1')).toHaveLength(1)
+    expect(await repository.listAvoidRules('record-1')).toEqual([])
+  })
+
+  test('deleting a record removes its photos and derived data', async () => {
+    await seedPlan()
+    await repository.saveRecordWithPhotos(repeatRecord(), [photo()])
+    await repository.saveRecordWithPhotos(
+      avoidRecord({ id: 'record-2', avoidRules: ['不要推白'] }),
+      [photo({ id: 'photo-2', recordId: 'record-2' })],
+    )
+
+    await repository.deleteRecord('record-1')
+
+    expect(await repository.getRecord('record-1')).toBeUndefined()
+    expect(await repository.listPhotos('record-1')).toEqual([])
+    expect(await repository.listStandardStyles('record-1')).toEqual([])
+    expect(await repository.listAvoidRules('record-1')).toEqual([])
+    expect(await repository.getRecord('record-2')).toBeDefined()
+    expect(await repository.getPhoto('photo-2')).toBeDefined()
+    expect(await repository.listAvoidRules('record-2')).toHaveLength(1)
+
+    await repository.deleteRecord('record-2')
+    expect(await repository.getRecord('record-2')).toBeUndefined()
+    expect(await repository.getPhoto('photo-2')).toBeUndefined()
+    expect(await repository.listAvoidRules('record-2')).toEqual([])
+  })
+
+  test('deleting a plan removes candidates and brief but preserves its historical record', async () => {
+    await seedPlan()
+    await repository.saveBrief(brief())
+    await repository.savePlanWithCandidates(
+      plan({ id: 'plan-2' }),
+      [
+        candidate(1, { id: 'plan-2-candidate-1', planId: 'plan-2' }),
+        candidate(2, { id: 'plan-2-candidate-2', planId: 'plan-2' }),
+      ],
+    )
+    const siblingBrief = brief({ id: 'brief-2', planId: 'plan-2' })
+    await repository.saveBrief(siblingBrief)
+    await repository.saveRecordWithPhotos(repeatRecord(), [photo()])
+
+    await repository.deletePlan('plan-1')
+
+    expect(await repository.getPlan('plan-1')).toBeUndefined()
+    expect(await repository.listCandidates('plan-1')).toEqual([])
+    expect(await repository.getBrief('plan-1')).toBeUndefined()
+    expect(await repository.getRecord('record-1')).toEqual(repeatRecord())
+    expect(await repository.listPhotos('record-1')).toHaveLength(1)
+    expect(await repository.listStandardStyles('record-1')).toHaveLength(1)
+    expect(await repository.getPlan('plan-2')).toBeDefined()
+    expect(await repository.listCandidates('plan-2')).toHaveLength(2)
+    expect(await repository.getBrief('plan-2')).toEqual(siblingBrief)
+  })
+
+  test('deleting a profile cascades through all archive-owned data', async () => {
+    await seedPlan()
+    await repository.saveBrief(brief())
+    await repository.saveRecordWithPhotos(repeatRecord(), [photo()])
+    await repository.saveRecordWithPhotos(
+      avoidRecord({ id: 'record-avoid', avoidRules: ['不要推白'] }),
+      [photo({ id: 'photo-avoid', recordId: 'record-avoid' })],
+    )
+
+    await repository.createProfile(profile({ id: 'profile-2', name: '保留的档案' }))
+    await repository.savePlanWithCandidates(
+      plan({ id: 'plan-2', profileId: 'profile-2' }),
+      [
+        candidate(1, { id: 'plan-2-candidate-1', planId: 'plan-2' }),
+        candidate(2, { id: 'plan-2-candidate-2', planId: 'plan-2' }),
+      ],
+    )
+    const siblingBrief = brief({
+      id: 'brief-2',
+      profileId: 'profile-2',
+      planId: 'plan-2',
+    })
+    await repository.saveBrief(siblingBrief)
+    await repository.saveRecordWithPhotos(
+      repeatRecord({
+        id: 'record-2',
+        profileId: 'profile-2',
+        planId: 'plan-2',
+      }),
+      [photo({ id: 'photo-2', recordId: 'record-2' })],
+    )
+    await repository.saveRecordWithPhotos(
+      avoidRecord({
+        id: 'record-2-avoid',
+        profileId: 'profile-2',
+        planId: 'plan-2',
+        avoidRules: ['保留的规则'],
+      }),
+      [photo({ id: 'photo-2-avoid', recordId: 'record-2-avoid' })],
+    )
+
+    await repository.deleteProfile('profile-1')
+
+    expect(await repository.getProfile('profile-1')).toBeUndefined()
+    expect(await repository.getPlan('plan-1')).toBeUndefined()
+    expect(await repository.listCandidates('plan-1')).toEqual([])
+    expect(await repository.getBrief('plan-1')).toBeUndefined()
+    expect(await repository.listRecords('profile-1')).toEqual([])
+    expect(await repository.getPhoto('photo-1')).toBeUndefined()
+    expect(await repository.getPhoto('photo-avoid')).toBeUndefined()
+    expect(await repository.listStandardStyles('record-1')).toEqual([])
+    expect(await repository.listAvoidRules('record-avoid')).toEqual([])
+
+    expect(await repository.getProfile('profile-2')).toEqual(
+      profile({ id: 'profile-2', name: '保留的档案' }),
+    )
+    expect(await repository.getPlan('plan-2')).toBeDefined()
+    expect(await repository.listCandidates('plan-2')).toHaveLength(2)
+    expect(await repository.getBrief('plan-2')).toEqual(siblingBrief)
+    expect(await repository.listRecords('profile-2')).toHaveLength(2)
+    expect(await repository.getPhoto('photo-2')).toBeDefined()
+    expect(await repository.getPhoto('photo-2-avoid')).toBeDefined()
+    expect(await repository.listStandardStyles('record-2')).toHaveLength(1)
+    expect(await repository.listAvoidRules('record-2-avoid')).toHaveLength(1)
+  })
+
+  test('defines indexes for profile, plan, record, date, and status queries', () => {
+    expect(db.plans.schema.indexes.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(['profileId', 'date', 'status']),
+    )
+    expect(db.candidates.schema.indexes.map(({ name }) => name)).toContain('planId')
+    expect(db.briefs.schema.indexes.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(['profileId', 'planId']),
+    )
+    expect(db.records.schema.indexes.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(['profileId', 'planId', 'date', 'status']),
+    )
+    expect(db.photos.schema.indexes.map(({ name }) => name)).toContain('recordId')
+    expect(db.avoidRules.schema.indexes.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(['profileId', 'recordId']),
+    )
+    expect(db.standardStyles.schema.indexes.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(['profileId', 'recordId']),
+    )
+  })
+
+  test('maps quota failures to a recognizable storage error', async () => {
+    const quotaError = new DOMException('Storage is full', 'QuotaExceededError')
+    const wrappedQuotaError = new Dexie.BulkError('Profile write failed', {
+      0: quotaError,
+    })
+    vi.spyOn(db.profiles, 'add').mockRejectedValueOnce(wrappedQuotaError)
+
+    const error = await repository.createProfile(profile()).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(ArchiveStorageError)
+    expect(error).toMatchObject({
+      code: 'quota_exceeded',
+      cause: wrappedQuotaError,
+    })
+  })
+
+  test('maps unavailable IndexedDB failures and rethrows unrelated failures', async () => {
+    const unavailable = new DOMException('IndexedDB is unavailable', 'InvalidStateError')
+    const wrappedUnavailable = new Dexie.DatabaseClosedError(
+      'Profile write failed',
+      unavailable,
+    )
+    vi.spyOn(db.profiles, 'add').mockRejectedValueOnce(wrappedUnavailable)
+    await expect(repository.createProfile(profile())).rejects.toMatchObject({
+      code: 'unavailable',
+      cause: wrappedUnavailable,
+    })
+
+    const unrelated = new Error('unexpected write failure')
+    vi.spyOn(db.profiles, 'add').mockRejectedValueOnce(unrelated)
+    await expect(repository.createProfile(profile())).rejects.toBe(unrelated)
+  })
+})
