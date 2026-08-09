@@ -1,9 +1,53 @@
+/// <reference lib="dom" />
+
 import path from 'node:path'
 
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 const TEST_DB_SESSION_KEY = '__zajianfa_e2e_archive_db__'
 const databaseNames = new Map<string, string>()
+const PRIVATE_SOURCE_MARKER = 'M3A_PRIVATE_SOURCE_BYTES_AND_FILENAME'
+
+const createOrientationSixJpeg = async (page: Page) => {
+  const jpegBytes = await page.evaluate(async () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 80
+    canvas.height = 40
+    const context = canvas.getContext('2d')
+    if (!context) {
+      throw new Error('Fixture canvas unavailable')
+    }
+    context.fillStyle = '#ef1f1f'
+    context.fillRect(0, 0, 40, 40)
+    context.fillStyle = '#1f3fef'
+    context.fillRect(40, 0, 40, 40)
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Fixture encode failed')), 'image/jpeg', 0.95)
+    })
+    return [...new Uint8Array(await blob.arrayBuffer())]
+  })
+  const jpeg = Buffer.from(jpegBytes)
+  const exifPayload = Buffer.from([
+    0x45, 0x78, 0x69, 0x66, 0x00, 0x00,
+    0x4d, 0x4d, 0x00, 0x2a, 0x00, 0x00, 0x00, 0x08,
+    0x00, 0x01,
+    0x01, 0x12, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01,
+    0x00, 0x06, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+  ])
+  const app1 = Buffer.alloc(exifPayload.length + 4)
+  app1[0] = 0xff
+  app1[1] = 0xe1
+  app1.writeUInt16BE(exifPayload.length + 2, 2)
+  exifPayload.copy(app1, 4)
+  const privateBytes = Buffer.from(PRIVATE_SOURCE_MARKER, 'utf8')
+  const comment = Buffer.alloc(privateBytes.length + 4)
+  comment[0] = 0xff
+  comment[1] = 0xfe
+  comment.writeUInt16BE(privateBytes.length + 2, 2)
+  privateBytes.copy(comment, 4)
+  return Buffer.concat([jpeg.subarray(0, 2), app1, comment, jpeg.subarray(2)])
+}
 
 test.beforeEach(async ({ page }, testInfo) => {
   const databaseName = `zajianfa-e2e-${testInfo.workerIndex}-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -166,15 +210,181 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
         innerWidth: number
       }
       const targetHeights = [...browser.document.querySelectorAll('a, button')]
-        .map((target) => target.getBoundingClientRect())
-        .filter(({ height, width }) => height > 0 && width > 0)
-        .map(({ height }) => height)
+        .map((target) => ({
+          box: target.getBoundingClientRect(),
+          label: (target as unknown as { textContent: string | null }).textContent?.trim() ?? '',
+        }))
+        .filter(({ box: { height, width } }) => height > 0 && width > 0)
+        .sort((left, right) => left.box.height - right.box.height)
       return {
         hasHorizontalOverflow: browser.document.documentElement.scrollWidth > browser.innerWidth,
-        minimumTargetHeight: Math.min(...targetHeights),
+        minimumTargetHeight: targetHeights[0]?.box.height ?? 0,
+        minimumTargetLabel: targetHeights[0]?.label ?? '',
       }
     })
     expect(layout.hasHorizontalOverflow).toBe(false)
-    expect(layout.minimumTargetHeight).toBeGreaterThanOrEqual(45)
+    expect(layout.minimumTargetHeight, layout.minimumTargetLabel).toBeGreaterThanOrEqual(45)
   }
+})
+
+test('prepares an orientation-6 JPEG locally before saving and never sends source bytes', async ({
+  page,
+}, testInfo) => {
+  const requests: { url: string, body: Buffer | null }[] = []
+  page.on('request', (request) => {
+    requests.push({ url: request.url(), body: request.postDataBuffer() })
+  })
+  await page.goto('/archive')
+  const sourceJpeg = await createOrientationSixJpeg(page)
+  expect(sourceJpeg.includes(Buffer.from('Exif\0\0', 'binary'))).toBe(true)
+  expect(sourceJpeg.includes(Buffer.from(PRIVATE_SOURCE_MARKER))).toBe(true)
+
+  await page.getByRole('link', { name: '建立档案' }).click()
+  await page.getByLabel('称呼').fill('本地图片测试')
+  await page.getByLabel('发质').selectOption('straight')
+  await page.getByLabel('发丝粗细').selectOption('medium')
+  await page.getByLabel('发量').selectOption('medium')
+  await page.getByLabel('日常打理分钟').fill('5')
+  await page.getByLabel('洗发频率').selectOption('daily')
+  await page.getByRole('button', { name: '保存档案' }).click()
+  await page.getByRole('link', { name: '记录这次理发' }).click()
+  await page.getByLabel('理发日期').fill('2026-08-10')
+  await page.getByLabel('发型名').fill('方向纠正测试')
+  await page.getByLabel('已造型照片').setInputFiles({
+    name: '私密原图-tony.jpg',
+    mimeType: 'image/jpeg',
+    buffer: sourceJpeg,
+  })
+
+  await expect(page.getByText(/已在本地处理：40 × 80/)).toBeVisible()
+  const preparedPreview = page.getByRole('img', { name: '已造型处理后预览' })
+  await expect(preparedPreview).toBeVisible()
+  await expect.poll(() => preparedPreview.evaluate((image) => ({
+    width: (image as HTMLImageElement).naturalWidth,
+    height: (image as HTMLImageElement).naturalHeight,
+  }))).toEqual({ width: 40, height: 80 })
+  await expect(page.getByText(/不会上传/)).toBeVisible()
+  for (const viewport of [
+    { width: 360, height: 800 },
+    { width: 390, height: 844 },
+    { width: 430, height: 932 },
+    { width: 1280, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport)
+    const layout = await page.evaluate(() => {
+      const targets = [...document.querySelectorAll('a, button')]
+        .map((target) => ({
+          box: target.getBoundingClientRect(),
+          label: target.textContent?.trim() ?? '',
+          className: target.className,
+        }))
+        .filter(({ box: { height, width } }) => height > 0 && width > 0)
+        .sort((left, right) => left.box.height - right.box.height)
+      return {
+        hasHorizontalOverflow: document.documentElement.scrollWidth > innerWidth,
+        minimumTargetHeight: targets[0]?.box.height ?? 0,
+        minimumTarget: `${targets[0]?.label ?? ''} (${targets[0]?.className ?? ''})`,
+      }
+    })
+    expect(layout.hasHorizontalOverflow).toBe(false)
+    expect(layout.minimumTargetHeight, layout.minimumTarget).toBeGreaterThanOrEqual(45)
+  }
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.screenshot({ path: testInfo.outputPath('m3a-processing-form-390x844.png'), fullPage: true })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  const transitionSeconds = await page.getByRole('button', { name: '保存剪后记录' }).evaluate(
+    (button) => Number.parseFloat(getComputedStyle(button).transitionDuration) || 0,
+  )
+  expect(transitionSeconds).toBeLessThanOrEqual(0.001)
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+
+  await page.getByRole('button', { name: '保存剪后记录' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: '方向纠正测试' })).toBeVisible()
+
+  const databaseName = databaseNames.get(testInfo.testId)
+  expect(databaseName).toBeTruthy()
+  const photo = await page.evaluate(async (name) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(name)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    try {
+      const row = await new Promise<{
+        image: Blob
+        width?: number
+        height?: number
+        bytes?: number
+        processedAt?: string
+      }>((resolve, reject) => {
+        const request = database.transaction('photos', 'readonly').objectStore('photos').getAll()
+        request.onsuccess = () => resolve(request.result[0])
+        request.onerror = () => reject(request.error)
+      })
+      const bytes = new Uint8Array(await row.image.arrayBuffer())
+      const bitmap = await createImageBitmap(row.image)
+      const result = {
+        type: row.image.type,
+        size: row.image.size,
+        width: row.width,
+        height: row.height,
+        bytes: row.bytes,
+        processedAt: row.processedAt,
+        bitmapWidth: bitmap.width,
+        bitmapHeight: bitmap.height,
+        byteText: new TextDecoder('latin1').decode(bytes),
+      }
+      bitmap.close()
+      return result
+    } finally {
+      database.close()
+    }
+  }, databaseName as string)
+
+  expect(['image/webp', 'image/jpeg']).toContain(photo.type)
+  expect(photo.size).toBeLessThanOrEqual(1_500_000)
+  expect(photo).toMatchObject({
+    width: 40,
+    height: 80,
+    bytes: photo.size,
+    bitmapWidth: 40,
+    bitmapHeight: 80,
+  })
+  expect(photo.processedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+  expect(photo.byteText).not.toContain('Exif')
+  expect(photo.byteText).not.toContain('EXIF')
+  expect(photo.byteText).not.toContain(PRIVATE_SOURCE_MARKER)
+
+  await page.reload()
+  const savedImage = page.getByRole('img', { name: '方向纠正测试的已造型照片' })
+  await expect(savedImage).toBeVisible()
+  const displayed = await savedImage.evaluate((image) => {
+    const photo = image as HTMLImageElement
+    const canvas = document.createElement('canvas')
+    canvas.width = photo.naturalWidth
+    canvas.height = photo.naturalHeight
+    const context = canvas.getContext('2d')
+    if (!context) {
+      throw new Error('Display verification canvas unavailable')
+    }
+    context.drawImage(photo, 0, 0)
+    return {
+      width: photo.naturalWidth,
+      height: photo.naturalHeight,
+      top: [...context.getImageData(20, 20, 1, 1).data],
+      bottom: [...context.getImageData(20, 60, 1, 1).data],
+    }
+  })
+  expect(displayed).toMatchObject({ width: 40, height: 80 })
+  expect(displayed.top[0]).toBeGreaterThan(displayed.top[2] ?? 0)
+  expect(displayed.bottom[2]).toBeGreaterThan(displayed.bottom[0] ?? 0)
+  await page.screenshot({ path: testInfo.outputPath('m3a-local-image-390x844.png'), fullPage: true })
+
+  const externalRequests = requests.filter(({ url }) => {
+    const parsed = new URL(url)
+    return ['http:', 'https:'].includes(parsed.protocol)
+      && parsed.origin !== 'http://127.0.0.1:4173'
+  })
+  expect(externalRequests).toEqual([])
+  expect(requests.some(({ body }) => body?.includes(Buffer.from(PRIVATE_SOURCE_MARKER)))).toBe(false)
 })

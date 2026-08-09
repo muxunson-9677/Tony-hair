@@ -1,6 +1,6 @@
 /// <reference types="node" />
 
-import { File as NodeFile } from 'node:buffer'
+import { Blob as NodeBlob, File as NodeFile } from 'node:buffer'
 
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/vue'
 import { createPinia } from 'pinia'
@@ -12,6 +12,7 @@ import { createAppRouter } from '../../router'
 import { ArchiveStorageError } from './ArchiveRepository'
 import { defaultArchiveDb, defaultArchiveRepository } from './archiveStore'
 import * as briefExport from './briefExport'
+import * as localImages from '../images/prepareLocalImage'
 import type {
   BarberBrief,
   Candidate,
@@ -485,6 +486,20 @@ describe('archive routes and forms', () => {
 
   test('validates the record form, converts yuan to cents, and preserves an unreplaced photo on edit', async () => {
     await defaultArchiveRepository.createProfile(existingProfile)
+    const preparedBlob = new NodeBlob(['prepared-photo'], {
+      type: 'image/webp',
+    }) as unknown as Blob
+    const prepareImage = vi.spyOn(localImages, 'prepareLocalImage').mockResolvedValue({
+      blob: preparedBlob,
+      mimeType: 'image/webp',
+      width: 1280,
+      height: 1920,
+      originalWidth: 2000,
+      originalHeight: 3000,
+      bytes: preparedBlob.size,
+      processedAt: '2026-08-20T09:30:00.000Z',
+    })
+    const saveRecord = vi.spyOn(defaultArchiveRepository, 'saveRecordWithPhotos')
     const router = await renderAt('/archive/records/new')
 
     expect(await screen.findByRole('heading', { level: 1, name: '记录这次理发' })).toBeTruthy()
@@ -512,6 +527,14 @@ describe('archive routes and forms', () => {
       value: [localPhoto],
     })
     await fireEvent(styledPhotoInput, new Event('change', { bubbles: true }))
+    expect(await screen.findByText(/1280 × 1920.*14 B/)).toBeTruthy()
+    const preview = screen.getByRole('img', { name: '已造型处理后预览' })
+    const previewCallIndex = vi.mocked(URL.createObjectURL).mock.calls.findIndex(
+      ([blob]) => blob === preparedBlob,
+    )
+    const previewUrl = vi.mocked(URL.createObjectURL).mock.results[previewCallIndex]?.value
+    expect(preview.getAttribute('src')).toBe(previewUrl)
+    expect(previewUrl).toBeTruthy()
     await fireEvent.click(screen.getByLabelText('避雷'))
     await fireEvent.update(screen.getByLabelText('避雷规则 1'), '   ')
     await fireEvent.click(screen.getByRole('button', { name: '保存剪后记录' }))
@@ -521,6 +544,7 @@ describe('archive routes and forms', () => {
     await fireEvent.click(screen.getByRole('button', { name: '保存剪后记录' }))
 
     await waitFor(() => expect(router.currentRoute.value.path).not.toBe('/archive/records/new'))
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(previewUrl)
     const record = (await defaultArchiveRepository.listRecords(existingProfile.id))[0]
     expect(record).toMatchObject({
       styleName: '纹理短碎发',
@@ -528,7 +552,26 @@ describe('archive routes and forms', () => {
       durationMinutes: 75,
       outcome: 'repeat',
     })
-    expect((await defaultArchiveRepository.listPhotos(record?.id ?? ''))[0]?.stage).toBe('styled')
+    expect(prepareImage).toHaveBeenCalledWith(localPhoto)
+    const submittedPhotos = saveRecord.mock.calls[0]?.[1]
+    expect(submittedPhotos?.[0]).toMatchObject({
+      stage: 'styled',
+      image: preparedBlob,
+      width: 1280,
+      height: 1920,
+      bytes: preparedBlob.size,
+      processedAt: '2026-08-20T09:30:00.000Z',
+    })
+    expect(submittedPhotos?.[0]?.image).not.toBe(localPhoto)
+    const storedPhoto = (await defaultArchiveRepository.listPhotos(record?.id ?? ''))[0]
+    expect(storedPhoto).toMatchObject({
+      stage: 'styled',
+      width: 1280,
+      height: 1920,
+      bytes: preparedBlob.size,
+      processedAt: '2026-08-20T09:30:00.000Z',
+    })
+    expect(await storedPhoto?.image.text()).toBe('prepared-photo')
     expect(await screen.findByText('¥128.50')).toBeTruthy()
     expect(screen.getByText('5 / 5')).toBeTruthy()
     expect(screen.getByText('已存为标准发型')).toBeTruthy()
@@ -542,11 +585,163 @@ describe('archive routes and forms', () => {
 
     expect(await screen.findByText('这次记为避雷')).toBeTruthy()
     expect(screen.getByText('两侧不要推白')).toBeTruthy()
-    expect(await (await defaultArchiveRepository.listPhotos(record?.id ?? ''))[0]?.image.text()).toBe('styled-photo')
+    const editedPhoto = (await defaultArchiveRepository.listPhotos(record?.id ?? ''))[0]
+    expect(await editedPhoto?.image.text()).toBe('prepared-photo')
+    expect(editedPhoto).toMatchObject({
+      width: 1280,
+      height: 1920,
+      bytes: preparedBlob.size,
+      processedAt: '2026-08-20T09:30:00.000Z',
+    })
     expect(await defaultArchiveRepository.listStandardStylesByProfile(existingProfile.id)).toEqual([])
     expect(await defaultArchiveRepository.listAvoidRulesByProfile(existingProfile.id)).toMatchObject([
       { text: '两侧不要推白', active: true },
     ])
+  })
+
+  test('waits for local image preparation before enabling save', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    let finishPreparation!: (value: localImages.PreparedLocalImage) => void
+    vi.spyOn(localImages, 'prepareLocalImage').mockReturnValue(new Promise((resolve) => {
+      finishPreparation = resolve
+    }))
+    await renderAt('/archive/records/new')
+    const saveButton = await screen.findByRole('button', { name: '保存剪后记录' })
+    const input = screen.getByLabelText('已造型照片') as HTMLInputElement
+    Object.defineProperty(input, 'files', { configurable: true, value: [localPhoto] })
+
+    await fireEvent(input, new Event('change', { bubbles: true }))
+
+    expect(await screen.findByText('本地处理中…')).toBeTruthy()
+    expect((saveButton as HTMLButtonElement).disabled).toBe(true)
+
+    const preparedBlob = new NodeBlob(['ready'], { type: 'image/webp' }) as unknown as Blob
+    finishPreparation({
+      blob: preparedBlob,
+      mimeType: 'image/webp',
+      width: 800,
+      height: 1200,
+      originalWidth: 800,
+      originalHeight: 1200,
+      bytes: preparedBlob.size,
+      processedAt: '2026-08-20T09:30:00.000Z',
+    })
+
+    expect(await screen.findByText(/800 × 1200.*5 B/)).toBeTruthy()
+    expect((saveButton as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  test('shows a local failure and never saves an unprepared file', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    vi.spyOn(localImages, 'prepareLocalImage').mockRejectedValue(
+      new localImages.ImagePreparationError('decode_failed'),
+    )
+    const saveRecord = vi.spyOn(defaultArchiveRepository, 'saveRecordWithPhotos')
+    await renderAt('/archive/records/new')
+    await fireEvent.update(await screen.findByLabelText('理发日期'), '2026-08-20')
+    await fireEvent.update(screen.getByLabelText('发型名'), '无法处理的照片')
+    const input = screen.getByLabelText('已造型照片') as HTMLInputElement
+    Object.defineProperty(input, 'files', { configurable: true, value: [localPhoto] })
+
+    await fireEvent(input, new Event('change', { bubbles: true }))
+
+    expect((await screen.findAllByText('无法读取这张照片，请换一张后重试。')).length)
+      .toBeGreaterThan(0)
+    await fireEvent.click(screen.getByRole('button', { name: '保存剪后记录' }))
+    expect(saveRecord).not.toHaveBeenCalled()
+    expect(await defaultArchiveRepository.listRecords(existingProfile.id)).toEqual([])
+  })
+
+  test('clears an optional failed photo so another prepared photo can still be saved', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const preparedBlob = new NodeBlob(['prepared'], { type: 'image/webp' }) as unknown as Blob
+    vi.spyOn(localImages, 'prepareLocalImage')
+      .mockResolvedValueOnce({
+        blob: preparedBlob,
+        mimeType: 'image/webp',
+        width: 800,
+        height: 1200,
+        originalWidth: 800,
+        originalHeight: 1200,
+        bytes: preparedBlob.size,
+        processedAt: '2026-08-20T09:30:00.000Z',
+      })
+      .mockRejectedValueOnce(new localImages.ImagePreparationError('decode_failed'))
+    const router = await renderAt('/archive/records/new')
+    await fireEvent.update(await screen.findByLabelText('理发日期'), '2026-08-20')
+    await fireEvent.update(screen.getByLabelText('发型名'), '保留有效照片')
+    const styledInput = screen.getByLabelText('已造型照片') as HTMLInputElement
+    Object.defineProperty(styledInput, 'files', { configurable: true, value: [localPhoto] })
+    await fireEvent(styledInput, new Event('change', { bubbles: true }))
+    expect(await screen.findByText(/800 × 1200/)).toBeTruthy()
+    const optionalInput = screen.getByLabelText('剪前照片') as HTMLInputElement
+    Object.defineProperty(optionalInput, 'files', { configurable: true, value: [localPhoto] })
+    await fireEvent(optionalInput, new Event('change', { bubbles: true }))
+    expect((await screen.findAllByText('无法读取这张照片，请换一张后重试。')).length)
+      .toBeGreaterThan(0)
+
+    Object.defineProperty(optionalInput, 'files', { configurable: true, value: [] })
+    await fireEvent(optionalInput, new Event('change', { bubbles: true }))
+
+    await waitFor(() => {
+      expect(screen.queryByText('请重新选择处理失败的照片。')).toBeNull()
+      expect(screen.queryAllByText('无法读取这张照片，请换一张后重试。')).toEqual([])
+    })
+    await fireEvent.click(screen.getByRole('button', { name: '保存剪后记录' }))
+    await waitFor(() => expect(router.currentRoute.value.path).not.toBe('/archive/records/new'))
+    const record = (await defaultArchiveRepository.listRecords(existingProfile.id))[0]
+    const photos = await defaultArchiveRepository.listPhotos(record?.id ?? '')
+    expect(photos).toHaveLength(1)
+    expect(await photos[0]?.image.text()).toBe('prepared')
+  })
+
+  test('freezes file selection while a record save is pending', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const preparedBlob = new NodeBlob(['prepared'], { type: 'image/webp' }) as unknown as Blob
+    const prepareImage = vi.spyOn(localImages, 'prepareLocalImage').mockResolvedValue({
+      blob: preparedBlob,
+      mimeType: 'image/webp',
+      width: 800,
+      height: 1200,
+      originalWidth: 800,
+      originalHeight: 1200,
+      bytes: preparedBlob.size,
+      processedAt: '2026-08-20T09:30:00.000Z',
+    })
+    let releaseSave!: () => void
+    const saveGate = new Promise<void>((resolve) => {
+      releaseSave = resolve
+    })
+    const originalSave = defaultArchiveRepository.saveRecordWithPhotos.bind(defaultArchiveRepository)
+    vi.spyOn(defaultArchiveRepository, 'saveRecordWithPhotos').mockImplementation(async (...args) => {
+      await saveGate
+      return originalSave(...args)
+    })
+    const router = await renderAt('/archive/records/new')
+    await fireEvent.update(await screen.findByLabelText('理发日期'), '2026-08-20')
+    await fireEvent.update(screen.getByLabelText('发型名'), '保存中冻结')
+    const input = screen.getByLabelText('已造型照片') as HTMLInputElement
+    Object.defineProperty(input, 'files', { configurable: true, value: [localPhoto] })
+    await fireEvent(input, new Event('change', { bubbles: true }))
+    expect(await screen.findByText(/800 × 1200/)).toBeTruthy()
+    await fireEvent.click(screen.getByRole('button', { name: '保存剪后记录' }))
+
+    try {
+      await waitFor(() => expect(input.disabled).toBe(true))
+      const lateFile = new NodeFile(['late-file'], 'late.webp', {
+        type: 'image/webp',
+      }) as unknown as File
+      Object.defineProperty(input, 'files', { configurable: true, value: [lateFile] })
+      await fireEvent(input, new Event('change', { bubbles: true }))
+      expect(prepareImage).toHaveBeenCalledOnce()
+    } finally {
+      releaseSave()
+    }
+
+    await waitFor(() => expect(router.currentRoute.value.path).not.toBe('/archive/records/new'))
+    const record = (await defaultArchiveRepository.listRecords(existingProfile.id))[0]
+    expect(await (await defaultArchiveRepository.listPhotos(record?.id ?? ''))[0]?.image.text())
+      .toBe('prepared')
   })
 
   test('shows a real recent record on archive and home, then deletes only that record', async () => {

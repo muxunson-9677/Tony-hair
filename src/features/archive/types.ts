@@ -100,6 +100,10 @@ export interface HaircutPhoto {
   readonly stage: 'before' | 'during' | 'unstyled' | 'styled' | 'after_wash' | 'day_7'
   readonly image: Blob
   readonly capturedAt: string
+  readonly width?: number
+  readonly height?: number
+  readonly bytes?: number
+  readonly processedAt?: string
 }
 
 export interface AvoidRule {

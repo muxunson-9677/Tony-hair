@@ -1042,6 +1042,10 @@ describe('ArchiveRepository', () => {
       id: 'legacy-v2-photo',
       capturedAt: '1970-01-01T00:00:00.000Z',
     })
+    expect(photos[0]).not.toHaveProperty('width')
+    expect(photos[0]).not.toHaveProperty('height')
+    expect(photos[0]).not.toHaveProperty('bytes')
+    expect(photos[0]).not.toHaveProperty('processedAt')
     expect(await photos[0]?.image.text()).toBe('legacy-photo')
     expect(rules).toMatchObject([{
       id: 'legacy-v2-rule',

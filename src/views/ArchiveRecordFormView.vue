@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -7,6 +7,11 @@ import {
   type HaircutPhotoDraft,
 } from '../features/archive/archiveStore'
 import type { HaircutPhoto } from '../features/archive/types'
+import {
+  ImagePreparationError,
+  prepareLocalImage,
+  type PreparedLocalImage,
+} from '../features/images/prepareLocalImage'
 
 type PhotoStage = HaircutPhoto['stage']
 
@@ -30,6 +35,24 @@ const recordMissing = ref(false)
 const localError = ref<string | null>(null)
 const existingPhotos = ref<HaircutPhoto[]>([])
 const replacementPhotosByStage = reactive<Partial<Record<PhotoStage, HaircutPhotoDraft>>>({})
+type PhotoPreparationState =
+  | { readonly status: 'processing', readonly requestId: number }
+  | {
+    readonly status: 'ready'
+    readonly requestId: number
+    readonly prepared: PreparedLocalImage
+    readonly previewUrl: string
+  }
+  | { readonly status: 'error', readonly requestId: number, readonly message: string }
+const photoPreparationByStage = reactive<Partial<Record<PhotoStage, PhotoPreparationState>>>({})
+let photoRequestId = 0
+let unmounted = false
+const isProcessingPhotos = computed(() => Object.values(photoPreparationByStage).some(
+  (state) => state?.status === 'processing',
+))
+const hasFailedPhotos = computed(() => Object.values(photoPreparationByStage).some(
+  (state) => state?.status === 'error',
+))
 
 const localDateInputValue = (date = new Date()) => {
   const year = date.getFullYear()
@@ -66,12 +89,95 @@ const parseYuan = (value: string): number | undefined | null => {
   return Number.isSafeInteger(cents) ? cents : null
 }
 
-const setPhoto = (stage: PhotoStage, event: Event) => {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  if (file) {
-    replacementPhotosByStage[stage] = { stage, image: file }
-    localError.value = null
+const readableBytes = (bytes: number) => {
+  if (bytes < 1024) {
+    return `${bytes} B`
   }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
+
+const releasePhotoPreview = (stage: PhotoStage) => {
+  const state = photoPreparationByStage[stage]
+  if (state?.status === 'ready') {
+    URL.revokeObjectURL(state.previewUrl)
+  }
+}
+
+const clearPhotoSelection = (stage: PhotoStage) => {
+  const state = photoPreparationByStage[stage]
+  releasePhotoPreview(stage)
+  delete replacementPhotosByStage[stage]
+  delete photoPreparationByStage[stage]
+  if (state?.status === 'error' && localError.value === state.message) {
+    const remainingError = Object.values(photoPreparationByStage).find(
+      (candidate) => candidate?.status === 'error',
+    )
+    localError.value = remainingError?.status === 'error' ? remainingError.message : null
+  }
+}
+
+const setPhoto = async (stage: PhotoStage, event: Event) => {
+  if (store.saving) {
+    return
+  }
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) {
+    clearPhotoSelection(stage)
+    return
+  }
+
+  const requestId = photoRequestId += 1
+  releasePhotoPreview(stage)
+  delete replacementPhotosByStage[stage]
+  photoPreparationByStage[stage] = { status: 'processing', requestId }
+  localError.value = null
+  try {
+    const prepared = await prepareLocalImage(file)
+    if (unmounted || photoPreparationByStage[stage]?.requestId !== requestId) {
+      return
+    }
+    const previewUrl = URL.createObjectURL(prepared.blob)
+    replacementPhotosByStage[stage] = {
+      stage,
+      image: prepared.blob,
+      width: prepared.width,
+      height: prepared.height,
+      bytes: prepared.bytes,
+      processedAt: prepared.processedAt,
+    }
+    photoPreparationByStage[stage] = { status: 'ready', requestId, prepared, previewUrl }
+  } catch (caught) {
+    if (unmounted || photoPreparationByStage[stage]?.requestId !== requestId) {
+      return
+    }
+    const error = caught instanceof ImagePreparationError
+      ? caught
+      : new ImagePreparationError('encode_failed')
+    photoPreparationByStage[stage] = { status: 'error', requestId, message: error.message }
+    localError.value = error.message
+  }
+}
+
+const photoPreviewUrl = (stage: PhotoStage) => {
+  const state = photoPreparationByStage[stage]
+  return state?.status === 'ready' ? state.previewUrl : ''
+}
+
+const photoPreparationLabel = (stage: PhotoStage) => {
+  const state = photoPreparationByStage[stage]
+  if (!state) {
+    return ''
+  }
+  if (state.status === 'processing') {
+    return '本地处理中…'
+  }
+  if (state.status === 'error') {
+    return state.message
+  }
+  return `已在本地处理：${state.prepared.width} × ${state.prepared.height} · ${readableBytes(state.prepared.bytes)}`
 }
 
 const existingPhotoLabel = (stage: PhotoStage) => (
@@ -82,6 +188,14 @@ const existingPhotoLabel = (stage: PhotoStage) => (
 
 const submit = async () => {
   localError.value = null
+  if (isProcessingPhotos.value) {
+    localError.value = '请等待照片在本地处理完成。'
+    return
+  }
+  if (hasFailedPhotos.value) {
+    localError.value = '请重新选择处理失败的照片。'
+    return
+  }
   const priceCents = parseYuan(form.priceYuan)
   if (priceCents === null) {
     localError.value = '价格请填写元，可精确到两位小数。'
@@ -168,6 +282,11 @@ onMounted(async () => {
   existingPhotos.value = [...store.photosByRecordId[record.id] ?? []]
   document.title = '编辑剪后记录｜咋剪发'
   initializing.value = false
+})
+
+onBeforeUnmount(() => {
+  unmounted = true
+  photoStages.forEach(({ stage }) => releasePhotoPreview(stage))
 })
 </script>
 
@@ -403,10 +522,24 @@ onMounted(async () => {
         >
           <span>{{ item.label }}照片</span>
           <small v-if="existingPhotoLabel(item.stage)">{{ existingPhotoLabel(item.stage) }}</small>
+          <small
+            v-if="photoPreparationLabel(item.stage)"
+            :class="{ 'photo-status--error': photoPreparationByStage[item.stage]?.status === 'error' }"
+            :role="photoPreparationByStage[item.stage]?.status === 'error' ? 'alert' : 'status'"
+          >
+            {{ photoPreparationLabel(item.stage) }}
+          </small>
+          <img
+            v-if="photoPreviewUrl(item.stage)"
+            class="photo-preparation-preview"
+            :src="photoPreviewUrl(item.stage)"
+            :alt="`${item.label}处理后预览`"
+          >
           <input
             :name="`photo-${item.stage}`"
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
+            :disabled="store.saving"
             @change="setPhoto(item.stage, $event)"
           >
         </label>
@@ -416,14 +549,14 @@ onMounted(async () => {
         class="privacy-note"
         aria-label="本地照片保存说明"
       >
-        <b>照片原样只存本机</b>
-        <p>本任务不会上传照片，也尚未压缩或去除 EXIF；方向纠正与隐私处理将在下一任务接入。</p>
+        <b>处理后的照片只存本机</b>
+        <p>新选照片会在浏览器本地纠正方向、压缩并重绘，去除原文件名与 EXIF；处理后的副本不会上传。</p>
       </aside>
 
       <button
         class="submit-button"
         type="submit"
-        :disabled="store.saving"
+        :disabled="store.saving || isProcessingPhotos"
       >
         {{ store.saving ? '正在保存…' : isEditing ? '保存修改' : '保存剪后记录' }}
       </button>

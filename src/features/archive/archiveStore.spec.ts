@@ -7,6 +7,7 @@ import {
   type ArchiveRepositoryPort,
   type BarberBriefDraft,
   type HairProfileDraft,
+  type HaircutPhotoDraft,
   type HaircutPlanDraft,
 } from './archiveStore'
 import type {
@@ -638,12 +639,25 @@ describe('archive store', () => {
       satisfaction: 5,
       outcome: 'repeat',
       avoidRules: [],
-      photos: [{ stage: 'styled', image: localPhoto }],
+      photos: [{
+        stage: 'styled',
+        image: localPhoto,
+        width: 1280,
+        height: 1920,
+        bytes: localPhoto.size,
+        processedAt: '2026-08-20T09:30:00.000Z',
+      } satisfies HaircutPhotoDraft],
     })
     expect(created?.record).toMatchObject({
       id: 'record-new',
       priceCents: 12800,
       outcome: 'repeat',
+    })
+    expect(created?.photos[0]).toMatchObject({
+      width: 1280,
+      height: 1920,
+      bytes: localPhoto.size,
+      processedAt: '2026-08-20T09:30:00.000Z',
     })
     expect(store.standardStyles).toMatchObject([{ recordId: 'record-new', active: true }])
 

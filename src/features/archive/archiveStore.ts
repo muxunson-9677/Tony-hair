@@ -69,7 +69,7 @@ export type BarberBriefDraft = Omit<
 
 export type HaircutPhotoDraft = Pick<HaircutPhoto, 'stage' | 'image'> & Partial<Pick<
   HaircutPhoto,
-  'id' | 'capturedAt'
+  'id' | 'capturedAt' | 'width' | 'height' | 'bytes' | 'processedAt'
 >>
 
 export interface HaircutRecordDraft {
@@ -622,6 +622,7 @@ export const createArchiveStore = (
         ? { ...base, outcome: 'repeat' }
         : { ...base, outcome: 'avoid', avoidRules: normalizedAvoidRules }
       const photos = draft.photos.map((photo): HaircutPhoto => ({
+        ...photo,
         id: photo.id ?? createId(),
         recordId,
         stage: photo.stage,
