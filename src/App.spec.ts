@@ -34,6 +34,9 @@ describe('app shell', () => {
       '/archive/plans/new',
       '/archive/plans/:id',
       '/archive/plans/:id/edit',
+      '/archive/records/new',
+      '/archive/records/:id',
+      '/archive/records/:id/edit',
       '/me',
     ]))
   })
@@ -44,13 +47,15 @@ describe('app shell', () => {
     expect(screen.getByRole('heading', { level: 1, name: '咋剪发' })).toBeTruthy()
     expect(screen.getByText('剪前看看，剪时说清，剪后记住')).toBeTruthy()
     expect(screen.getByRole('link', { name: '准备去剪' })).toBeTruthy()
-    expect(screen.getByRole('link', { name: '记录这次理发' })).toBeTruthy()
-    expect(screen.getByText('当前阶段不创建记录；后续记录仅保存在当前设备')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '记录这次理发' }).getAttribute('href')).toBe(
+      '/archive/records/new',
+    )
+    expect(screen.getByText('照片和记录仅保存在当前设备，不会上传或同步。')).toBeTruthy()
     expect(
       screen.getByText('清理浏览器数据、使用无痕模式或更换设备，都可能让记录丢失。'),
     ).toBeTruthy()
 
-    const visualLink = screen.getByRole('link', { name: '查看短发示例并进入试发型' })
+    const visualLink = await screen.findByRole('link', { name: '查看短发示例并进入试发型' })
     expect(visualLink.getAttribute('href')).toBe('/try')
     expect(
       within(visualLink).getByRole('img', { name: /AI 生成的虚构成年人物短发造型示例/ }),

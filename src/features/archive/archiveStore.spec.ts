@@ -8,7 +8,17 @@ import {
   type HairProfileDraft,
   type HaircutPlanDraft,
 } from './archiveStore'
-import type { Candidate, HairProfile, HaircutPlan } from './types'
+import type {
+  AvoidRule,
+  Candidate,
+  HairProfile,
+  HaircutPhoto,
+  HaircutPlan,
+  HaircutRecord,
+  StandardStyle,
+} from './types'
+
+const localPhoto = new Blob(['local-photo'], { type: 'image/webp' })
 
 const fullProfile = (overrides: Partial<HairProfile> = {}): HairProfile => ({
   id: 'profile-existing',
@@ -46,15 +56,50 @@ const fullCandidate = (order: number, overrides: Partial<Candidate> = {}): Candi
   ...overrides,
 })
 
+const fullRecord = (overrides: Partial<HaircutRecord> = {}): HaircutRecord => ({
+  id: 'record-existing',
+  profileId: 'profile-existing',
+  planId: 'plan-existing',
+  date: '2026-08-18',
+  status: 'completed',
+  satisfaction: 5,
+  outcome: 'repeat',
+  styleName: '清爽短碎发',
+  salonName: '巷口理发店',
+  barberName: 'Tony',
+  serviceName: '洗剪吹',
+  priceCents: 12800,
+  durationMinutes: 75,
+  notes: '顶部保留自然纹理',
+  createdAt: '2026-08-18T10:00:00.000Z',
+  updatedAt: '2026-08-18T10:00:00.000Z',
+  ...overrides,
+} as HaircutRecord)
+
+const fullPhoto = (overrides: Partial<HaircutPhoto> = {}): HaircutPhoto => ({
+  id: 'photo-existing',
+  recordId: 'record-existing',
+  stage: 'styled',
+  image: localPhoto,
+  capturedAt: '2026-08-18T10:00:00.000Z',
+  ...overrides,
+})
+
 class MemoryRepository implements ArchiveRepositoryPort {
   profiles: HairProfile[] = []
   plans: HaircutPlan[] = []
   candidates: Candidate[] = []
+  records: HaircutRecord[] = []
+  photos: HaircutPhoto[] = []
+  avoidRules: AvoidRule[] = []
+  standardStyles: StandardStyle[] = []
   nextFailure: unknown
   nextListProfilesFailure: unknown
   deferredProfiles: Promise<HairProfile[]> | null = null
   listProfilesCalls = 0
   savePlanCalls = 0
+  saveRecordCalls = 0
+  recordSaveGate: Promise<void> | null = null
 
   private failIfRequested() {
     if (this.nextFailure) {
@@ -96,6 +141,11 @@ class MemoryRepository implements ArchiveRepositoryPort {
     this.profiles = this.profiles.filter(({ id }) => id !== profileId)
     this.plans = this.plans.filter(({ profileId: id }) => id !== profileId)
     this.candidates = this.candidates.filter(({ planId }) => !planIds.has(planId))
+    const recordIds = new Set(this.records.filter(({ profileId: id }) => id === profileId).map(({ id }) => id))
+    this.records = this.records.filter(({ profileId: id }) => id !== profileId)
+    this.photos = this.photos.filter(({ recordId }) => !recordIds.has(recordId))
+    this.avoidRules = this.avoidRules.filter(({ profileId: id }) => id !== profileId)
+    this.standardStyles = this.standardStyles.filter(({ profileId: id }) => id !== profileId)
   }
 
   async listPlans(profileId: string) {
@@ -123,6 +173,71 @@ class MemoryRepository implements ArchiveRepositoryPort {
     this.failIfRequested()
     this.plans = this.plans.filter(({ id }) => id !== planId)
     this.candidates = this.candidates.filter(({ planId: id }) => id !== planId)
+  }
+
+  async listRecords(profileId: string) {
+    this.failIfRequested()
+    return this.records
+      .filter(({ profileId: id }) => id === profileId)
+      .sort((left, right) => right.date.localeCompare(left.date))
+  }
+
+  async listPhotos(recordId: string) {
+    this.failIfRequested()
+    return this.photos.filter(({ recordId: id }) => id === recordId)
+  }
+
+  async listAvoidRulesByProfile(profileId: string) {
+    this.failIfRequested()
+    return this.avoidRules.filter(({ profileId: id }) => id === profileId)
+  }
+
+  async listStandardStylesByProfile(profileId: string) {
+    this.failIfRequested()
+    return this.standardStyles.filter(({ profileId: id }) => id === profileId)
+  }
+
+  async saveRecordWithPhotos(record: HaircutRecord, photos: readonly HaircutPhoto[]) {
+    this.saveRecordCalls += 1
+    if (this.recordSaveGate) {
+      await this.recordSaveGate
+    }
+    this.failIfRequested()
+    this.records = [...this.records.filter(({ id }) => id !== record.id), record]
+    this.photos = [
+      ...this.photos.filter(({ recordId }) => recordId !== record.id),
+      ...photos,
+    ]
+    this.avoidRules = this.avoidRules.filter(({ recordId }) => recordId !== record.id)
+    this.standardStyles = this.standardStyles.filter(({ recordId }) => recordId !== record.id)
+    if (record.outcome === 'repeat') {
+      this.standardStyles.push({
+        id: `standard-style:${record.id}`,
+        profileId: record.profileId,
+        recordId: record.id,
+        name: record.styleName,
+        createdAt: record.updatedAt,
+        active: true,
+      })
+    } else {
+      this.avoidRules.push(...record.avoidRules.map((text, index) => ({
+        id: `avoid-rule:${record.id}:${index + 1}`,
+        profileId: record.profileId,
+        recordId: record.id,
+        text,
+        createdAt: record.updatedAt,
+        active: true,
+      })))
+    }
+    return { record, photos: [...photos] }
+  }
+
+  async deleteRecord(recordId: string) {
+    this.failIfRequested()
+    this.records = this.records.filter(({ id }) => id !== recordId)
+    this.photos = this.photos.filter(({ recordId: id }) => id !== recordId)
+    this.avoidRules = this.avoidRules.filter(({ recordId: id }) => id !== recordId)
+    this.standardStyles = this.standardStyles.filter(({ recordId: id }) => id !== recordId)
   }
 }
 
@@ -297,6 +412,135 @@ describe('archive store', () => {
     await refreshed.deletePlan(created?.plan.id ?? '')
     expect(refreshed.plans).toEqual([])
     expect(refreshed.profile?.id).toBe('profile-existing')
+  })
+
+  test('loads real records, photos, avoid rules, and standard styles for the active profile', async () => {
+    repository.profiles = [fullProfile()]
+    repository.records = [
+      fullRecord({ id: 'record-old', date: '2026-08-01' }),
+      fullRecord(),
+    ]
+    repository.photos = [
+      fullPhoto({ id: 'photo-old', recordId: 'record-old' }),
+      fullPhoto(),
+    ]
+    repository.avoidRules = [{
+      id: 'avoid-rule:record-old:1',
+      profileId: 'profile-existing',
+      recordId: 'record-old',
+      text: '不要推白',
+      createdAt: '2026-08-01T10:00:00.000Z',
+      active: true,
+    }]
+    repository.standardStyles = [{
+      id: 'standard-style:record-existing',
+      profileId: 'profile-existing',
+      recordId: 'record-existing',
+      name: '清爽短碎发',
+      createdAt: '2026-08-18T10:00:00.000Z',
+      active: true,
+    }]
+
+    const store = useTestStore()
+    await store.load()
+
+    expect(store.records.map(({ id }) => id)).toEqual(['record-existing', 'record-old'])
+    expect(store.photosByRecordId['record-existing']).toEqual([fullPhoto()])
+    expect(store.avoidRules).toHaveLength(1)
+    expect(store.standardStyles).toHaveLength(1)
+  })
+
+  test('creates, edits, reloads, and deletes a record while preserving its existing photo', async () => {
+    repository.profiles = [fullProfile()]
+    repository.plans = [fullPlan()]
+    ids = ['record-new', 'photo-new']
+    const store = useTestStore()
+    await store.load()
+
+    const created = await store.saveRecord({
+      planId: 'plan-existing',
+      date: '2026-08-20',
+      styleName: '纹理短碎发',
+      salonName: '巷口理发店',
+      barberName: 'Tony',
+      serviceName: '洗剪吹',
+      priceCents: 12800,
+      durationMinutes: 75,
+      notes: '顶部保留自然纹理',
+      satisfaction: 5,
+      outcome: 'repeat',
+      avoidRules: [],
+      photos: [{ stage: 'styled', image: localPhoto }],
+    })
+    expect(created?.record).toMatchObject({
+      id: 'record-new',
+      priceCents: 12800,
+      outcome: 'repeat',
+    })
+    expect(store.standardStyles).toMatchObject([{ recordId: 'record-new', active: true }])
+
+    const existingPhoto = created?.photos[0]
+    const edited = await store.saveRecord({
+      id: 'record-new',
+      date: '2026-08-20',
+      styleName: '纹理短碎发',
+      satisfaction: 2,
+      outcome: 'avoid',
+      avoidRules: ['两侧不要推白'],
+      photos: existingPhoto ? [existingPhoto] : [],
+    })
+    expect(edited?.record).toMatchObject({ id: 'record-new', outcome: 'avoid' })
+    expect(edited?.photos[0]?.id).toBe('photo-new')
+    expect(store.standardStyles).toEqual([])
+    expect(store.avoidRules).toMatchObject([{ recordId: 'record-new', text: '两侧不要推白' }])
+
+    setActivePinia(createPinia())
+    const refreshed = createArchiveStore(repository)()
+    await refreshed.load()
+    expect(refreshed.records[0]).toMatchObject({ id: 'record-new', outcome: 'avoid' })
+    expect(refreshed.photosByRecordId['record-new']?.[0]?.image).toBe(localPhoto)
+
+    expect(await refreshed.deleteRecord('record-new')).toBe(true)
+    expect(refreshed.records).toEqual([])
+    expect(refreshed.profile?.id).toBe('profile-existing')
+    expect(refreshed.plans[0]?.id).toBe('plan-existing')
+  })
+
+  test('rejects a second record mutation while the first save is pending and keeps failures visible', async () => {
+    repository.profiles = [fullProfile()]
+    let releaseSave!: () => void
+    repository.recordSaveGate = new Promise((resolve) => {
+      releaseSave = resolve
+    })
+    ids = ['record-new', 'photo-new']
+    const store = useTestStore()
+    await store.load()
+    const draft = {
+      date: '2026-08-20',
+      styleName: '纹理短碎发',
+      satisfaction: 5 as const,
+      outcome: 'repeat' as const,
+      avoidRules: [],
+      photos: [{ stage: 'styled' as const, image: localPhoto }],
+    }
+
+    const first = store.saveRecord(draft)
+    expect(await store.saveRecord(draft)).toBeNull()
+    expect(repository.saveRecordCalls).toBe(1)
+    releaseSave()
+    await first
+
+    repository.nextFailure = new ArchiveStorageError('unavailable', new Error('technical'))
+    expect(await store.saveRecord({ ...draft, id: 'record-new', satisfaction: 2 })).toBeNull()
+    expect(store.records[0]?.satisfaction).toBe(5)
+    expect(store.error).toMatch(/不可用|无痕/)
+    expect(store.saving).toBe(false)
+
+    repository.nextFailure = new ArchiveStorageError('unavailable', new Error('technical'))
+    expect(await store.deleteRecord('record-new')).toBe(false)
+    expect(store.records).toHaveLength(1)
+    expect(store.error).toMatch(/不可用|无痕/)
+    expect(store.saving).toBe(false)
   })
 
   test('does not reuse an undefined source identity for new candidates', async () => {

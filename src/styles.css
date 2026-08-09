@@ -59,7 +59,7 @@ a {
   z-index: 20;
   top: 8px;
   left: 50%;
-  min-height: 44px;
+  min-height: 45px;
   padding: 11px 16px;
   color: var(--paper);
   background: var(--ink);
@@ -620,14 +620,16 @@ button:focus-visible {
 
 .archive-view,
 .archive-form-view,
-.plan-detail-view {
+.plan-detail-view,
+.record-detail-view {
   min-height: calc(100svh - var(--nav-height) - env(safe-area-inset-bottom));
   padding: 24px 20px 48px;
 }
 
 .archive-header,
 .inner-header,
-.plan-detail-header {
+.plan-detail-header,
+.record-detail-header {
   padding-bottom: 24px;
   border-bottom: 1px solid var(--ink);
 }
@@ -635,6 +637,7 @@ button:focus-visible {
 .archive-header h1,
 .inner-header h1,
 .plan-detail-header h1,
+.record-detail-header h1,
 .archive-empty h1 {
   margin: 19px 0 0;
   font-size: clamp(2.9rem, 14vw, 4.7rem);
@@ -645,13 +648,15 @@ button:focus-visible {
 
 .inner-header h1,
 .plan-detail-header h1,
+.record-detail-header h1,
 .archive-empty h1 {
   font-size: clamp(2.45rem, 11vw, 3.7rem);
 }
 
 .archive-header > p:last-child,
 .inner-header > p:last-child,
-.plan-detail-header > p {
+.plan-detail-header > p,
+.record-detail-header > p {
   max-width: 28em;
   margin: 14px 0 0;
   color: var(--warm-gray);
@@ -681,6 +686,8 @@ button:focus-visible {
 .profile-summary h2,
 .archive-section-heading h2,
 .archive-future h2,
+.archive-guidance h2,
+.record-outcome-summary h2,
 .selected-candidates h2,
 .demo-candidate-picker h2 {
   margin: 10px 0 0;
@@ -741,6 +748,8 @@ button:focus-visible {
 
 .profile-summary,
 .archive-plans,
+.archive-records,
+.archive-guidance,
 .archive-future {
   padding: 28px 0;
   border-bottom: 1px solid var(--line);
@@ -804,6 +813,8 @@ button:focus-visible {
 }
 
 .plan-list,
+.record-list,
+.guidance-list,
 .candidate-detail-list,
 .selected-candidates ol {
   margin: 20px 0 0;
@@ -815,7 +826,15 @@ button:focus-visible {
   border-top: 1px solid var(--ink);
 }
 
+.record-list {
+  border-top: 1px solid var(--ink);
+}
+
 .plan-list li {
+  border-bottom: 1px solid var(--ink);
+}
+
+.record-list li {
   border-bottom: 1px solid var(--ink);
 }
 
@@ -829,9 +848,26 @@ button:focus-visible {
   text-decoration: none;
 }
 
+.record-list a {
+  display: grid;
+  min-height: 126px;
+  grid-template-columns: 104px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  text-decoration: none;
+}
+
 .plan-list img {
   width: 88px;
   height: 94px;
+  object-fit: cover;
+  object-position: center 30%;
+}
+
+.record-list img {
+  width: 104px;
+  height: 106px;
   object-fit: cover;
   object-position: center 30%;
 }
@@ -841,8 +877,16 @@ button:focus-visible {
   gap: 5px;
 }
 
+.record-list__copy {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
 .plan-list__copy > span,
-.plan-list__copy small {
+.plan-list__copy small,
+.record-list__copy > span,
+.record-list__copy small {
   color: var(--warm-gray);
   font-size: 0.66rem;
 }
@@ -852,12 +896,36 @@ button:focus-visible {
   line-height: 1.35;
 }
 
+.record-list__copy b {
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.guidance-list {
+  border-top: 1px solid var(--ink);
+}
+
+.guidance-list li {
+  padding: 15px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.87rem;
+  font-weight: 720;
+  line-height: 1.55;
+}
+
+.guidance-list--avoid li::before {
+  margin-right: 9px;
+  color: var(--accent);
+  content: "×";
+}
+
 .archive-trust-note--content {
   margin-top: 28px;
 }
 
 .archive-form-view,
-.plan-detail-view {
+.plan-detail-view,
+.record-detail-view {
   padding-top: 16px;
 }
 
@@ -950,6 +1018,235 @@ button:focus-visible {
   justify-content: center;
 }
 
+.record-outcome,
+.record-photos {
+  margin: 8px 0 24px;
+  padding: 20px 0 0;
+  border: 0;
+  border-top: 1px solid var(--ink);
+}
+
+.record-outcome legend,
+.record-photos legend {
+  padding: 0;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.record-outcome {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: var(--ink);
+  border-bottom: 1px solid var(--ink);
+}
+
+.record-outcome legend {
+  margin-bottom: 14px;
+}
+
+.record-outcome label {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 13px;
+  background: var(--paper);
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.record-outcome input {
+  width: 18px;
+  min-height: 18px;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.avoid-rule-fields {
+  margin: -8px 0 25px;
+  padding: 18px 16px 1px;
+  border-left: 4px solid var(--accent);
+  background: var(--paper-deep);
+}
+
+.avoid-rule-fields label {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 17px;
+}
+
+.record-photos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--ink);
+}
+
+.record-photos legend {
+  margin-bottom: 14px;
+}
+
+.record-photos label {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 6px;
+  padding: 13px;
+  background: var(--paper);
+}
+
+.record-photos label small {
+  color: var(--accent);
+  font-size: 0.67rem;
+  line-height: 1.4;
+}
+
+.record-photos input[type="file"] {
+  min-height: 72px;
+  padding: 9px;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.record-photos input[type="file"]::file-selector-button {
+  min-height: 45px;
+  margin: 0 8px 4px 0;
+  padding: 0 10px;
+  border: 0;
+  color: var(--paper);
+  background: var(--ink);
+  font: inherit;
+  font-weight: 750;
+}
+
+.record-detail-header {
+  padding-top: 6px;
+}
+
+.record-photo-strip {
+  display: grid;
+  grid-auto-columns: minmax(82%, 1fr);
+  grid-auto-flow: column;
+  gap: 1px;
+  margin: 26px -20px 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  background: var(--ink);
+  scroll-snap-type: inline mandatory;
+}
+
+.record-photo-strip figure {
+  position: relative;
+  margin: 0;
+  scroll-snap-align: start;
+}
+
+.record-photo-strip img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 0.92;
+  object-fit: cover;
+  object-position: center 30%;
+}
+
+.record-photo-strip figcaption {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 7px 9px;
+  color: var(--paper);
+  background: rgba(23, 21, 18, 0.88);
+  font-size: 0.64rem;
+  font-weight: 780;
+  letter-spacing: 0.07em;
+}
+
+.record-metadata {
+  margin: 0;
+  padding-top: 22px;
+  border-bottom: 1px solid var(--ink);
+}
+
+.record-metadata > div {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 15px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.record-metadata dt {
+  color: var(--warm-gray);
+  font-size: 0.7rem;
+  font-weight: 760;
+}
+
+.record-metadata dd {
+  margin: 0;
+  font-size: 0.87rem;
+  line-height: 1.55;
+}
+
+.record-outcome-summary {
+  margin: 28px -20px 0;
+  padding: 25px 20px 29px;
+  color: var(--paper);
+  background: var(--ink);
+}
+
+.record-outcome-summary .section-index {
+  color: #d88662;
+}
+
+.record-outcome-summary h2 {
+  margin-top: 9px;
+}
+
+.record-outcome-summary p:not(.section-index),
+.record-outcome-summary li {
+  margin-top: 12px;
+  color: #d2cabf;
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.record-outcome-summary ul {
+  margin: 11px 0 0;
+  padding-left: 18px;
+}
+
+.record-outcome-summary--avoid {
+  background: #6b3725;
+}
+
+.home-visual--history img {
+  filter: saturate(0.92);
+}
+
+.home-visual__caption small {
+  color: #d0c7ba;
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.home-history-reminder {
+  margin: 10px 0 0;
+  padding: 11px 0 0 13px;
+  border-top: 1px solid var(--line);
+  border-left: 3px solid var(--ink);
+  color: var(--warm-gray);
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.55;
+}
+
+.home-history-reminder--avoid {
+  border-left-color: var(--accent);
+  color: #613322;
+}
+
 .submit-button:disabled,
 .demo-candidate-grid button:disabled,
 .danger-button:disabled,
@@ -960,7 +1257,7 @@ button:focus-visible {
 
 .danger-button,
 .danger-text-button {
-  min-height: 44px;
+  min-height: 45px;
   border: 0;
   border-radius: 0;
   color: var(--accent);
@@ -1049,7 +1346,7 @@ button:focus-visible {
 
 .candidate-inline-actions button,
 .demo-candidate-grid button {
-  min-height: 44px;
+  min-height: 45px;
   padding: 7px 9px;
   border: 1px solid currentcolor;
   border-radius: 0;
@@ -1318,6 +1615,7 @@ a:focus-visible {
   }
 
   .plan-list a:hover,
+  .record-list a:hover,
   .text-link:hover,
   .back-link:hover {
     color: var(--accent);
@@ -1359,7 +1657,8 @@ a:focus-visible {
   .page-view,
   .archive-view,
   .archive-form-view,
-  .plan-detail-view {
+  .plan-detail-view,
+  .record-detail-view {
     min-height: calc(100svh - 48px - var(--nav-height));
   }
 }

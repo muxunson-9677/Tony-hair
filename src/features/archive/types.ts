@@ -60,11 +60,19 @@ export interface BarberBrief {
 interface HaircutRecordBase {
   readonly id: string
   readonly profileId: string
-  readonly planId: string
+  readonly planId?: string
   readonly date: string
   readonly status: 'completed'
   readonly satisfaction: 1 | 2 | 3 | 4 | 5
   readonly styleName: string
+  readonly salonName?: string
+  readonly barberName?: string
+  readonly serviceName?: string
+  readonly priceCents?: number
+  readonly durationMinutes?: number
+  readonly notes?: string
+  readonly createdAt: string
+  readonly updatedAt: string
 }
 
 interface RepeatHaircutRecord extends HaircutRecordBase {
@@ -84,6 +92,7 @@ export interface HaircutPhoto {
   readonly recordId: string
   readonly stage: 'before' | 'during' | 'unstyled' | 'styled' | 'after_wash' | 'day_7'
   readonly image: Blob
+  readonly capturedAt: string
 }
 
 export interface AvoidRule {
@@ -91,6 +100,8 @@ export interface AvoidRule {
   readonly profileId: string
   readonly recordId: string
   readonly text: string
+  readonly createdAt: string
+  readonly active: boolean
 }
 
 export interface StandardStyle {
@@ -98,4 +109,13 @@ export interface StandardStyle {
   readonly profileId: string
   readonly recordId: string
   readonly name: string
+  readonly createdAt: string
+  readonly active: boolean
+}
+
+export interface HaircutRecordBundle {
+  readonly record: HaircutRecord
+  readonly photos: HaircutPhoto[]
+  readonly avoidRules: AvoidRule[]
+  readonly standardStyles: StandardStyle[]
 }

@@ -8,8 +8,16 @@ import type {
   HaircutPhoto,
   HaircutPlan,
   HaircutRecord,
+  HaircutRecordBundle,
   StandardStyle,
 } from './types'
+
+const LEGACY_TIMESTAMP = '1970-01-01T00:00:00.000Z'
+
+const timestampFromLegacyDate = (date: string) => {
+  const parsed = new Date(date)
+  return Number.isNaN(parsed.valueOf()) ? LEGACY_TIMESTAMP : parsed.toISOString()
+}
 
 const ARCHIVE_STORES_V1 = {
   profiles: 'id',
@@ -71,9 +79,41 @@ export class ZajianfaDb extends Dexie {
     }))
     this.briefs = this.table('briefs')
     this.records = this.table('records')
+    this.records.hook('reading', (record) => {
+      if (!record) {
+        return record
+      }
+      const createdAt = record.createdAt ?? timestampFromLegacyDate(record.date)
+      return {
+        ...record,
+        planId: record.planId || undefined,
+        salonName: record.salonName || undefined,
+        barberName: record.barberName || undefined,
+        serviceName: record.serviceName || undefined,
+        priceCents: record.priceCents,
+        durationMinutes: record.durationMinutes,
+        notes: record.notes || undefined,
+        createdAt,
+        updatedAt: record.updatedAt ?? createdAt,
+      }
+    })
     this.photos = this.table('photos')
+    this.photos.hook('reading', (photo) => photo && ({
+      ...photo,
+      capturedAt: photo.capturedAt ?? LEGACY_TIMESTAMP,
+    }))
     this.avoidRules = this.table('avoidRules')
+    this.avoidRules.hook('reading', (rule) => rule && ({
+      ...rule,
+      createdAt: rule.createdAt ?? LEGACY_TIMESTAMP,
+      active: rule.active ?? true,
+    }))
     this.standardStyles = this.table('standardStyles')
+    this.standardStyles.hook('reading', (style) => style && ({
+      ...style,
+      createdAt: style.createdAt ?? LEGACY_TIMESTAMP,
+      active: style.active ?? true,
+    }))
   }
 }
 
@@ -106,14 +146,16 @@ const WASH_FREQUENCIES = new Set([
   'weekly_or_less',
   'unsure',
 ])
-const PHOTO_STAGES = new Set([
+const PHOTO_STAGE_ORDER = [
   'before',
   'during',
   'unstyled',
   'styled',
   'after_wash',
   'day_7',
-])
+] as const
+const PHOTO_STAGES = new Set(PHOTO_STAGE_ORDER)
+const PHOTO_STAGE_INDEX = new Map(PHOTO_STAGE_ORDER.map((stage, index) => [stage, index]))
 const UNAVAILABLE_ERROR_NAMES = new Set([
   'DatabaseClosedError',
   'InvalidStateError',
@@ -519,6 +561,8 @@ export class ArchiveRepository {
             profileId: record.profileId,
             recordId: record.id,
             name: record.styleName,
+            createdAt: record.updatedAt,
+            active: true,
           })
         } else {
           await this.db.avoidRules.bulkAdd(record.avoidRules.map((text, index) => ({
@@ -526,6 +570,8 @@ export class ArchiveRepository {
             profileId: record.profileId,
             recordId: record.id,
             text,
+            createdAt: record.updatedAt,
+            active: true,
           })))
         }
 
@@ -539,7 +585,32 @@ export class ArchiveRepository {
   }
 
   listRecords(profileId: string): Promise<HaircutRecord[]> {
-    return this.run(() => this.db.records.where('profileId').equals(profileId).toArray())
+    return this.run(async () => {
+      const records = await this.db.records.where('profileId').equals(profileId).toArray()
+      return records.sort((left, right) => (
+        right.date.localeCompare(left.date)
+        || right.updatedAt.localeCompare(left.updatedAt)
+      ))
+    })
+  }
+
+  async getRecordBundle(id: string): Promise<HaircutRecordBundle | undefined> {
+    const record = await this.getRecord(id)
+    if (!record) {
+      return undefined
+    }
+    const [photos, avoidRules, standardStyles] = await Promise.all([
+      this.listPhotos(id),
+      this.listAvoidRules(id),
+      this.listStandardStyles(id),
+    ])
+    return { record, photos, avoidRules, standardStyles }
+  }
+
+  async listRecordBundles(profileId: string): Promise<HaircutRecordBundle[]> {
+    const records = await this.listRecords(profileId)
+    const bundles = await Promise.all(records.map(({ id }) => this.getRecordBundle(id)))
+    return bundles.filter((bundle): bundle is HaircutRecordBundle => Boolean(bundle))
   }
 
   getPhoto(id: string): Promise<HaircutPhoto | undefined> {
@@ -547,7 +618,15 @@ export class ArchiveRepository {
   }
 
   listPhotos(recordId: string): Promise<HaircutPhoto[]> {
-    return this.run(() => this.db.photos.where('recordId').equals(recordId).toArray())
+    return this.run(async () => {
+      const photos = await this.db.photos.where('recordId').equals(recordId).toArray()
+      return photos.sort((left, right) => (
+        (PHOTO_STAGE_INDEX.get(left.stage) ?? PHOTO_STAGE_ORDER.length)
+        - (PHOTO_STAGE_INDEX.get(right.stage) ?? PHOTO_STAGE_ORDER.length)
+        || left.capturedAt.localeCompare(right.capturedAt)
+        || left.id.localeCompare(right.id)
+      ))
+    })
   }
 
   listAvoidRules(recordId: string): Promise<AvoidRule[]> {
@@ -556,6 +635,24 @@ export class ArchiveRepository {
 
   listStandardStyles(recordId: string): Promise<StandardStyle[]> {
     return this.run(() => this.db.standardStyles.where('recordId').equals(recordId).sortBy('id'))
+  }
+
+  listAvoidRulesByProfile(profileId: string): Promise<AvoidRule[]> {
+    return this.run(async () => {
+      const rules = await this.db.avoidRules.where('profileId').equals(profileId).toArray()
+      return rules.sort((left, right) => (
+        right.createdAt.localeCompare(left.createdAt) || left.id.localeCompare(right.id)
+      ))
+    })
+  }
+
+  listStandardStylesByProfile(profileId: string): Promise<StandardStyle[]> {
+    return this.run(async () => {
+      const styles = await this.db.standardStyles.where('profileId').equals(profileId).toArray()
+      return styles.sort((left, right) => (
+        right.createdAt.localeCompare(left.createdAt) || left.id.localeCompare(right.id)
+      ))
+    })
   }
 
   deleteRecord(recordId: string): Promise<void> {

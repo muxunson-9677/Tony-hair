@@ -6,7 +6,15 @@ import {
   ArchiveStorageError,
   ZajianfaDb,
 } from './ArchiveRepository'
-import type { Candidate, HairProfile, HaircutPlan } from './types'
+import type {
+  AvoidRule,
+  Candidate,
+  HairProfile,
+  HaircutPhoto,
+  HaircutPlan,
+  HaircutRecord,
+  StandardStyle,
+} from './types'
 
 export interface ArchiveRepositoryPort {
   createProfile(profile: HairProfile): Promise<string>
@@ -20,6 +28,15 @@ export interface ArchiveRepositoryPort {
     candidates: readonly Candidate[],
   ): Promise<{ plan: HaircutPlan, candidates: Candidate[] }>
   deletePlan(planId: string): Promise<void>
+  listRecords(profileId: string): Promise<HaircutRecord[]>
+  listPhotos(recordId: string): Promise<HaircutPhoto[]>
+  listAvoidRulesByProfile(profileId: string): Promise<AvoidRule[]>
+  listStandardStylesByProfile(profileId: string): Promise<StandardStyle[]>
+  saveRecordWithPhotos(
+    record: HaircutRecord,
+    photos: readonly HaircutPhoto[],
+  ): Promise<{ record: HaircutRecord, photos: HaircutPhoto[] }>
+  deleteRecord(recordId: string): Promise<void>
 }
 
 export type HairProfileDraft = {
@@ -35,6 +52,28 @@ export interface HaircutPlanDraft {
   readonly date: string
   readonly status: 'draft' | 'ready'
   readonly candidates: readonly CandidateDraft[]
+}
+
+export type HaircutPhotoDraft = Pick<HaircutPhoto, 'stage' | 'image'> & Partial<Pick<
+  HaircutPhoto,
+  'id' | 'capturedAt'
+>>
+
+export interface HaircutRecordDraft {
+  readonly id?: string
+  readonly planId?: string
+  readonly date: string
+  readonly styleName: string
+  readonly salonName?: string
+  readonly barberName?: string
+  readonly serviceName?: string
+  readonly priceCents?: number
+  readonly durationMinutes?: number
+  readonly notes?: string
+  readonly satisfaction: number
+  readonly outcome: 'repeat' | 'avoid'
+  readonly avoidRules: readonly string[]
+  readonly photos: readonly HaircutPhotoDraft[]
 }
 
 interface ArchiveStoreOptions {
@@ -84,6 +123,18 @@ const sortPlans = (plans: readonly HaircutPlan[]) => (
   ))
 )
 
+const sortRecords = (records: readonly HaircutRecord[]) => (
+  [...records].sort((left, right) => (
+    right.date.localeCompare(left.date) || right.updatedAt.localeCompare(left.updatedAt)
+  ))
+)
+
+const sortCreated = <Item extends { readonly id: string, readonly createdAt: string }>(
+  items: readonly Item[],
+) => [...items].sort((left, right) => (
+  right.createdAt.localeCompare(left.createdAt) || left.id.localeCompare(right.id)
+))
+
 export const createArchiveStore = (
   repository: ArchiveRepositoryPort,
   options: ArchiveStoreOptions = {},
@@ -94,6 +145,10 @@ export const createArchiveStore = (
   const profiles = ref<HairProfile[]>([])
   const plans = ref<HaircutPlan[]>([])
   const candidatesByPlanId = ref<Record<string, Candidate[]>>({})
+  const records = ref<HaircutRecord[]>([])
+  const photosByRecordId = ref<Record<string, HaircutPhoto[]>>({})
+  const avoidRules = ref<AvoidRule[]>([])
+  const standardStyles = ref<StandardStyle[]>([])
   const loading = ref(true)
   const saving = ref(false)
   const error = ref<string | null>(null)
@@ -110,18 +165,34 @@ export const createArchiveStore = (
         profiles: loadedProfiles,
         plans: [] as HaircutPlan[],
         candidatesByPlanId: {} as Record<string, Candidate[]>,
+        records: [] as HaircutRecord[],
+        photosByRecordId: {} as Record<string, HaircutPhoto[]>,
+        avoidRules: [] as AvoidRule[],
+        standardStyles: [] as StandardStyle[],
       }
     }
 
-    const loadedPlans = sortPlans(await repository.listPlans(primaryProfile.id))
+    const [loadedPlans, loadedRecords, loadedAvoidRules, loadedStandardStyles] = await Promise.all([
+      repository.listPlans(primaryProfile.id).then(sortPlans),
+      repository.listRecords(primaryProfile.id).then(sortRecords),
+      repository.listAvoidRulesByProfile(primaryProfile.id).then(sortCreated),
+      repository.listStandardStylesByProfile(primaryProfile.id).then(sortCreated),
+    ])
     const candidateEntries = await Promise.all(loadedPlans.map(async ({ id }) => (
       [id, await repository.listCandidates(id)] as const
+    )))
+    const photoEntries = await Promise.all(loadedRecords.map(async ({ id }) => (
+      [id, await repository.listPhotos(id)] as const
     )))
 
     return {
       profiles: loadedProfiles,
       plans: loadedPlans,
       candidatesByPlanId: Object.fromEntries(candidateEntries),
+      records: loadedRecords,
+      photosByRecordId: Object.fromEntries(photoEntries),
+      avoidRules: loadedAvoidRules,
+      standardStyles: loadedStandardStyles,
     }
   }
 
@@ -129,6 +200,10 @@ export const createArchiveStore = (
     profiles.value = snapshot.profiles
     plans.value = snapshot.plans
     candidatesByPlanId.value = snapshot.candidatesByPlanId
+    records.value = snapshot.records
+    photosByRecordId.value = snapshot.photosByRecordId
+    avoidRules.value = snapshot.avoidRules
+    standardStyles.value = snapshot.standardStyles
   }
 
   const load = () => {
@@ -216,6 +291,10 @@ export const createArchiveStore = (
       profiles.value = profiles.value.filter(({ id }) => id !== profileId)
       plans.value = []
       candidatesByPlanId.value = {}
+      records.value = []
+      photosByRecordId.value = {}
+      avoidRules.value = []
+      standardStyles.value = []
       try {
         applySnapshot(await fetchSnapshot())
       } catch (caught) {
@@ -336,11 +415,168 @@ export const createArchiveStore = (
     }
   }
 
+  const saveRecord = async (
+    draft: HaircutRecordDraft,
+  ): Promise<{ record: HaircutRecord, photos: HaircutPhoto[] } | null> => {
+    const currentProfile = profile.value
+    if (!currentProfile) {
+      error.value = '请先建立本设备档案，再记录这次理发。'
+      return null
+    }
+    if (draft.styleName.trim().length === 0 || Number.isNaN(Date.parse(draft.date))) {
+      error.value = '请填写有效的理发日期和发型名。'
+      return null
+    }
+    if (!Number.isInteger(draft.satisfaction) || draft.satisfaction < 1 || draft.satisfaction > 5) {
+      error.value = '满意度必须是 1 到 5 的整数。'
+      return null
+    }
+    if (draft.photos.length < 1) {
+      error.value = '请至少选择一张剪后阶段照片。'
+      return null
+    }
+    if (
+      draft.priceCents !== undefined
+      && (!Number.isInteger(draft.priceCents) || draft.priceCents < 0)
+    ) {
+      error.value = '价格必须是精确到分的非负金额。'
+      return null
+    }
+    if (
+      draft.durationMinutes !== undefined
+      && (!Number.isInteger(draft.durationMinutes) || draft.durationMinutes < 1)
+    ) {
+      error.value = '耗时必须是大于 0 的整数分钟。'
+      return null
+    }
+    const normalizedAvoidRules = draft.avoidRules
+      .map((rule) => rule.trim())
+      .filter(Boolean)
+    if (
+      draft.outcome === 'avoid'
+      && (normalizedAvoidRules.length < 1 || normalizedAvoidRules.length > 3)
+    ) {
+      error.value = '选择避雷时，请填写 1 到 3 条非空规则。'
+      return null
+    }
+    if (saving.value) {
+      return null
+    }
+
+    beginMutation()
+    try {
+      const existing = draft.id
+        ? records.value.find(({ id }) => id === draft.id)
+        : undefined
+      if (draft.id && !existing) {
+        error.value = '没有找到要编辑的剪后记录。'
+        return null
+      }
+      const timestamp = now().toISOString()
+      const recordId = existing?.id ?? createId()
+      const optionalText = (value?: string) => value?.trim() || undefined
+      const base = {
+        id: recordId,
+        profileId: currentProfile.id,
+        planId: draft.planId || undefined,
+        date: draft.date,
+        status: 'completed' as const,
+        satisfaction: draft.satisfaction as HaircutRecord['satisfaction'],
+        styleName: draft.styleName.trim(),
+        salonName: optionalText(draft.salonName),
+        barberName: optionalText(draft.barberName),
+        serviceName: optionalText(draft.serviceName),
+        priceCents: draft.priceCents,
+        durationMinutes: draft.durationMinutes,
+        notes: optionalText(draft.notes),
+        createdAt: existing?.createdAt ?? timestamp,
+        updatedAt: timestamp,
+      }
+      const record: HaircutRecord = draft.outcome === 'repeat'
+        ? { ...base, outcome: 'repeat' }
+        : { ...base, outcome: 'avoid', avoidRules: normalizedAvoidRules }
+      const photos = draft.photos.map((photo): HaircutPhoto => ({
+        id: photo.id ?? createId(),
+        recordId,
+        stage: photo.stage,
+        image: photo.image,
+        capturedAt: photo.capturedAt ?? timestamp,
+      }))
+
+      const saved = await repository.saveRecordWithPhotos(record, photos)
+      records.value = sortRecords([
+        ...records.value.filter(({ id }) => id !== recordId),
+        saved.record,
+      ])
+      photosByRecordId.value = {
+        ...photosByRecordId.value,
+        [recordId]: saved.photos,
+      }
+      avoidRules.value = avoidRules.value.filter(({ recordId: id }) => id !== recordId)
+      standardStyles.value = standardStyles.value.filter(({ recordId: id }) => id !== recordId)
+      if (record.outcome === 'repeat') {
+        standardStyles.value = sortCreated([...standardStyles.value, {
+          id: `standard-style:${record.id}`,
+          profileId: record.profileId,
+          recordId: record.id,
+          name: record.styleName,
+          createdAt: record.updatedAt,
+          active: true,
+        }])
+      } else {
+        avoidRules.value = sortCreated([
+          ...avoidRules.value,
+          ...record.avoidRules.map((text, index) => ({
+            id: `avoid-rule:${record.id}:${index + 1}`,
+            profileId: record.profileId,
+            recordId: record.id,
+            text,
+            createdAt: record.updatedAt,
+            active: true,
+          })),
+        ])
+      }
+      return saved
+    } catch (caught) {
+      error.value = archiveErrorMessage(caught)
+      return null
+    } finally {
+      saving.value = false
+    }
+  }
+
+  const deleteRecord = async (recordId: string): Promise<boolean> => {
+    if (saving.value) {
+      return false
+    }
+
+    beginMutation()
+    try {
+      await repository.deleteRecord(recordId)
+      records.value = records.value.filter(({ id }) => id !== recordId)
+      const nextPhotos = { ...photosByRecordId.value }
+      delete nextPhotos[recordId]
+      photosByRecordId.value = nextPhotos
+      avoidRules.value = avoidRules.value.filter(({ recordId: id }) => id !== recordId)
+      standardStyles.value = standardStyles.value.filter(({ recordId: id }) => id !== recordId)
+      return true
+    } catch (caught) {
+      error.value = archiveErrorMessage(caught)
+      return false
+    } finally {
+      saving.value = false
+    }
+  }
+
   return {
     profiles,
     profile,
     plans,
     candidatesByPlanId,
+    records,
+    photosByRecordId,
+    avoidRules,
+    standardStyles,
     loading,
     saving,
     error,
@@ -349,6 +585,8 @@ export const createArchiveStore = (
     deleteProfile,
     savePlan,
     deletePlan,
+    saveRecord,
+    deleteRecord,
   }
 })
 

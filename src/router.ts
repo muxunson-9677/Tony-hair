@@ -4,6 +4,8 @@ import ArchiveView from './views/ArchiveView.vue'
 import ArchivePlanDetailView from './views/ArchivePlanDetailView.vue'
 import ArchivePlanFormView from './views/ArchivePlanFormView.vue'
 import ArchiveProfileView from './views/ArchiveProfileView.vue'
+import ArchiveRecordDetailView from './views/ArchiveRecordDetailView.vue'
+import ArchiveRecordFormView from './views/ArchiveRecordFormView.vue'
 import HomeView from './views/HomeView.vue'
 import MeView from './views/MeView.vue'
 import NotFoundView from './views/NotFoundView.vue'
@@ -54,6 +56,24 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         name: 'archive-plan-detail',
         component: ArchivePlanDetailView,
         meta: { title: '发型计划｜咋剪发' },
+      },
+      {
+        path: '/archive/records/new',
+        name: 'archive-record-new',
+        component: ArchiveRecordFormView,
+        meta: { title: '记录这次理发｜咋剪发' },
+      },
+      {
+        path: '/archive/records/:id/edit',
+        name: 'archive-record-edit',
+        component: ArchiveRecordFormView,
+        meta: { title: '编辑剪后记录｜咋剪发' },
+      },
+      {
+        path: '/archive/records/:id',
+        name: 'archive-record-detail',
+        component: ArchiveRecordDetailView,
+        meta: { title: '剪后记录｜咋剪发' },
       },
       {
         path: '/me',

@@ -14,6 +14,7 @@ export type {
   HaircutPhoto,
   HaircutPlan,
   HaircutRecord,
+  HaircutRecordBundle,
   StandardStyle,
   StrandThickness,
   WashFrequency,

@@ -1,3 +1,7 @@
+/// <reference types="node" />
+
+import { File as NodeFile } from 'node:buffer'
+
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/vue'
 import { createPinia } from 'pinia'
 import { createMemoryHistory } from 'vue-router'
@@ -7,7 +11,17 @@ import App from '../../App.vue'
 import { createAppRouter } from '../../router'
 import { ArchiveStorageError } from './ArchiveRepository'
 import { defaultArchiveDb, defaultArchiveRepository } from './archiveStore'
-import type { Candidate, HairProfile, HaircutPlan } from './types'
+import type {
+  Candidate,
+  HairProfile,
+  HaircutPhoto,
+  HaircutPlan,
+  HaircutRecord,
+} from './types'
+
+const localPhoto = new NodeFile(['styled-photo'], 'styled.webp', {
+  type: 'image/webp',
+}) as unknown as File
 
 const existingProfile: HairProfile = {
   id: 'profile-for-routes',
@@ -52,6 +66,9 @@ describe('archive routes and forms', () => {
       '/archive/plans/new',
       '/archive/plans/:id',
       '/archive/plans/:id/edit',
+      '/archive/records/new',
+      '/archive/records/:id',
+      '/archive/records/:id/edit',
     ]))
 
     await renderAt('/archive/profile')
@@ -110,9 +127,9 @@ describe('archive routes and forms', () => {
     await waitFor(() => expect(router.currentRoute.value.path).toBe('/archive'))
     expect(await screen.findByRole('heading', { level: 2, name: '小林的发型档案' })).toBeTruthy()
     expect(screen.getByText('微卷 · 细 · 发量适中')).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '剪后记录暂不展示' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '最近剪后记录' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: '沟通卡暂不展示' })).toBeTruthy()
-    expect(screen.queryByText('还没有剪后记录')).toBeNull()
+    expect(screen.getByText('还没有剪后记录。记录至少一张照片和满意度，之后才能形成复刻或避雷提醒。')).toBeTruthy()
 
     await fireEvent.click(screen.getByRole('link', { name: '编辑档案' }))
     await fireEvent.update(await screen.findByLabelText('称呼'), '林同学')
@@ -226,5 +243,212 @@ describe('archive routes and forms', () => {
     await router.push(`/archive/plans/${completedPlan.id}/edit`)
     expect(await screen.findByText(/不会把它降级为草稿/)).toBeTruthy()
     expect((await defaultArchiveRepository.getPlan(completedPlan.id))?.status).toBe('completed')
+  })
+
+  test('defaults a new record to the local calendar day near midnight', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 7, 10, 3, 7))
+
+    try {
+      await renderAt('/archive/records/new')
+      await vi.waitFor(() => {
+        expect((screen.getByLabelText('理发日期') as HTMLInputElement).value).toBe('2026-08-10')
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('keeps every legacy photo in an unreplaced stage while editing text', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const record: HaircutRecord = {
+      id: 'record-with-legacy-photos',
+      profileId: existingProfile.id,
+      date: '2026-08-20',
+      status: 'completed',
+      satisfaction: 4,
+      styleName: '旧版短发',
+      outcome: 'repeat',
+      createdAt: '2026-08-20T10:00:00.000Z',
+      updatedAt: '2026-08-20T10:00:00.000Z',
+    }
+    await defaultArchiveRepository.saveRecordWithPhotos(record, [
+      {
+        id: 'legacy-styled-1',
+        recordId: record.id,
+        stage: 'styled',
+        image: new NodeFile(['legacy-one'], 'legacy-one.webp', { type: 'image/webp' }) as unknown as File,
+        capturedAt: '2026-08-20T10:00:00.000Z',
+      },
+      {
+        id: 'legacy-styled-2',
+        recordId: record.id,
+        stage: 'styled',
+        image: new NodeFile(['legacy-two'], 'legacy-two.webp', { type: 'image/webp' }) as unknown as File,
+        capturedAt: '2026-08-20T11:00:00.000Z',
+      },
+    ])
+
+    const router = await renderAt(`/archive/records/${record.id}/edit`)
+    expect(await screen.findByText('已保留：已造型照片')).toBeTruthy()
+    await fireEvent.update(screen.getByLabelText('备注'), '只修改文字')
+    await fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
+    await waitFor(() => expect(router.currentRoute.value.path).toBe(`/archive/records/${record.id}`))
+
+    const savedPhotos = await defaultArchiveRepository.listPhotos(record.id)
+    expect(savedPhotos.map(({ id }) => id)).toEqual(['legacy-styled-1', 'legacy-styled-2'])
+    expect(await Promise.all(savedPhotos.map(({ image }) => image.text()))).toEqual([
+      'legacy-one',
+      'legacy-two',
+    ])
+  })
+
+  test('validates the record form, converts yuan to cents, and preserves an unreplaced photo on edit', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const router = await renderAt('/archive/records/new')
+
+    expect(await screen.findByRole('heading', { level: 1, name: '记录这次理发' })).toBeTruthy()
+    await screen.findByLabelText('理发日期')
+    expect(document.querySelectorAll('input[type="file"]')).toHaveLength(6)
+    await fireEvent.update(screen.getByLabelText('理发日期'), '2026-08-20')
+    await fireEvent.update(screen.getByLabelText('发型名'), '纹理短碎发')
+    await fireEvent.update(screen.getByLabelText('价格（元）'), '128.555')
+    await fireEvent.update(screen.getByLabelText('满意度'), '5')
+    await fireEvent.click(screen.getByRole('button', { name: '保存剪后记录' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/价格.*两位小数/)
+    expect(await defaultArchiveRepository.listRecords(existingProfile.id)).toEqual([])
+
+    await fireEvent.update(screen.getByLabelText('价格（元）'), '128.50')
+    await fireEvent.click(screen.getByRole('button', { name: '保存剪后记录' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/至少.*一张照片/)
+    await fireEvent.update(screen.getByLabelText('店铺'), '巷口理发店')
+    await fireEvent.update(screen.getByLabelText('理发师'), 'Tony')
+    await fireEvent.update(screen.getByLabelText('服务'), '洗剪吹')
+    await fireEvent.update(screen.getByLabelText('耗时（分钟）'), '75')
+    await fireEvent.update(screen.getByLabelText('备注'), '顶部保留自然纹理')
+    const styledPhotoInput = screen.getByLabelText('已造型照片') as HTMLInputElement
+    Object.defineProperty(styledPhotoInput, 'files', {
+      configurable: true,
+      value: [localPhoto],
+    })
+    await fireEvent(styledPhotoInput, new Event('change', { bubbles: true }))
+    await fireEvent.click(screen.getByLabelText('避雷'))
+    await fireEvent.update(screen.getByLabelText('避雷规则 1'), '   ')
+    await fireEvent.click(screen.getByRole('button', { name: '保存剪后记录' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/1 到 3 条非空规则/)
+    expect(await defaultArchiveRepository.listRecords(existingProfile.id)).toEqual([])
+    await fireEvent.click(screen.getByLabelText('复刻'))
+    await fireEvent.click(screen.getByRole('button', { name: '保存剪后记录' }))
+
+    await waitFor(() => expect(router.currentRoute.value.path).not.toBe('/archive/records/new'))
+    const record = (await defaultArchiveRepository.listRecords(existingProfile.id))[0]
+    expect(record).toMatchObject({
+      styleName: '纹理短碎发',
+      priceCents: 12850,
+      durationMinutes: 75,
+      outcome: 'repeat',
+    })
+    expect((await defaultArchiveRepository.listPhotos(record?.id ?? ''))[0]?.stage).toBe('styled')
+    expect(await screen.findByText('¥128.50')).toBeTruthy()
+    expect(screen.getByText('5 / 5')).toBeTruthy()
+    expect(screen.getByText('已存为标准发型')).toBeTruthy()
+
+    await fireEvent.click(screen.getByRole('link', { name: '编辑记录' }))
+    expect(await screen.findByText('已保留：已造型照片')).toBeTruthy()
+    await fireEvent.update(screen.getByLabelText('满意度'), '2')
+    await fireEvent.click(screen.getByLabelText('避雷'))
+    await fireEvent.update(screen.getByLabelText('避雷规则 1'), '两侧不要推白')
+    await fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
+
+    expect(await screen.findByText('这次记为避雷')).toBeTruthy()
+    expect(screen.getByText('两侧不要推白')).toBeTruthy()
+    expect(await (await defaultArchiveRepository.listPhotos(record?.id ?? ''))[0]?.image.text()).toBe('styled-photo')
+    expect(await defaultArchiveRepository.listStandardStylesByProfile(existingProfile.id)).toEqual([])
+    expect(await defaultArchiveRepository.listAvoidRulesByProfile(existingProfile.id)).toMatchObject([
+      { text: '两侧不要推白', active: true },
+    ])
+  })
+
+  test('shows a real recent record on archive and home, then deletes only that record', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const plan: HaircutPlan = {
+      id: 'record-plan',
+      profileId: existingProfile.id,
+      title: '保留的计划',
+      date: '2026-08-18',
+      status: 'ready',
+      createdAt: '2026-08-18T00:00:00.000Z',
+      updatedAt: '2026-08-18T00:00:00.000Z',
+    }
+    await defaultArchiveRepository.savePlanWithCandidates(plan, [1, 2].map((order) => ({
+      id: `record-plan-candidate-${order}`,
+      planId: plan.id,
+      order,
+      name: `候选 ${order}`,
+      notes: '',
+      source: 'demo_ai' as const,
+      demoImagePath: order === 1
+        ? '/demo/persona-lin-bob.webp'
+        : '/demo/persona-ran-crop.webp',
+    })))
+    const record: HaircutRecord = {
+      id: 'real-record',
+      profileId: existingProfile.id,
+      planId: plan.id,
+      date: '2026-08-20',
+      status: 'completed',
+      satisfaction: 5,
+      styleName: '清爽短碎发',
+      outcome: 'repeat',
+      createdAt: '2026-08-20T10:00:00.000Z',
+      updatedAt: '2026-08-20T10:00:00.000Z',
+    }
+    const photo: HaircutPhoto = {
+      id: 'real-photo',
+      recordId: record.id,
+      stage: 'styled',
+      image: localPhoto,
+      capturedAt: '2026-08-20T10:00:00.000Z',
+    }
+    await defaultArchiveRepository.saveRecordWithPhotos(record, [photo])
+
+    const router = await renderAt('/archive')
+    expect(await screen.findByRole('link', { name: /清爽短碎发/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '标准发型' })).toBeTruthy()
+    expect(screen.getAllByText('清爽短碎发').length).toBeGreaterThan(0)
+    expect(screen.getByText('还没有避雷规则。')).toBeTruthy()
+
+    await router.push('/')
+    expect(await screen.findByText('上次发型 · 清爽短碎发')).toBeTruthy()
+    expect(screen.getByText('满意度 5 / 5')).toBeTruthy()
+    expect(screen.getByText(/下次可以复刻/)).toBeTruthy()
+    expect(screen.getByRole('img', { name: /清爽短碎发.*已造型/ })).toBeTruthy()
+    expect(URL.revokeObjectURL).toHaveBeenCalled()
+    const revocationsAfterArchive = vi.mocked(URL.revokeObjectURL).mock.calls.length
+
+    await router.push(`/archive/records/${record.id}`)
+    await screen.findByRole('heading', { level: 1, name: '清爽短碎发' })
+    expect(vi.mocked(URL.revokeObjectURL).mock.calls.length).toBeGreaterThan(revocationsAfterArchive)
+    const revocationsAfterHome = vi.mocked(URL.revokeObjectURL).mock.calls.length
+    const confirmDelete = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    await fireEvent.click(await screen.findByRole('button', { name: '删除记录' }))
+    expect(confirmDelete).toHaveBeenCalledWith(expect.stringMatching(/档案和计划会保留/))
+    expect(await screen.findByText('还没有剪后记录。记录至少一张照片和满意度，之后才能形成复刻或避雷提醒。')).toBeTruthy()
+    expect(vi.mocked(URL.revokeObjectURL).mock.calls.length).toBeGreaterThan(revocationsAfterHome)
+    expect(await defaultArchiveRepository.getProfile(existingProfile.id)).toBeDefined()
+    expect(await defaultArchiveRepository.getPlan(plan.id)).toBeDefined()
+  })
+
+  test('shows a home storage error before either empty or historical content', async () => {
+    vi.spyOn(defaultArchiveRepository, 'listProfiles').mockRejectedValueOnce(
+      new ArchiveStorageError('unavailable', new Error('technical')),
+    )
+
+    await renderAt('/')
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/不可用|无痕/)
+    expect(screen.queryByRole('link', { name: '查看短发示例并进入试发型' })).toBeNull()
+    expect(screen.queryByText(/上次发型/)).toBeNull()
   })
 })

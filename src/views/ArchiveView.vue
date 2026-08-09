@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
 import type { HairProfile, HaircutPlan } from '../features/archive/types'
 
 const store = useArchiveStore()
+const recordPhotoUrls = ref<Record<string, string>>({})
 
 const textureLabels: Record<HairProfile['hairTexture'], string> = {
   straight: '直发',
@@ -45,7 +46,25 @@ const formatDate = (date: string) => {
     : new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric' }).format(parsed)
 }
 
+const revokeRecordUrls = () => {
+  Object.values(recordPhotoUrls.value).forEach((url) => URL.revokeObjectURL(url))
+  recordPhotoUrls.value = {}
+}
+
+watch(
+  [() => store.records, () => store.photosByRecordId],
+  () => {
+    revokeRecordUrls()
+    recordPhotoUrls.value = Object.fromEntries(store.records.flatMap((record) => {
+      const photo = store.photosByRecordId[record.id]?.[0]
+      return photo ? [[record.id, URL.createObjectURL(photo.image)]] : []
+    }))
+  },
+  { immediate: true },
+)
+
 onMounted(() => store.load())
+onBeforeUnmount(revokeRecordUrls)
 </script>
 
 <template>
@@ -87,13 +106,12 @@ onMounted(() => store.load())
         01 / 本机档案
       </p>
       <h2>这台设备还没有发型档案</h2>
-      <p>先记下你的发质和日常习惯，之后建立的计划才有归属。</p>
+      <p>先记下你的发质和日常习惯，之后建立的计划与剪后记录才有归属。</p>
       <RouterLink
         class="archive-primary-link"
         to="/archive/profile"
       >
-        <span>建立档案</span>
-        <span aria-hidden="true">→</span>
+        <span>建立档案</span><span aria-hidden="true">→</span>
       </RouterLink>
       <p class="archive-trust-note">
         只保存在当前设备，不会创建账号或同步。清理浏览器数据、使用无痕模式或更换设备，都可能让档案丢失。
@@ -156,14 +174,12 @@ onMounted(() => store.load())
             新建发型计划
           </RouterLink>
         </div>
-
         <p
           v-if="store.plans.length === 0"
           class="archive-inline-empty"
         >
           还没有发型计划。先从六个预制短发中选 2—4 个真实候选。
         </p>
-
         <ol
           v-else
           class="plan-list"
@@ -190,16 +206,112 @@ onMounted(() => store.load())
       </section>
 
       <section
-        class="archive-future"
+        class="archive-records"
         aria-labelledby="archive-history-title"
       >
-        <p class="section-index">
-          03 / 剪后记录
+        <div class="archive-section-heading">
+          <div>
+            <p class="section-index">
+              03 / 剪后记录
+            </p>
+            <h2 id="archive-history-title">
+              最近剪后记录
+            </h2>
+          </div>
+          <RouterLink
+            class="text-link"
+            to="/archive/records/new"
+          >
+            记录这次理发
+          </RouterLink>
+        </div>
+        <p
+          v-if="store.records.length === 0"
+          class="archive-inline-empty"
+        >
+          还没有剪后记录。记录至少一张照片和满意度，之后才能形成复刻或避雷提醒。
         </p>
-        <h2 id="archive-history-title">
-          剪后记录暂不展示
+        <ol
+          v-else
+          class="record-list"
+        >
+          <li
+            v-for="record in store.records"
+            :key="record.id"
+          >
+            <RouterLink :to="`/archive/records/${record.id}`">
+              <img
+                v-if="recordPhotoUrls[record.id]"
+                :src="recordPhotoUrls[record.id]"
+                :alt="`${record.styleName}剪后照片`"
+              >
+              <span class="record-list__copy">
+                <span>{{ formatDate(record.date) }} · 满意度 {{ record.satisfaction }} / 5</span>
+                <b>{{ record.styleName }}</b>
+                <small>{{ record.outcome === 'repeat' ? '可复刻' : '需避雷' }}</small>
+              </span>
+              <span aria-hidden="true">→</span>
+            </RouterLink>
+          </li>
+        </ol>
+      </section>
+
+      <section
+        class="archive-guidance"
+        aria-labelledby="archive-standard-title"
+      >
+        <p class="section-index">
+          04 / 可复刻
+        </p>
+        <h2 id="archive-standard-title">
+          标准发型
         </h2>
-        <p>本阶段不读取或编辑剪后照片、满意度与结果，也不会用空态覆盖这台设备可能已有的数据。</p>
+        <p
+          v-if="store.standardStyles.filter(({ active }) => active).length === 0"
+          class="archive-inline-empty"
+        >
+          还没有标准发型。
+        </p>
+        <ul
+          v-else
+          class="guidance-list"
+        >
+          <li
+            v-for="style in store.standardStyles.filter(({ active }) => active)"
+            :key="style.id"
+          >
+            {{ style.name }}
+          </li>
+        </ul>
+      </section>
+
+      <section
+        class="archive-guidance"
+        aria-labelledby="archive-avoid-title"
+      >
+        <p class="section-index">
+          05 / 要避开
+        </p>
+        <h2 id="archive-avoid-title">
+          避雷规则
+        </h2>
+        <p
+          v-if="store.avoidRules.filter(({ active }) => active).length === 0"
+          class="archive-inline-empty"
+        >
+          还没有避雷规则。
+        </p>
+        <ul
+          v-else
+          class="guidance-list guidance-list--avoid"
+        >
+          <li
+            v-for="rule in store.avoidRules.filter(({ active }) => active)"
+            :key="rule.id"
+          >
+            {{ rule.text }}
+          </li>
+        </ul>
       </section>
 
       <section
@@ -207,12 +319,12 @@ onMounted(() => store.load())
         aria-labelledby="archive-brief-title"
       >
         <p class="section-index">
-          04 / 沟通卡
+          06 / 沟通卡
         </p>
         <h2 id="archive-brief-title">
           沟通卡暂不展示
         </h2>
-        <p>本阶段不读取、生成或导出沟通卡，也不会把未检查的数据描述成空记录。</p>
+        <p>本阶段暂不读取、编辑或导出沟通卡；下一任务再接入，不会把未检查的数据描述成空记录。</p>
       </section>
 
       <p class="archive-trust-note archive-trust-note--content">

@@ -90,6 +90,8 @@ const repeatRecord = (
   satisfaction: 5,
   outcome: 'repeat',
   styleName: '清爽短碎发',
+  createdAt: '2026-08-10T03:00:00.000Z',
+  updatedAt: '2026-08-10T03:00:00.000Z',
   ...overrides,
 } as HaircutRecord)
 
@@ -105,6 +107,8 @@ const avoidRecord = (
   outcome: 'avoid',
   styleName: '过短渐层',
   avoidRules: ['两侧不要推白'],
+  createdAt: '2026-08-10T03:00:00.000Z',
+  updatedAt: '2026-08-10T03:00:00.000Z',
   ...overrides,
 } as HaircutRecord)
 
@@ -115,6 +119,7 @@ const photo = (
   recordId: 'record-1',
   stage: 'unstyled',
   image: defaultPhotoImage,
+  capturedAt: '2026-08-10T03:00:00.000Z',
   ...overrides,
 })
 
@@ -365,6 +370,117 @@ describe('ArchiveRepository', () => {
     expect(await repository.listPhotos('record-1')).toHaveLength(1)
   })
 
+  test('keeps photos in the six-stage workflow order after a reload', async () => {
+    await seedPlan()
+    const stages: HaircutPhoto['stage'][] = [
+      'styled',
+      'before',
+      'day_7',
+      'after_wash',
+      'unstyled',
+      'during',
+    ]
+    await repository.saveRecordWithPhotos(repeatRecord(), stages.map((stage, index) => photo({
+      id: `photo-${index + 1}`,
+      stage,
+    })))
+
+    expect((await repository.listPhotos('record-1')).map(({ stage }) => stage)).toEqual([
+      'before',
+      'during',
+      'unstyled',
+      'styled',
+      'after_wash',
+      'day_7',
+    ])
+  })
+
+  test('saves a direct record without a plan and returns its complete bundle', async () => {
+    await repository.createProfile(profile())
+    const record = repeatRecord({
+      planId: undefined,
+      salonName: '巷口理发店',
+      barberName: 'Tony',
+      serviceName: '洗剪吹',
+      priceCents: 12800,
+      durationMinutes: 75,
+      notes: '顶部保留了自然纹理',
+    } as Partial<HaircutRecord>)
+    const recordPhoto = photo({ stage: 'styled' })
+
+    const saved = await repository.saveRecordWithPhotos(record, [recordPhoto])
+    const loaded = await repository.getRecordBundle(record.id)
+
+    expect(saved.record).toEqual(record)
+    expect(loaded).toMatchObject({
+      record,
+      photos: [{ id: recordPhoto.id, stage: 'styled' }],
+      avoidRules: [],
+      standardStyles: [{
+        recordId: record.id,
+        name: '清爽短碎发',
+        active: true,
+        createdAt: record.updatedAt,
+      }],
+    })
+  })
+
+  test('lists record bundles and profile-derived guidance newest first', async () => {
+    await repository.createProfile(profile())
+    await repository.createProfile(profile({ id: 'profile-2', name: '另一份档案' }))
+    await repository.saveRecordWithPhotos(repeatRecord({
+      id: 'record-old',
+      planId: undefined,
+      date: '2026-08-01',
+      styleName: '旧标准发型',
+      createdAt: '2026-08-01T10:00:00.000Z',
+      updatedAt: '2026-08-01T10:00:00.000Z',
+    } as Partial<HaircutRecord>), [photo({
+      id: 'photo-old',
+      recordId: 'record-old',
+      capturedAt: '2026-08-01T10:00:00.000Z',
+    })])
+    await repository.saveRecordWithPhotos(avoidRecord({
+      id: 'record-new',
+      planId: undefined,
+      date: '2026-08-09',
+      avoidRules: ['两侧不要推白'],
+      createdAt: '2026-08-09T10:00:00.000Z',
+      updatedAt: '2026-08-09T10:00:00.000Z',
+    } as Partial<HaircutRecord>), [photo({
+      id: 'photo-new',
+      recordId: 'record-new',
+      capturedAt: '2026-08-09T10:00:00.000Z',
+    })])
+    await repository.saveRecordWithPhotos(repeatRecord({
+      id: 'other-record',
+      profileId: 'profile-2',
+      planId: undefined,
+      date: '2026-08-10',
+      createdAt: '2026-08-10T10:00:00.000Z',
+      updatedAt: '2026-08-10T10:00:00.000Z',
+    } as Partial<HaircutRecord>), [photo({
+      id: 'other-photo',
+      recordId: 'other-record',
+      capturedAt: '2026-08-10T10:00:00.000Z',
+    })])
+
+    expect((await repository.listRecords('profile-1')).map(({ id }) => id)).toEqual([
+      'record-new',
+      'record-old',
+    ])
+    expect((await repository.listRecordBundles('profile-1')).map(({ record }) => record.id)).toEqual([
+      'record-new',
+      'record-old',
+    ])
+    expect(await repository.listAvoidRulesByProfile('profile-1')).toMatchObject([
+      { recordId: 'record-new', text: '两侧不要推白', active: true },
+    ])
+    expect(await repository.listStandardStylesByProfile('profile-1')).toMatchObject([
+      { recordId: 'record-old', name: '旧标准发型', active: true },
+    ])
+  })
+
   test('creates one standard style for a repeat outcome', async () => {
     await seedPlan()
     await repository.saveRecordWithPhotos(repeatRecord(), [photo()])
@@ -374,6 +490,8 @@ describe('ArchiveRepository', () => {
       profileId: 'profile-1',
       recordId: 'record-1',
       name: '清爽短碎发',
+      active: true,
+      createdAt: '2026-08-10T03:00:00.000Z',
     }])
     expect(await repository.listAvoidRules('record-1')).toEqual([])
   })
@@ -391,18 +509,24 @@ describe('ArchiveRepository', () => {
         profileId: 'profile-1',
         recordId: 'record-1',
         text: '两侧不要推白',
+        active: true,
+        createdAt: '2026-08-10T03:00:00.000Z',
       },
       {
         id: 'avoid-rule:record-1:2',
         profileId: 'profile-1',
         recordId: 'record-1',
         text: '顶部不要打得太薄',
+        active: true,
+        createdAt: '2026-08-10T03:00:00.000Z',
       },
       {
         id: 'avoid-rule:record-1:3',
         profileId: 'profile-1',
         recordId: 'record-1',
         text: '后颈不要留长尾',
+        active: true,
+        createdAt: '2026-08-10T03:00:00.000Z',
       },
     ])
     expect(await repository.listStandardStyles('record-1')).toEqual([])
@@ -446,6 +570,26 @@ describe('ArchiveRepository', () => {
     expect(await repository.listPhotos('record-1')).toHaveLength(1)
     expect(await repository.listStandardStyles('record-1')).toEqual([])
     expect(await repository.listAvoidRules('record-1')).toHaveLength(2)
+  })
+
+  test('atomically keeps an unreplaced photo when the record outcome changes', async () => {
+    await seedPlan()
+    await repository.saveRecordWithPhotos(repeatRecord(), [photo()])
+    const existingPhoto = (await repository.listPhotos('record-1'))[0]
+
+    await repository.saveRecordWithPhotos(
+      avoidRecord({ avoidRules: ['不要推白'] }),
+      existingPhoto ? [existingPhoto] : [],
+    )
+
+    expect(await repository.getRecord('record-1')).toMatchObject({ outcome: 'avoid' })
+    expect(await repository.listPhotos('record-1')).toMatchObject([{
+      id: 'photo-1',
+      stage: 'unstyled',
+    }])
+    expect(await (await repository.listPhotos('record-1'))[0]?.image.text()).toBe('local-photo')
+    expect(await repository.listStandardStyles('record-1')).toEqual([])
+    expect(await repository.listAvoidRules('record-1')).toHaveLength(1)
   })
 
   test('rolls back the old record, photos, and derived data when an update write fails', async () => {
@@ -700,7 +844,11 @@ describe('ArchiveRepository', () => {
       outcome: 'repeat',
       styleName: '旧发型',
     })
-    expect(await upgradedRepository.listStandardStyles('legacy-record')).toHaveLength(1)
+    expect(await upgradedRepository.listStandardStyles('legacy-record')).toMatchObject([{
+      id: 'legacy-standard',
+      active: true,
+      createdAt: '1970-01-01T00:00:00.000Z',
+    }])
     expect(
       await upgraded.profiles.where('updatedAt').equals(migratedProfile?.updatedAt ?? '').first(),
     ).toMatchObject({ id: 'legacy-profile' })
@@ -710,6 +858,92 @@ describe('ArchiveRepository', () => {
     const reopened = openDatabase()
     const reopenedProfile = await new ArchiveRepository(reopened).getProfile('legacy-profile')
     expect(reopenedProfile?.updatedAt).toBe(firstMigrationTime)
+  })
+
+  test('reads legacy version 2 record defaults without rewriting its photo Blob', async () => {
+    db.close()
+    const legacy = new Dexie(dbName, { indexedDB, IDBKeyRange })
+    legacy.version(2).stores({
+      profiles: 'id, updatedAt',
+      plans: 'id, profileId, date, status, updatedAt',
+      candidates: 'id, planId, &[planId+order]',
+      briefs: 'id, &planId, profileId',
+      records: 'id, profileId, planId, date, status',
+      photos: 'id, recordId, stage',
+      avoidRules: 'id, profileId, recordId',
+      standardStyles: 'id, profileId, recordId',
+    })
+    const legacyPhoto = new NodeBlob(['legacy-photo'], { type: 'image/webp' }) as unknown as Blob
+    await legacy.table('records').add({
+      id: 'legacy-v2-record',
+      profileId: 'legacy-profile',
+      date: '2025-03-04',
+      status: 'completed',
+      satisfaction: 4,
+      outcome: 'avoid',
+      styleName: '旧版短发',
+      avoidRules: ['不要推白'],
+    })
+    await legacy.table('photos').add({
+      id: 'legacy-v2-photo',
+      recordId: 'legacy-v2-record',
+      stage: 'styled',
+      image: legacyPhoto,
+    })
+    await legacy.table('avoidRules').add({
+      id: 'legacy-v2-rule',
+      profileId: 'legacy-profile',
+      recordId: 'legacy-v2-record',
+      text: '不要推白',
+    })
+    legacy.close()
+
+    const upgraded = openDatabase()
+    const upgradedRepository = new ArchiveRepository(upgraded)
+    const record = await upgradedRepository.getRecord('legacy-v2-record')
+    const photos = await upgradedRepository.listPhotos('legacy-v2-record')
+    const rules = await upgradedRepository.listAvoidRules('legacy-v2-record')
+
+    expect(upgraded.verno).toBe(2)
+    expect(record).toMatchObject({
+      id: 'legacy-v2-record',
+      planId: undefined,
+      salonName: undefined,
+      barberName: undefined,
+      serviceName: undefined,
+      priceCents: undefined,
+      durationMinutes: undefined,
+      notes: undefined,
+      createdAt: '2025-03-04T00:00:00.000Z',
+      updatedAt: '2025-03-04T00:00:00.000Z',
+    })
+    expect(photos[0]).toMatchObject({
+      id: 'legacy-v2-photo',
+      capturedAt: '1970-01-01T00:00:00.000Z',
+    })
+    expect(await photos[0]?.image.text()).toBe('legacy-photo')
+    expect(rules).toMatchObject([{
+      id: 'legacy-v2-rule',
+      active: true,
+      createdAt: '1970-01-01T00:00:00.000Z',
+    }])
+  })
+
+  test('uses the legacy timestamp when an old record date is unreadable', async () => {
+    await db.records.add({
+      id: 'legacy-invalid-date',
+      profileId: 'legacy-profile',
+      date: 'not-a-date',
+      status: 'completed',
+      satisfaction: 3,
+      outcome: 'repeat',
+      styleName: '旧记录',
+    } as unknown as HaircutRecord)
+
+    expect(await repository.getRecord('legacy-invalid-date')).toMatchObject({
+      createdAt: '1970-01-01T00:00:00.000Z',
+      updatedAt: '1970-01-01T00:00:00.000Z',
+    })
   })
 
   test('maps quota failures to a recognizable storage error', async () => {
