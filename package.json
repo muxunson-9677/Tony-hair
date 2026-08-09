@@ -3,11 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "npm@11.17.0",
   "engines": {
-    "node": "24.x"
+    "node": "24.19.0"
   },
   "scripts": {
     "dev": "vite",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
     "build": "vite build",
     "typecheck": "vue-tsc -b --pretty false",
     "lint": "eslint .",

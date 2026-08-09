@@ -50,7 +50,7 @@
           aria-hidden="true"
         />
         <span>
-          <span>仅保存在当前设备</span><br>
+          <span>当前阶段不创建记录；后续记录仅保存在当前设备</span><br>
           <span>清理浏览器数据、使用无痕模式或更换设备，都可能让记录丢失。</span>
         </span>
       </p>

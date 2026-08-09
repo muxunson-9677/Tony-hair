@@ -19,3 +19,15 @@ test('navigates through the four primary destinations', async ({ page }) => {
     await expect(link).toHaveAttribute('aria-current', 'page')
   }
 })
+
+test('serves an unknown deep link and returns home', async ({ page }) => {
+  await page.goto('/missing/deep-link')
+
+  await expect(page).toHaveTitle('页面没找到｜咋剪发')
+  await expect(page.getByRole('heading', { level: 1, name: '页面没找到' })).toBeVisible()
+
+  await page.getByRole('link', { name: '返回首页' }).click()
+
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByRole('heading', { level: 1, name: '咋剪发' })).toBeVisible()
+})

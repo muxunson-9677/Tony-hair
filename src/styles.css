@@ -8,7 +8,7 @@
   --ink: #171512;
   --paper: #f3efe5;
   --paper-deep: #e7e0d4;
-  --warm-gray: #8c857a;
+  --warm-gray: #6f685e;
   --line: rgba(23, 21, 18, 0.18);
   --accent: #914d34;
   --nav-height: 78px;
@@ -393,6 +393,10 @@ a:focus-visible {
 
   .app-shell {
     min-height: calc(100svh - 48px);
+  }
+
+  .bottom-nav {
+    bottom: 24px;
   }
 
   .app-main,

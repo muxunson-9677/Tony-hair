@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/vue'
+import { render, screen, waitFor, within } from '@testing-library/vue'
 import { createPinia } from 'pinia'
 import { createMemoryHistory } from 'vue-router'
 import { describe, expect, test } from 'vitest'
@@ -36,7 +36,7 @@ describe('app shell', () => {
     expect(screen.getByText('剪前看看，剪时说清，剪后记住')).toBeTruthy()
     expect(screen.getByRole('link', { name: '准备去剪' })).toBeTruthy()
     expect(screen.getByRole('link', { name: '记录这次理发' })).toBeTruthy()
-    expect(screen.getByText('仅保存在当前设备')).toBeTruthy()
+    expect(screen.getByText('当前阶段不创建记录；后续记录仅保存在当前设备')).toBeTruthy()
     expect(
       screen.getByText('清理浏览器数据、使用无痕模式或更换设备，都可能让记录丢失。'),
     ).toBeTruthy()
@@ -56,6 +56,25 @@ describe('app shell', () => {
       'page',
     )
     expect(navigation.querySelectorAll('[aria-current="page"]')).toHaveLength(1)
+  })
+
+  test('updates the title and moves focus to main content after client navigation', async () => {
+    const router = await renderAt('/')
+    const main = document.querySelector<HTMLElement>('#main-content')
+    const homeLink = screen.getByRole('link', { name: '首页' })
+
+    await waitFor(() => expect(document.title).toBe('咋剪发'))
+    expect(main?.getAttribute('tabindex')).toBe('-1')
+
+    homeLink.focus()
+    expect(document.activeElement).toBe(homeLink)
+
+    await router.push('/try')
+
+    await waitFor(() => {
+      expect(document.title).toBe('试发型｜咋剪发')
+      expect(document.activeElement).toBe(main)
+    })
   })
 
   test('labels the try-on route as a sample without promising real generation', async () => {
@@ -79,5 +98,12 @@ describe('app shell', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: '我的' })).toBeTruthy()
     expect(screen.getByText(/偏好与隐私设置/)).toBeTruthy()
+  })
+
+  test('shows a useful not-found page for an unknown deep link', async () => {
+    await renderAt('/missing/deep-link')
+
+    expect(screen.getByRole('heading', { level: 1, name: '页面没找到' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '返回首页' }).getAttribute('href')).toBe('/')
   })
 })

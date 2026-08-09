@@ -1,5 +1,24 @@
 <script setup lang="ts">
+import { nextTick, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+
 import BottomNav from './components/BottomNav.vue'
+
+const activeRoute = useRoute()
+const mainContent = ref<HTMLElement | null>(null)
+
+watch(
+  () => activeRoute.fullPath,
+  async () => {
+    if (typeof activeRoute.meta.title === 'string') {
+      document.title = activeRoute.meta.title
+    }
+
+    await nextTick()
+    mainContent.value?.focus()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -11,7 +30,9 @@ import BottomNav from './components/BottomNav.vue'
 
     <main
       id="main-content"
+      ref="mainContent"
       class="app-main"
+      tabindex="-1"
     >
       <RouterView v-slot="{ Component, route }">
         <Transition
