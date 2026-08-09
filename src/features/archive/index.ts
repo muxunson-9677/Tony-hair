@@ -8,9 +8,13 @@ export type {
   AvoidRule,
   BarberBrief,
   Candidate,
+  HairDensity,
   HairProfile,
+  HairTexture,
   HaircutPhoto,
   HaircutPlan,
   HaircutRecord,
   StandardStyle,
+  StrandThickness,
+  WashFrequency,
 } from './types'

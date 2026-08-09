@@ -11,6 +11,23 @@ import type {
   StandardStyle,
 } from './types'
 
+const ARCHIVE_STORES_V1 = {
+  profiles: 'id',
+  plans: 'id, profileId, date, status',
+  candidates: 'id, planId, &[planId+order]',
+  briefs: 'id, &planId, profileId',
+  records: 'id, profileId, planId, date, status',
+  photos: 'id, recordId, stage',
+  avoidRules: 'id, profileId, recordId',
+  standardStyles: 'id, profileId, recordId',
+} as const
+
+const ARCHIVE_STORES_V2 = {
+  ...ARCHIVE_STORES_V1,
+  profiles: 'id, updatedAt',
+  plans: 'id, profileId, date, status, updatedAt',
+} as const
+
 export class ZajianfaDb extends Dexie {
   profiles!: Table<HairProfile, string>
   plans!: Table<HaircutPlan, string>
@@ -24,20 +41,34 @@ export class ZajianfaDb extends Dexie {
   constructor(name = 'zajianfa-archive', options?: DexieOptions) {
     super(name, options)
 
-    this.version(1).stores({
-      profiles: 'id',
-      plans: 'id, profileId, date, status',
-      candidates: 'id, planId, &[planId+order]',
-      briefs: 'id, &planId, profileId',
-      records: 'id, profileId, planId, date, status',
-      photos: 'id, recordId, stage',
-      avoidRules: 'id, profileId, recordId',
-      standardStyles: 'id, profileId, recordId',
+    this.version(1).stores(ARCHIVE_STORES_V1)
+    this.version(2).stores(ARCHIVE_STORES_V2).upgrade(async (transaction) => {
+      const migratedAt = new Date().toISOString()
+
+      await transaction.table('profiles').toCollection().modify((profile) => {
+        profile.hairTexture ??= 'unsure'
+        profile.strandThickness ??= 'unsure'
+        profile.density ??= 'unsure'
+        profile.stylingMinutes ??= null
+        profile.washFrequency ??= 'unsure'
+        profile.preferenceNotes ??= ''
+        profile.createdAt ??= migratedAt
+        profile.updatedAt ??= migratedAt
+      })
+      await transaction.table('plans').toCollection().modify((plan) => {
+        plan.title ??= '未命名计划'
+        plan.createdAt ??= migratedAt
+        plan.updatedAt ??= migratedAt
+      })
     })
 
     this.profiles = this.table('profiles')
     this.plans = this.table('plans')
     this.candidates = this.table('candidates')
+    this.candidates.hook('reading', (candidate) => candidate && ({
+      ...candidate,
+      notes: candidate.notes ?? '',
+    }))
     this.briefs = this.table('briefs')
     this.records = this.table('records')
     this.photos = this.table('photos')
@@ -65,6 +96,16 @@ export class ArchiveStorageError extends Error {
 }
 
 const CANDIDATE_SOURCES = new Set(['user_reference', 'past_record', 'demo_ai'])
+const HAIR_TEXTURES = new Set(['straight', 'wavy', 'curly', 'coily', 'unsure'])
+const STRAND_THICKNESSES = new Set(['fine', 'medium', 'coarse', 'unsure'])
+const HAIR_DENSITIES = new Set(['low', 'medium', 'high', 'unsure'])
+const WASH_FREQUENCIES = new Set([
+  'daily',
+  'every_other_day',
+  'two_to_three_per_week',
+  'weekly_or_less',
+  'unsure',
+])
 const PHOTO_STAGES = new Set([
   'before',
   'during',
@@ -135,6 +176,39 @@ const mapStorageError = (error: unknown): never => {
   throw error
 }
 
+const isDateValue = (value: string) => value.trim().length > 0 && !Number.isNaN(Date.parse(value))
+
+const validateProfile = (profile: HairProfile) => {
+  if (profile.name.trim().length === 0) {
+    throw new RangeError('profile name must not be empty')
+  }
+  if (!HAIR_TEXTURES.has(profile.hairTexture)) {
+    throw new Error('hair texture is invalid')
+  }
+  if (!STRAND_THICKNESSES.has(profile.strandThickness)) {
+    throw new Error('strand thickness is invalid')
+  }
+  if (!HAIR_DENSITIES.has(profile.density)) {
+    throw new Error('hair density is invalid')
+  }
+  if (
+    profile.stylingMinutes !== null
+    && (
+      !Number.isInteger(profile.stylingMinutes)
+      || profile.stylingMinutes < 0
+      || profile.stylingMinutes > 180
+    )
+  ) {
+    throw new RangeError('styling minutes must be null or an integer from 0 to 180')
+  }
+  if (!WASH_FREQUENCIES.has(profile.washFrequency)) {
+    throw new Error('wash frequency is invalid')
+  }
+  if (!isDateValue(profile.createdAt) || !isDateValue(profile.updatedAt)) {
+    throw new RangeError('profile timestamps must be valid dates')
+  }
+}
+
 const validatePlanCandidates = (
   plan: HaircutPlan,
   candidates: readonly Candidate[],
@@ -142,9 +216,17 @@ const validatePlanCandidates = (
   if (candidates.length < 2 || candidates.length > 4) {
     throw new RangeError('A plan must contain between 2 and 4 candidates')
   }
+  if (plan.title.trim().length === 0) {
+    throw new RangeError('plan title must not be empty')
+  }
+  if (!isDateValue(plan.date) || !isDateValue(plan.createdAt) || !isDateValue(plan.updatedAt)) {
+    throw new RangeError('plan dates must be valid')
+  }
 
   const orders = new Set<number>()
   const ids = new Set<string>()
+  const demoImagePaths = new Set<string>()
+  const pastRecordIds = new Set<string>()
   for (const candidate of candidates) {
     if (candidate.planId !== plan.id) {
       throw new Error('Every candidate must belong to the saved plan')
@@ -161,8 +243,26 @@ const validatePlanCandidates = (
     if (!CANDIDATE_SOURCES.has(candidate.source)) {
       throw new Error('candidate source is invalid')
     }
+    if (candidate.demoImagePath && candidate.source !== 'demo_ai') {
+      throw new Error('demo image path requires a demo candidate')
+    }
+    if (candidate.pastRecordId && candidate.source !== 'past_record') {
+      throw new Error('past record id requires a past-record candidate')
+    }
+    if (candidate.demoImagePath && demoImagePaths.has(candidate.demoImagePath)) {
+      throw new Error('demo candidates must be unique within a plan')
+    }
+    if (candidate.pastRecordId && pastRecordIds.has(candidate.pastRecordId)) {
+      throw new Error('past-record candidates must be unique within a plan')
+    }
     orders.add(candidate.order)
     ids.add(candidate.id)
+    if (candidate.demoImagePath) {
+      demoImagePaths.add(candidate.demoImagePath)
+    }
+    if (candidate.pastRecordId) {
+      pastRecordIds.add(candidate.pastRecordId)
+    }
   }
 }
 
@@ -236,6 +336,7 @@ export class ArchiveRepository {
   }
 
   createProfile(profile: HairProfile): Promise<string> {
+    validateProfile(profile)
     return this.run(() => this.db.profiles.add(profile))
   }
 
@@ -248,6 +349,7 @@ export class ArchiveRepository {
   }
 
   updateProfile(profile: HairProfile): Promise<string> {
+    validateProfile(profile)
     return this.run(async () => {
       if (!(await this.db.profiles.get(profile.id))) {
         throw new Error(`Profile not found: ${profile.id}`)

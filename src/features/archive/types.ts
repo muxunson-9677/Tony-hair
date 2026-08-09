@@ -1,13 +1,34 @@
+export type HairTexture = 'straight' | 'wavy' | 'curly' | 'coily' | 'unsure'
+export type StrandThickness = 'fine' | 'medium' | 'coarse' | 'unsure'
+export type HairDensity = 'low' | 'medium' | 'high' | 'unsure'
+export type WashFrequency =
+  | 'daily'
+  | 'every_other_day'
+  | 'two_to_three_per_week'
+  | 'weekly_or_less'
+  | 'unsure'
+
 export interface HairProfile {
   readonly id: string
   readonly name: string
+  readonly hairTexture: HairTexture
+  readonly strandThickness: StrandThickness
+  readonly density: HairDensity
+  readonly stylingMinutes: number | null
+  readonly washFrequency: WashFrequency
+  readonly preferenceNotes: string
+  readonly createdAt: string
+  readonly updatedAt: string
 }
 
 export interface HaircutPlan {
   readonly id: string
   readonly profileId: string
+  readonly title: string
   readonly date: string
   readonly status: 'draft' | 'ready' | 'completed'
+  readonly createdAt: string
+  readonly updatedAt: string
 }
 
 export interface Candidate {
@@ -15,7 +36,10 @@ export interface Candidate {
   readonly planId: string
   readonly order: number
   readonly name: string
+  readonly notes: string
   readonly source: 'user_reference' | 'past_record' | 'demo_ai'
+  readonly demoImagePath?: string
+  readonly pastRecordId?: string
   readonly referenceImage?: Blob
 }
 

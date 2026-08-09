@@ -1,3 +1,5 @@
+import 'fake-indexeddb/auto'
+
 import { cleanup } from '@testing-library/vue'
 import { afterEach } from 'vitest'
 

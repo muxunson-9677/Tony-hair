@@ -28,14 +28,25 @@ const defaultPhotoImage = new NodeBlob(
 const profile = (overrides: Partial<HairProfile> = {}): HairProfile => ({
   id: 'profile-1',
   name: '我的档案',
+  hairTexture: 'straight',
+  strandThickness: 'medium',
+  density: 'medium',
+  stylingMinutes: 10,
+  washFrequency: 'every_other_day',
+  preferenceNotes: '希望容易打理',
+  createdAt: '2026-08-10T01:00:00.000Z',
+  updatedAt: '2026-08-10T01:00:00.000Z',
   ...overrides,
 })
 
 const plan = (overrides: Partial<HaircutPlan> = {}): HaircutPlan => ({
   id: 'plan-1',
   profileId: 'profile-1',
+  title: '下次短发计划',
   date: '2026-08-10T02:00:00.000Z',
   status: 'draft',
+  createdAt: '2026-08-10T02:00:00.000Z',
+  updatedAt: '2026-08-10T02:00:00.000Z',
   ...overrides,
 })
 
@@ -47,7 +58,9 @@ const candidate = (
   planId: 'plan-1',
   order,
   name: `候选 ${order}`,
+  notes: `候选 ${order} 的决策备注`,
   source: 'demo_ai',
+  demoImagePath: `/demo/candidate-${order}.webp`,
   ...overrides,
 })
 
@@ -150,8 +163,8 @@ describe('ArchiveRepository', () => {
     ) as unknown as Blob
     await repository.createProfile(profile())
     await repository.savePlanWithCandidates(plan(), [
-      candidate(1, { source: 'user_reference', referenceImage }),
-      candidate(2, { source: 'past_record' }),
+      candidate(1, { source: 'user_reference', demoImagePath: undefined, referenceImage }),
+      candidate(2, { source: 'past_record', demoImagePath: undefined }),
     ])
     await repository.saveRecordWithPhotos(repeatRecord(), [photo()])
 
@@ -224,6 +237,20 @@ describe('ArchiveRepository', () => {
 
     expect(await repository.getPlan('plan-1')).toBeUndefined()
     expect(await repository.listCandidates('plan-1')).toEqual([])
+  })
+
+  test('rejects two candidates that point to the same past record', async () => {
+    await repository.createProfile(profile())
+    const duplicates = [1, 2].map((order) => candidate(order, {
+      source: 'past_record',
+      demoImagePath: undefined,
+      pastRecordId: 'record-shared',
+    }))
+
+    await expect(
+      repository.savePlanWithCandidates(plan(), duplicates),
+    ).rejects.toThrow('past-record candidates must be unique')
+    expect(await repository.getPlan('plan-1')).toBeUndefined()
   })
 
   test('rolls back a plan when a candidate write fails inside the transaction', async () => {
@@ -564,8 +591,10 @@ describe('ArchiveRepository', () => {
   })
 
   test('defines indexes for profile, plan, record, date, and status queries', () => {
+    expect(db.verno).toBe(2)
+    expect(db.profiles.schema.indexes.map(({ name }) => name)).toContain('updatedAt')
     expect(db.plans.schema.indexes.map(({ name }) => name)).toEqual(
-      expect.arrayContaining(['profileId', 'date', 'status']),
+      expect.arrayContaining(['profileId', 'date', 'status', 'updatedAt']),
     )
     expect(db.candidates.schema.indexes.map(({ name }) => name)).toContain('planId')
     expect(db.briefs.schema.indexes.map(({ name }) => name)).toEqual(
@@ -581,6 +610,106 @@ describe('ArchiveRepository', () => {
     expect(db.standardStyles.schema.indexes.map(({ name }) => name)).toEqual(
       expect.arrayContaining(['profileId', 'recordId']),
     )
+  })
+
+  test('upgrades version 1 profile, plan, candidate Blob, and record data without replacing it', async () => {
+    db.close()
+    const legacy = new Dexie(dbName, { indexedDB, IDBKeyRange })
+    legacy.version(1).stores({
+      profiles: 'id',
+      plans: 'id, profileId, date, status',
+      candidates: 'id, planId, &[planId+order]',
+      briefs: 'id, &planId, profileId',
+      records: 'id, profileId, planId, date, status',
+      photos: 'id, recordId, stage',
+      avoidRules: 'id, profileId, recordId',
+      standardStyles: 'id, profileId, recordId',
+    })
+    const legacyImage = new NodeBlob(['legacy-reference'], { type: 'image/webp' }) as unknown as Blob
+
+    await legacy.table('profiles').add({ id: 'legacy-profile', name: '旧档案' })
+    await legacy.table('plans').add({
+      id: 'legacy-plan',
+      profileId: 'legacy-profile',
+      date: '2025-02-03',
+      status: 'completed',
+    })
+    await legacy.table('candidates').bulkAdd([
+      {
+        id: 'legacy-candidate-1',
+        planId: 'legacy-plan',
+        order: 1,
+        name: '旧候选一',
+        source: 'user_reference',
+        referenceImage: legacyImage,
+      },
+      {
+        id: 'legacy-candidate-2',
+        planId: 'legacy-plan',
+        order: 2,
+        name: '旧候选二',
+        source: 'demo_ai',
+      },
+    ])
+    await legacy.table('records').add({
+      id: 'legacy-record',
+      profileId: 'legacy-profile',
+      planId: 'legacy-plan',
+      date: '2025-02-04',
+      status: 'completed',
+      satisfaction: 5,
+      outcome: 'repeat',
+      styleName: '旧发型',
+    })
+    await legacy.table('standardStyles').add({
+      id: 'legacy-standard',
+      profileId: 'legacy-profile',
+      recordId: 'legacy-record',
+      name: '旧发型',
+    })
+    legacy.close()
+
+    const upgraded = openDatabase()
+    const upgradedRepository = new ArchiveRepository(upgraded)
+    const migratedProfile = await upgradedRepository.getProfile('legacy-profile')
+    const migratedPlan = await upgradedRepository.getPlan('legacy-plan')
+    const migratedCandidates = await upgradedRepository.listCandidates('legacy-plan')
+
+    expect(upgraded.verno).toBe(2)
+    expect(migratedProfile).toMatchObject({
+      id: 'legacy-profile',
+      name: '旧档案',
+      hairTexture: 'unsure',
+      strandThickness: 'unsure',
+      density: 'unsure',
+      stylingMinutes: null,
+      washFrequency: 'unsure',
+      preferenceNotes: '',
+    })
+    expect(migratedProfile?.createdAt).toBe(migratedProfile?.updatedAt)
+    expect(migratedPlan).toMatchObject({
+      id: 'legacy-plan',
+      title: '未命名计划',
+      date: '2025-02-03',
+      status: 'completed',
+    })
+    expect(migratedPlan?.createdAt).toBe(migratedPlan?.updatedAt)
+    expect(migratedCandidates.map(({ notes }) => notes)).toEqual(['', ''])
+    expect(await migratedCandidates[0]?.referenceImage?.text()).toBe('legacy-reference')
+    expect(await upgradedRepository.getRecord('legacy-record')).toMatchObject({
+      outcome: 'repeat',
+      styleName: '旧发型',
+    })
+    expect(await upgradedRepository.listStandardStyles('legacy-record')).toHaveLength(1)
+    expect(
+      await upgraded.profiles.where('updatedAt').equals(migratedProfile?.updatedAt ?? '').first(),
+    ).toMatchObject({ id: 'legacy-profile' })
+
+    const firstMigrationTime = migratedProfile?.updatedAt
+    upgraded.close()
+    const reopened = openDatabase()
+    const reopenedProfile = await new ArchiveRepository(reopened).getProfile('legacy-profile')
+    expect(reopenedProfile?.updatedAt).toBe(firstMigrationTime)
   })
 
   test('maps quota failures to a recognizable storage error', async () => {

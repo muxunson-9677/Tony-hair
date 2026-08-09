@@ -26,7 +26,16 @@ describe('app shell', () => {
     const router = createAppRouter(createMemoryHistory())
     const paths = router.getRoutes().map((route) => route.path)
 
-    expect(paths).toEqual(expect.arrayContaining(['/', '/try', '/archive', '/me']))
+    expect(paths).toEqual(expect.arrayContaining([
+      '/',
+      '/try',
+      '/archive',
+      '/archive/profile',
+      '/archive/plans/new',
+      '/archive/plans/:id',
+      '/archive/plans/:id/edit',
+      '/me',
+    ]))
   })
 
   test('shows the brand promise, main actions, and local data risks on home', async () => {
@@ -127,11 +136,13 @@ describe('app shell', () => {
     )
   })
 
-  test('gives the archive route honest first-stage copy', async () => {
+  test('gives an empty archive an honest local-only starting point', async () => {
     await renderAt('/archive')
 
     expect(screen.getByRole('heading', { level: 1, name: '档案' })).toBeTruthy()
-    expect(screen.getByText(/下一阶段/)).toBeTruthy()
+    expect(await screen.findByText('这台设备还没有发型档案')).toBeTruthy()
+    expect(screen.getByText(/只保存在当前设备/)).toBeTruthy()
+    expect(screen.getByText(/清理浏览器数据.*丢失/)).toBeTruthy()
   })
 
   test('gives the profile route honest first-stage copy', async () => {
