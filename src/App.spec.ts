@@ -150,11 +150,20 @@ describe('app shell', () => {
     expect(screen.getByText(/清理浏览器数据.*丢失/)).toBeTruthy()
   })
 
-  test('gives the profile route honest first-stage copy', async () => {
+  test('offers the local privacy mask from the profile route', async () => {
     await renderAt('/me')
 
     expect(screen.getByRole('heading', { level: 1, name: '我的' })).toBeTruthy()
-    expect(screen.getByText(/偏好与隐私设置/)).toBeTruthy()
+    const maskLink = screen.getByRole('link', { name: /照片遮罩/ })
+    expect(maskLink.getAttribute('href')).toBe('/privacy/mask')
+  })
+
+  test('keeps the privacy mask workbench free of the fixed main navigation', async () => {
+    await renderAt('/privacy/mask')
+
+    expect(screen.getByRole('heading', { level: 1, name: /隐私\s*遮罩/ })).toBeTruthy()
+    expect(screen.queryByRole('navigation', { name: '主导航' })).toBeNull()
+    expect(document.querySelector('#main-content')?.classList).toContain('app-main--without-nav')
   })
 
   test('shows a useful not-found page for an unknown deep link', async () => {

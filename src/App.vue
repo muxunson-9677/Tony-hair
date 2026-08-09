@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import BottomNav from './components/BottomNav.vue'
 
 const activeRoute = useRoute()
 const mainContent = ref<HTMLElement | null>(null)
+const hidesBottomNav = computed(() => activeRoute.meta.hideBottomNav === true)
 
 watch(
   () => activeRoute.fullPath,
@@ -32,6 +33,7 @@ watch(
       id="main-content"
       ref="mainContent"
       class="app-main"
+      :class="{ 'app-main--without-nav': hidesBottomNav }"
       tabindex="-1"
     >
       <RouterView v-slot="{ Component, route }">
@@ -47,6 +49,6 @@ watch(
       </RouterView>
     </main>
 
-    <BottomNav />
+    <BottomNav v-if="!hidesBottomNav" />
   </div>
 </template>

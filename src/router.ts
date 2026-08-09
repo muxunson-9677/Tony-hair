@@ -10,6 +10,7 @@ import ArchiveRecordFormView from './views/ArchiveRecordFormView.vue'
 import HomeView from './views/HomeView.vue'
 import MeView from './views/MeView.vue'
 import NotFoundView from './views/NotFoundView.vue'
+import PrivacyMaskView from './views/PrivacyMaskView.vue'
 import TryView from './views/TryView.vue'
 
 export function createAppRouter(history: RouterHistory = createWebHistory()) {
@@ -87,6 +88,12 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         name: 'me',
         component: MeView,
         meta: { title: '我的｜咋剪发' },
+      },
+      {
+        path: '/privacy/mask',
+        name: 'privacy-mask',
+        component: PrivacyMaskView,
+        meta: { title: '隐私遮罩｜咋剪发', hideBottomNav: true },
       },
       {
         path: '/:pathMatch(.*)*',

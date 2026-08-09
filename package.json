@@ -15,9 +15,11 @@
     "lint": "eslint .",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "verify:mediapipe": "node scripts/verify-mediapipe-assets.mjs"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "1.0.1",
     "dexie": "^4.4.4",
     "pinia": "^4.0.2",
     "vue": "^3.5.41",

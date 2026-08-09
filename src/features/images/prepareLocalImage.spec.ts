@@ -352,6 +352,39 @@ describe('decodeBrowserImage', () => {
     )
   })
 
+  test('falls back to HTMLImage when createImageBitmap rejects its options', async () => {
+    class FakeImage {
+      naturalWidth = 720
+      naturalHeight = 960
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+      private value = ''
+
+      set src(value: string) {
+        this.value = value
+        if (value) {
+          queueMicrotask(() => this.onload?.())
+        }
+      }
+
+      get src() {
+        return this.value
+      }
+    }
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => {
+      throw new Error('imageOrientation is unsupported')
+    }))
+    vi.stubGlobal('Image', FakeImage)
+
+    const decoded = await decodeBrowserImage(imageFile())
+
+    expect(decoded).toMatchObject({ width: 720, height: 960, orientationApplied: false })
+    decoded.close()
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(
+      vi.mocked(URL.createObjectURL).mock.results[0]?.value,
+    )
+  })
+
   test('revokes the HTMLImage object URL when fallback decoding fails', async () => {
     class BrokenImage {
       naturalWidth = 0

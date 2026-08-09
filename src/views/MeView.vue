@@ -18,11 +18,21 @@
       </p>
     </header>
 
+    <RouterLink
+      class="privacy-tool-link"
+      to="/privacy/mask"
+    >
+      <span>本地隐私工具</span>
+      <strong>照片遮罩</strong>
+      <p>本机定位、手动确认，导出新的单层图片。</p>
+      <b aria-hidden="true">→</b>
+    </RouterLink>
+
     <div class="stage-copy">
       <p class="stage-copy__lead">
-        偏好与隐私设置将在后续阶段补充。
+        当前没有账号、云同步或远端个人资料。
       </p>
-      <p>当前没有账号、云同步或远端个人资料；你可以先从四个主入口了解产品结构。</p>
+      <p>发型档案只在当前设备；清理浏览器数据后仍可能丢失。</p>
     </div>
   </section>
 </template>
