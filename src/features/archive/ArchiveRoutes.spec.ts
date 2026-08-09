@@ -171,9 +171,9 @@ describe('archive routes and forms', () => {
     expect(await screen.findByRole('heading', { level: 1, name: '新建发型计划' })).toBeTruthy()
     expect(await screen.findByText(/示例体验/)).toBeTruthy()
     expect(screen.getByText(/非用户生成/)).toBeTruthy()
-    expect(screen.getByText(/自己的参考图.*本地图片处理阶段开放/)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /历史记录/ })).toBeNull()
-    expect(document.querySelector('input[type="file"]')).toBeNull()
+    expect(screen.getByLabelText('本地参考图')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '从剪后记录复刻' })).toBeTruthy()
+    expect(screen.getByText('还没有带照片的剪后记录。')).toBeTruthy()
 
     await fireEvent.update(screen.getByLabelText('计划标题'), '夏末短发计划')
     await fireEvent.update(screen.getByLabelText('计划日期'), '2026-08-22')
@@ -186,7 +186,7 @@ describe('archive routes and forms', () => {
     expect(screen.getByText('已选择 2 / 4')).toBeTruthy()
     await fireEvent.click(screen.getByRole('button', { name: '保存计划' }))
 
-    await waitFor(() => expect(router.currentRoute.value.path).toMatch(/^\/archive\/plans\//))
+    await waitFor(() => expect(router.currentRoute.value.path).not.toBe('/archive/plans/new'))
     expect(await screen.findByRole('heading', { level: 1, name: '夏末短发计划' })).toBeTruthy()
     expect(screen.getAllByText('示例体验 · 非用户生成').length).toBeGreaterThan(0)
     expect(screen.getByRole('img', { name: /齐颌短鲍伯/ })).toBeTruthy()
@@ -203,6 +203,146 @@ describe('archive routes and forms', () => {
     expect(confirmDelete).toHaveBeenCalledWith(expect.stringMatching(/删除.*计划/))
     expect(await screen.findByRole('heading', { level: 2, name: '阿青的发型档案' })).toBeTruthy()
     expect(screen.getByText(/还没有发型计划/)).toBeTruthy()
+  })
+
+  test('mixes a prepared reference, a real past record, and a demo while preserving ids on edit', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const record: HaircutRecord = {
+      id: 'source-record',
+      profileId: existingProfile.id,
+      date: '2026-08-19',
+      status: 'completed',
+      satisfaction: 5,
+      styleName: '清爽短碎发',
+      outcome: 'repeat',
+      createdAt: '2026-08-19T10:00:00.000Z',
+      updatedAt: '2026-08-19T10:00:00.000Z',
+    }
+    const sourcePhoto = new NodeBlob(['real-record-photo'], { type: 'image/webp' }) as unknown as Blob
+    await defaultArchiveRepository.saveRecordWithPhotos(record, [{
+      id: 'source-record-photo',
+      recordId: record.id,
+      stage: 'styled',
+      image: sourcePhoto,
+      capturedAt: record.updatedAt,
+      width: 900,
+      height: 1200,
+      bytes: sourcePhoto.size,
+      processedAt: record.updatedAt,
+    }])
+    const preparedBlob = new NodeBlob(['prepared-private-reference'], {
+      type: 'image/webp',
+    }) as unknown as Blob
+    vi.spyOn(localImages, 'prepareLocalImage').mockResolvedValue({
+      blob: preparedBlob,
+      mimeType: 'image/webp',
+      width: 960,
+      height: 1280,
+      originalWidth: 1200,
+      originalHeight: 1600,
+      bytes: preparedBlob.size,
+      processedAt: '2026-08-20T09:30:00.000Z',
+    })
+    const router = await renderAt('/archive/plans/new')
+    const input = await screen.findByLabelText('本地参考图') as HTMLInputElement
+    Object.defineProperty(input, 'files', { configurable: true, value: [localPhoto] })
+
+    await fireEvent(input, new Event('change', { bubbles: true }))
+
+    expect(await screen.findByText(/960 × 1280.*26 B/)).toBeTruthy()
+    await fireEvent.click(screen.getByRole('button', { name: '加入历史候选：清爽短碎发' }))
+    await fireEvent.click(screen.getByRole('button', { name: '加入候选：齐颌短鲍伯' }))
+    expect(screen.getByText('已选择 3 / 4')).toBeTruthy()
+    await fireEvent.update(screen.getByLabelText('计划标题'), '三种来源计划')
+    await fireEvent.click(screen.getByRole('button', { name: '保存计划' }))
+
+    await waitFor(() => expect(router.currentRoute.value.path).not.toBe('/archive/plans/new'))
+    const planId = router.currentRoute.value.params.id as string
+    const saved = await defaultArchiveRepository.listCandidates(planId)
+    expect(saved.map(({ source }) => source)).toEqual([
+      'user_reference',
+      'past_record',
+      'demo_ai',
+    ])
+    expect(await saved[0]?.referenceImage?.text()).toBe('prepared-private-reference')
+    expect(saved[0]).toMatchObject({
+      referenceImageWidth: 960,
+      referenceImageHeight: 1280,
+      referenceImageBytes: preparedBlob.size,
+      referenceImageProcessedAt: '2026-08-20T09:30:00.000Z',
+    })
+    expect(await saved[1]?.referenceImage?.text()).toBe('real-record-photo')
+    expect(saved[1]?.pastRecordId).toBe(record.id)
+    await screen.findByRole('heading', { level: 1, name: '三种来源计划' })
+    await waitFor(() => {
+      expect(URL.createObjectURL).toHaveBeenCalledWith(preparedBlob)
+      expect(URL.createObjectURL).toHaveBeenCalledWith(sourcePhoto)
+      expect(screen.getAllByRole('img')).toHaveLength(3)
+    })
+    const originalIds = saved.map(({ id }) => id)
+
+    await fireEvent.click(screen.getByRole('link', { name: '编辑计划' }))
+    expect(await screen.findByText('已选择 3 / 4')).toBeTruthy()
+    await fireEvent.update(screen.getByLabelText('计划标题'), '保留候选标识的计划')
+    await fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
+
+    await waitFor(() => expect(router.currentRoute.value.path).toBe(`/archive/plans/${planId}`))
+    expect((await defaultArchiveRepository.listCandidates(planId)).map(({ id }) => id))
+      .toEqual(originalIds)
+    expect(URL.revokeObjectURL).toHaveBeenCalled()
+
+    const exportPng = vi.spyOn(briefExport, 'exportBriefPng').mockResolvedValue({
+      blob: new NodeBlob(['png'], { type: 'image/png' }) as unknown as Blob,
+      filename: 'brief.png',
+      width: 1440,
+      height: 2200,
+    })
+    await router.push(`/archive/plans/${planId}/brief`)
+    await screen.findByRole('heading', { level: 1, name: '创建理发师沟通卡' })
+    await fireEvent.click(screen.getByLabelText('目标候选：我的参考图 1'))
+    await fireEvent.click(screen.getByRole('button', { name: '导出 PNG' }))
+    const exportedSource = exportPng.mock.calls[0]?.[0].imageSource
+    expect(typeof exportedSource).not.toBe('string')
+    expect(await (exportedSource as Blob).text()).toBe('prepared-private-reference')
+  })
+
+  test('freezes candidate changes while a local reference is being prepared', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    let finishPreparation!: (value: localImages.PreparedLocalImage) => void
+    vi.spyOn(localImages, 'prepareLocalImage').mockReturnValue(new Promise((resolve) => {
+      finishPreparation = resolve
+    }))
+    await renderAt('/archive/plans/new')
+    await screen.findByRole('button', { name: '加入候选：齐颌短鲍伯' })
+    for (const name of ['齐颌短鲍伯', '轻层次精灵短发', '常春藤侧分']) {
+      await fireEvent.click(screen.getByRole('button', { name: `加入候选：${name}` }))
+    }
+    const input = screen.getByLabelText('本地参考图') as HTMLInputElement
+    Object.defineProperty(input, 'files', { configurable: true, value: [localPhoto] })
+    await fireEvent(input, new Event('change', { bubbles: true }))
+
+    expect((await screen.findByRole('status')).textContent).toContain('本地处理中…')
+    const fourthChoice = screen.getByRole('button', { name: '加入候选：清爽渐层' })
+    try {
+      expect((fourthChoice as HTMLButtonElement).disabled).toBe(true)
+      expect((screen.getAllByRole('button', { name: '移除' })[0] as HTMLButtonElement).disabled)
+        .toBe(true)
+    } finally {
+      const prepared = new NodeBlob(['ready'], { type: 'image/webp' }) as unknown as Blob
+      finishPreparation({
+        blob: prepared,
+        mimeType: 'image/webp',
+        width: 800,
+        height: 1200,
+        originalWidth: 800,
+        originalHeight: 1200,
+        bytes: prepared.size,
+        processedAt: '2026-08-20T09:30:00.000Z',
+      })
+    }
+
+    expect(await screen.findByText('已选择 4 / 4')).toBeTruthy()
+    expect(screen.queryByText('已选择 5 / 4')).toBeNull()
   })
 
   test('creates, reloads, previews, prints, reports export failure, edits, and deletes only a brief', async () => {
@@ -384,7 +524,8 @@ describe('archive routes and forms', () => {
       notes: '',
       source: 'user_reference',
     }))
-    await defaultArchiveRepository.savePlanWithCandidates(legacyPlan, legacyCandidates)
+    await defaultArchiveDb.plans.add(legacyPlan)
+    await defaultArchiveDb.candidates.bulkAdd(legacyCandidates)
     const completedPlan: HaircutPlan = {
       ...legacyPlan,
       id: 'completed-plan',
@@ -423,6 +564,67 @@ describe('archive routes and forms', () => {
     await router.push(`/archive/plans/${completedPlan.id}/edit`)
     expect(await screen.findByText(/不会把它降级为草稿/)).toBeTruthy()
     expect((await defaultArchiveRepository.getPlan(completedPlan.id))?.status).toBe('completed')
+  })
+
+  test('keeps a hybrid demo read-only and exports the same demo image shown in the brief', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const hybridImage = new NodeBlob(['hidden-reference'], {
+      type: 'image/webp',
+    }) as unknown as Blob
+    const hybridPlan: HaircutPlan = {
+      id: 'hybrid-demo-plan',
+      profileId: existingProfile.id,
+      title: '混合来源旧计划',
+      date: '2026-08-01',
+      status: 'draft',
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+    }
+    await defaultArchiveDb.plans.add(hybridPlan)
+    await defaultArchiveDb.candidates.bulkAdd([
+      {
+        id: 'hybrid-demo-candidate',
+        planId: hybridPlan.id,
+        order: 1,
+        name: '混合预制图',
+        notes: '',
+        source: 'demo_ai',
+        demoImagePath: '/demo/persona-lin-bob.webp',
+        referenceImage: hybridImage,
+        referenceImageWidth: 900,
+        referenceImageHeight: 1200,
+        referenceImageBytes: hybridImage.size,
+        referenceImageProcessedAt: '2026-08-01T00:00:00.000Z',
+      },
+      {
+        id: 'clean-demo-candidate',
+        planId: hybridPlan.id,
+        order: 2,
+        name: '正常预制图',
+        notes: '',
+        source: 'demo_ai',
+        demoImagePath: '/demo/persona-ran-crop.webp',
+      },
+    ])
+    const exportPng = vi.spyOn(briefExport, 'exportBriefPng').mockResolvedValue({
+      blob: new NodeBlob(['png'], { type: 'image/png' }) as unknown as Blob,
+      filename: 'brief.png',
+      width: 1440,
+      height: 2200,
+    })
+
+    const router = await renderAt(`/archive/plans/${hybridPlan.id}`)
+    expect(await screen.findByText('旧来源候选或已完成计划暂时只读')).toBeTruthy()
+    expect(screen.queryByRole('link', { name: '编辑计划' })).toBeNull()
+    await router.push(`/archive/plans/${hybridPlan.id}/brief`)
+    expect(await screen.findByRole('img', { name: '混合预制图候选图' })).toHaveProperty(
+      'src',
+      expect.stringContaining('/demo/persona-lin-bob.webp'),
+    )
+    await fireEvent.click(screen.getByRole('button', { name: '导出 PNG' }))
+    expect(exportPng).toHaveBeenCalledWith(expect.objectContaining({
+      imageSource: '/demo/persona-lin-bob.webp',
+    }))
   })
 
   test('defaults a new record to the local calendar day near midnight', async () => {

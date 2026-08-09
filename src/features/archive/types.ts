@@ -38,9 +38,14 @@ export interface Candidate {
   readonly name: string
   readonly notes: string
   readonly source: 'user_reference' | 'past_record' | 'demo_ai'
+  readonly referenceId?: string
   readonly demoImagePath?: string
   readonly pastRecordId?: string
   readonly referenceImage?: Blob
+  readonly referenceImageWidth?: number
+  readonly referenceImageHeight?: number
+  readonly referenceImageBytes?: number
+  readonly referenceImageProcessedAt?: string
 }
 
 export interface BarberBrief {

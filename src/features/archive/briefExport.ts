@@ -1,7 +1,7 @@
 export interface BriefExportContent {
   readonly planTitle: string
   readonly candidateName: string
-  readonly imageSource: string
+  readonly imageSource: string | Blob
   readonly overall: string
   readonly top: string
   readonly fringe: string
@@ -302,7 +302,18 @@ export const exportBriefPng = async (
 
   context.fillStyle = PAPER
   context.fillRect(0, 0, layout.width, layout.height)
-  const image = await dependencies.loadImage(content.imageSource)
+  let sourceObjectUrl: string | undefined
+  let image: CanvasImageSource
+  try {
+    const source = content.imageSource instanceof Blob
+      ? (sourceObjectUrl = dependencies.createObjectURL(content.imageSource))
+      : content.imageSource
+    image = await dependencies.loadImage(source)
+  } finally {
+    if (sourceObjectUrl) {
+      dependencies.revokeObjectURL(sourceObjectUrl)
+    }
+  }
   drawCoverImage(context, image, layout.image)
 
   context.textAlign = 'left'

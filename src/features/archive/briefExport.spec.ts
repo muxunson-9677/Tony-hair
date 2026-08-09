@@ -113,6 +113,44 @@ describe('brief PNG export', () => {
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:brief-png')
   })
 
+  test('loads a candidate Blob through a temporary URL and revokes it after flattening', async () => {
+    const sourceBlob = new Blob(['prepared-candidate'], { type: 'image/webp' })
+    const loadedSources: string[] = []
+    const revoked: string[] = []
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => ({
+        fillStyle: '',
+        font: '',
+        textAlign: 'left',
+        textBaseline: 'alphabetic',
+        fillRect: vi.fn(),
+        fillText: vi.fn(),
+        drawImage: vi.fn(),
+        measureText: (text: string) => ({ width: text.length * 30 }),
+      }),
+      toBlob: (callback: BlobCallback) => callback(new Blob(['png'], { type: 'image/png' })),
+    } as unknown as HTMLCanvasElement
+
+    await exportBriefPng({ ...content, imageSource: sourceBlob }, {
+      createCanvas: () => canvas,
+      loadImage: async (source) => {
+        loadedSources.push(source)
+        return { width: 1200, height: 1600 } as CanvasImageSource
+      },
+      createObjectURL: (blob) => blob === sourceBlob ? 'blob:candidate-source' : 'blob:brief-png',
+      revokeObjectURL: (url) => revoked.push(url),
+      createAnchor: () => ({
+        click: vi.fn(),
+        remove: vi.fn(),
+      }) as unknown as HTMLAnchorElement,
+    })
+
+    expect(loadedSources).toEqual(['blob:candidate-source'])
+    expect(revoked).toEqual(['blob:candidate-source', 'blob:brief-png'])
+  })
+
   test('reports PNG encoding failure without creating a fake download URL', async () => {
     const createObjectURL = vi.fn()
     const canvas = {

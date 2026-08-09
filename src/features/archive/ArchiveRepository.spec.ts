@@ -172,8 +172,22 @@ describe('ArchiveRepository', () => {
     ) as unknown as Blob
     await repository.createProfile(profile())
     await repository.savePlanWithCandidates(plan(), [
-      candidate(1, { source: 'user_reference', demoImagePath: undefined, referenceImage }),
-      candidate(2, { source: 'past_record', demoImagePath: undefined }),
+      candidate(1, {
+        source: 'user_reference',
+        demoImagePath: undefined,
+        referenceId: 'local-reference-1',
+        referenceImage,
+        referenceImageWidth: 900,
+        referenceImageHeight: 1200,
+        referenceImageBytes: referenceImage.size,
+        referenceImageProcessedAt: '2026-08-10T00:00:00.000Z',
+      }),
+      candidate(2, {
+        source: 'past_record',
+        demoImagePath: undefined,
+        pastRecordId: 'record-1',
+        referenceImage,
+      }),
     ])
     await repository.saveRecordWithPhotos(repeatRecord(), [photo()])
 
@@ -254,12 +268,128 @@ describe('ArchiveRepository', () => {
       source: 'past_record',
       demoImagePath: undefined,
       pastRecordId: 'record-shared',
+      referenceImage: defaultPhotoImage,
     }))
 
     await expect(
       repository.savePlanWithCandidates(plan(), duplicates),
     ).rejects.toThrow('past-record candidates must be unique')
     expect(await repository.getPlan('plan-1')).toBeUndefined()
+  })
+
+  test('rejects incomplete or duplicate current source pointers at the repository boundary', async () => {
+    await repository.createProfile(profile())
+    const referenceImage = new NodeBlob(['prepared-reference'], {
+      type: 'image/webp',
+    }) as unknown as Blob
+    const validUser = candidate(1, {
+      source: 'user_reference',
+      demoImagePath: undefined,
+      referenceId: 'local-reference-1',
+      referenceImage,
+      referenceImageWidth: 900,
+      referenceImageHeight: 1200,
+      referenceImageBytes: referenceImage.size,
+      referenceImageProcessedAt: '2026-08-10T00:00:00.000Z',
+    })
+
+    for (const invalidUser of [
+      { ...validUser, referenceId: undefined },
+      { ...validUser, referenceImage: undefined },
+      { ...validUser, referenceImageWidth: undefined },
+      { ...validUser, referenceImageHeight: undefined },
+      { ...validUser, referenceImageBytes: undefined },
+      { ...validUser, referenceImageProcessedAt: undefined },
+    ]) {
+      await expect(repository.savePlanWithCandidates(plan(), [
+        invalidUser,
+        candidate(2),
+      ])).rejects.toThrow(/user-reference candidate/i)
+    }
+
+    await expect(repository.savePlanWithCandidates(plan(), [
+      validUser,
+      { ...validUser, id: 'candidate-2', order: 2 },
+    ])).rejects.toThrow(/source pointer must be unique/i)
+    await expect(repository.savePlanWithCandidates(plan(), [
+      candidate(1, { demoImagePath: undefined }),
+      candidate(2),
+    ])).rejects.toThrow(/demo candidate requires/i)
+    await expect(repository.savePlanWithCandidates(plan(), [
+      candidate(1, {
+        referenceImage,
+        referenceImageWidth: 900,
+        referenceImageHeight: 1200,
+        referenceImageBytes: referenceImage.size,
+        referenceImageProcessedAt: '2026-08-10T00:00:00.000Z',
+      }),
+      candidate(2),
+    ])).rejects.toThrow(/demo candidate cannot contain a reference image/i)
+    await expect(repository.savePlanWithCandidates(plan(), [
+      candidate(1, {
+        source: 'past_record',
+        demoImagePath: undefined,
+        referenceImage,
+      }),
+      candidate(2),
+    ])).rejects.toThrow(/past-record candidate requires/i)
+    await expect(repository.savePlanWithCandidates(plan(), [
+      candidate(1, {
+        source: 'past_record',
+        demoImagePath: undefined,
+        pastRecordId: 'record-1',
+      }),
+      candidate(2),
+    ])).rejects.toThrow(/past-record candidate requires/i)
+
+    expect(await repository.getPlan('plan-1')).toBeUndefined()
+    expect(await repository.listCandidates('plan-1')).toEqual([])
+  })
+
+  test('enforces the prepared-image contract for new user references', async () => {
+    await repository.createProfile(profile())
+    const validBlob = new NodeBlob(['prepared-reference'], {
+      type: 'image/webp',
+    }) as unknown as Blob
+    const validUser = candidate(1, {
+      source: 'user_reference',
+      demoImagePath: undefined,
+      referenceId: 'local-reference-1',
+      referenceImage: validBlob,
+      referenceImageWidth: 900,
+      referenceImageHeight: 1200,
+      referenceImageBytes: validBlob.size,
+      referenceImageProcessedAt: '2026-08-10T00:00:00.000Z',
+    })
+    const png = new NodeBlob(['png'], { type: 'image/png' }) as unknown as Blob
+    const empty = new NodeBlob([], { type: 'image/webp' }) as unknown as Blob
+    const oversized = new NodeBlob(
+      [new Uint8Array(1_500_001)],
+      { type: 'image/jpeg' },
+    ) as unknown as Blob
+
+    for (const invalidUser of [
+      { ...validUser, referenceImage: png, referenceImageBytes: png.size },
+      { ...validUser, referenceImage: empty, referenceImageBytes: empty.size },
+      { ...validUser, referenceImage: oversized, referenceImageBytes: oversized.size },
+      { ...validUser, referenceImageWidth: 1921 },
+      { ...validUser, referenceImageBytes: validBlob.size + 1 },
+    ]) {
+      await expect(repository.savePlanWithCandidates(plan(), [
+        invalidUser,
+        candidate(2),
+      ])).rejects.toThrow(/prepared WebP or JPEG/i)
+    }
+
+    await expect(repository.savePlanWithCandidates(plan(), [
+      candidate(1, {
+        source: 'past_record',
+        demoImagePath: undefined,
+        pastRecordId: 'record-1',
+        referenceImage: empty,
+      }),
+      candidate(2),
+    ])).rejects.toThrow(/non-empty reference image/i)
   })
 
   test('rolls back a plan when a candidate write fails inside the transaction', async () => {

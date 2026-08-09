@@ -6,6 +6,7 @@ import {
   ArchiveStorageError,
   ZajianfaDb,
 } from './ArchiveRepository'
+import { candidateSourceKey } from './candidateSources'
 import type {
   AvoidRule,
   BarberBrief,
@@ -343,12 +344,12 @@ export const createArchiveStore = (
       return null
     }
     if (draft.candidates.length < 2 || draft.candidates.length > 4) {
-      error.value = '请选择 2 到 4 个不重复的示例候选。'
+      error.value = '请选择 2 到 4 个不重复的候选。'
       return null
     }
-    const demoPaths = draft.candidates.map(({ demoImagePath }) => demoImagePath).filter(Boolean)
-    if (new Set(demoPaths).size !== demoPaths.length) {
-      error.value = '请选择 2 到 4 个不重复的示例候选。'
+    const sourceKeys = draft.candidates.map(candidateSourceKey)
+    if (sourceKeys.some((key) => !key) || new Set(sourceKeys).size !== sourceKeys.length) {
+      error.value = '请选择 2 到 4 个来源不重复且完整的候选。'
       return null
     }
     if (saving.value) {
@@ -376,16 +377,7 @@ export const createArchiveStore = (
           !usedExistingIds.has(item.id)
           && (
             candidate.id === item.id
-            || (
-              !candidate.id
-              && candidate.demoImagePath !== undefined
-              && item.demoImagePath === candidate.demoImagePath
-            )
-            || (
-              !candidate.id
-              && candidate.pastRecordId !== undefined
-              && item.pastRecordId === candidate.pastRecordId
-            )
+            || (!candidate.id && candidateSourceKey(item) === candidateSourceKey(candidate))
           )
         ))
         if (existing) {

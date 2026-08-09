@@ -1,5 +1,9 @@
 import Dexie, { type DexieOptions, type Table } from 'dexie'
 
+import {
+  candidateSourceKey,
+  meetsPreparedReferenceContract,
+} from './candidateSources'
 import type {
   AvoidRule,
   BarberBrief,
@@ -227,6 +231,14 @@ const mapStorageError = (error: unknown): never => {
 
 const isDateValue = (value: string) => value.trim().length > 0 && !Number.isNaN(Date.parse(value))
 
+const isBlobValue = (value: unknown): value is Blob => Boolean(
+  value
+  && typeof value === 'object'
+  && typeof (value as Blob).size === 'number'
+  && typeof (value as Blob).type === 'string'
+  && typeof (value as Blob).arrayBuffer === 'function',
+)
+
 const validateProfile = (profile: HairProfile) => {
   if (profile.name.trim().length === 0) {
     throw new RangeError('profile name must not be empty')
@@ -274,8 +286,7 @@ const validatePlanCandidates = (
 
   const orders = new Set<number>()
   const ids = new Set<string>()
-  const demoImagePaths = new Set<string>()
-  const pastRecordIds = new Set<string>()
+  const sourcePointers = new Set<string>()
   for (const candidate of candidates) {
     if (candidate.planId !== plan.id) {
       throw new Error('Every candidate must belong to the saved plan')
@@ -298,20 +309,71 @@ const validatePlanCandidates = (
     if (candidate.pastRecordId && candidate.source !== 'past_record') {
       throw new Error('past record id requires a past-record candidate')
     }
-    if (candidate.demoImagePath && demoImagePaths.has(candidate.demoImagePath)) {
-      throw new Error('demo candidates must be unique within a plan')
+    if (candidate.referenceId && candidate.source !== 'user_reference') {
+      throw new Error('reference id requires a user-reference candidate')
     }
-    if (candidate.pastRecordId && pastRecordIds.has(candidate.pastRecordId)) {
-      throw new Error('past-record candidates must be unique within a plan')
+    if (candidate.source === 'demo_ai' && !candidate.demoImagePath) {
+      throw new Error('demo candidate requires a demo image path')
+    }
+    if (
+      candidate.source === 'demo_ai'
+      && (
+        candidate.referenceImage !== undefined
+        || candidate.referenceImageWidth !== undefined
+        || candidate.referenceImageHeight !== undefined
+        || candidate.referenceImageBytes !== undefined
+        || candidate.referenceImageProcessedAt !== undefined
+      )
+    ) {
+      throw new Error('demo candidate cannot contain a reference image or metadata')
+    }
+    if (
+      candidate.source === 'past_record'
+      && (!candidate.pastRecordId || !isBlobValue(candidate.referenceImage))
+    ) {
+      throw new Error('past-record candidate requires a record id and reference image')
+    }
+    if (
+      candidate.source === 'user_reference'
+      && (
+        !candidate.referenceId
+        || !isBlobValue(candidate.referenceImage)
+        || !Number.isInteger(candidate.referenceImageWidth)
+        || (candidate.referenceImageWidth ?? 0) <= 0
+        || !Number.isInteger(candidate.referenceImageHeight)
+        || (candidate.referenceImageHeight ?? 0) <= 0
+        || !Number.isInteger(candidate.referenceImageBytes)
+        || !candidate.referenceImageProcessedAt
+        || !isDateValue(candidate.referenceImageProcessedAt)
+      )
+    ) {
+      throw new Error('user-reference candidate requires a reference id, image, and complete metadata')
+    }
+    if (candidate.source === 'past_record' && candidate.referenceImage?.size === 0) {
+      throw new Error('past-record candidate requires a non-empty reference image')
+    }
+    if (
+      candidate.source === 'user_reference'
+      && !meetsPreparedReferenceContract(candidate)
+    ) {
+      throw new Error('user-reference candidate image must be a prepared WebP or JPEG within limits')
+    }
+    const sourcePointer = candidateSourceKey(candidate)
+    if (!sourcePointer) {
+      throw new Error('candidate source pointer is incomplete')
+    }
+    if (sourcePointers.has(sourcePointer)) {
+      if (candidate.source === 'demo_ai') {
+        throw new Error('demo candidates must be unique within a plan')
+      }
+      if (candidate.source === 'past_record') {
+        throw new Error('past-record candidates must be unique within a plan')
+      }
+      throw new Error('candidate source pointer must be unique within a plan')
     }
     orders.add(candidate.order)
     ids.add(candidate.id)
-    if (candidate.demoImagePath) {
-      demoImagePaths.add(candidate.demoImagePath)
-    }
-    if (candidate.pastRecordId) {
-      pastRecordIds.add(candidate.pastRecordId)
-    }
+    sourcePointers.add(sourcePointer)
   }
 }
 

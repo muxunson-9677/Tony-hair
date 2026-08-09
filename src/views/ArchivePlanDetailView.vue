@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
+import {
+  isSafelyEditableCandidate,
+  resolveCandidateImageBlob,
+} from '../features/archive/candidateSources'
 import { archiveDemoCandidates } from '../features/archive/demoCandidates'
+import type { Candidate } from '../features/archive/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -12,16 +17,15 @@ const planId = computed(() => typeof route.params.id === 'string' ? route.params
 const plan = computed(() => store.plans.find(({ id }) => id === planId.value))
 const candidates = computed(() => store.candidatesByPlanId[planId.value] ?? [])
 const brief = computed(() => store.briefsByPlanId[planId.value])
+const candidateObjectUrls = ref<Record<string, string>>({})
+const knownDemoPaths = new Set(archiveDemoCandidates.map(({ image }) => image))
 const canEdit = computed(() => (
   plan.value?.status !== 'completed'
   && candidates.value.length >= 2
   && candidates.value.length <= 4
-  && candidates.value.every((candidate) => (
-    candidate.source === 'demo_ai'
-    && Boolean(candidate.demoImagePath)
-    && archiveDemoCandidates.some(({ image }) => image === candidate.demoImagePath)
-  ))
+  && candidates.value.every((candidate) => isSafelyEditableCandidate(candidate, knownDemoPaths))
 ))
+const hasDemoCandidates = computed(() => candidates.value.some(({ source }) => source === 'demo_ai'))
 
 const statusLabel = computed(() => plan.value?.status === 'ready' ? '可带去沟通' : plan.value?.status === 'completed' ? '已完成' : '草稿')
 
@@ -35,12 +39,41 @@ const deletePlan = async () => {
   }
 }
 
+const revokeCandidateUrls = () => {
+  Object.values(candidateObjectUrls.value).forEach((url) => URL.revokeObjectURL(url))
+  candidateObjectUrls.value = {}
+}
+
+const buildCandidateUrls = () => {
+  revokeCandidateUrls()
+  candidateObjectUrls.value = Object.fromEntries(candidates.value.flatMap((candidate) => {
+    const image = resolveCandidateImageBlob(candidate, store.photosByRecordId)
+    return image ? [[candidate.id, URL.createObjectURL(image)]] : []
+  }))
+}
+
+const candidateImageSource = (candidate: Candidate) => (
+  candidate.demoImagePath ?? candidateObjectUrls.value[candidate.id] ?? ''
+)
+
+const candidateSourceLabel = (candidate: Candidate) => {
+  if (candidate.source === 'user_reference') {
+    return 'OWN · 当前设备参考图'
+  }
+  if (candidate.source === 'past_record') {
+    return 'PAST · 真实剪后记录'
+  }
+  return 'DEMO · 示例体验'
+}
+
 onMounted(async () => {
   await store.load()
+  buildCandidateUrls()
   if (plan.value) {
     document.title = `${plan.value.title}｜咋剪发`
   }
 })
+onBeforeUnmount(revokeCandidateUrls)
 </script>
 
 <template>
@@ -140,11 +173,12 @@ onMounted(async () => {
       </header>
 
       <aside
+        v-if="hasDemoCandidates"
         class="sample-disclosure sample-disclosure--detail"
         aria-label="候选来源说明"
       >
         <b>示例体验 · 非用户生成</b>
-        <p>这些是预先制作的短发方向，不是基于你的照片生成；最终可剪性需由理发师现场确认。</p>
+        <p>标为 DEMO 的方向是预制素材，不是基于你的照片生成；最终可剪性需由理发师现场确认。</p>
       </aside>
 
       <ol
@@ -157,12 +191,12 @@ onMounted(async () => {
         >
           <figure>
             <img
-              v-if="candidate.demoImagePath"
-              :src="candidate.demoImagePath"
-              :alt="`${candidate.name}预制示例`"
+              v-if="candidateImageSource(candidate)"
+              :src="candidateImageSource(candidate)"
+              :alt="`${candidate.name}${candidate.source === 'demo_ai' ? '预制示例' : '本地候选图'}`"
             >
             <figcaption>
-              <span>0{{ candidate.order }} · DEMO</span>
+              <span>0{{ candidate.order }} · {{ candidateSourceLabel(candidate) }}</span>
               <h2>{{ candidate.name }}</h2>
               <p>{{ candidate.notes }}</p>
             </figcaption>

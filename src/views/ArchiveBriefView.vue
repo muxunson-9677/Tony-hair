@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
 import * as briefExport from '../features/archive/briefExport'
+import { resolveCandidateImageBlob } from '../features/archive/candidateSources'
 import type { Candidate } from '../features/archive/types'
 
 const route = useRoute()
@@ -38,6 +39,9 @@ const candidateImageSource = (candidate?: Candidate) => {
   return candidate.demoImagePath ?? candidateObjectUrls.value[candidate.id] ?? ''
 }
 const targetImageSource = computed(() => candidateImageSource(targetCandidate.value))
+const targetImageBlob = computed(() => targetCandidate.value
+  ? resolveCandidateImageBlob(targetCandidate.value, store.photosByRecordId)
+  : undefined)
 const legacyTargetMissing = computed(() => Boolean(
   savedBrief.value && !savedBrief.value.targetCandidateId,
 ))
@@ -50,10 +54,7 @@ const revokeCandidateUrls = () => {
 const buildCandidateUrls = () => {
   revokeCandidateUrls()
   candidateObjectUrls.value = Object.fromEntries(candidates.value.flatMap((candidate) => {
-    const image = candidate.referenceImage
-      ?? (candidate.pastRecordId
-        ? store.photosByRecordId[candidate.pastRecordId]?.[0]?.image
-        : undefined)
+    const image = resolveCandidateImageBlob(candidate, store.photosByRecordId)
     return image ? [[candidate.id, URL.createObjectURL(image)]] : []
   }))
 }
@@ -110,7 +111,7 @@ const save = async () => {
 const exportPng = async () => {
   const currentPlan = plan.value
   const candidate = targetCandidate.value
-  if (!currentPlan || !candidate || !targetImageSource.value) {
+  if (!currentPlan || !candidate || (!targetImageBlob.value && !targetImageSource.value)) {
     message.value = '目标候选没有可导出的本地图片。'
     return
   }
@@ -121,7 +122,7 @@ const exportPng = async () => {
     await briefExport.exportBriefPng({
       planTitle: currentPlan.title,
       candidateName: candidate.name,
-      imageSource: targetImageSource.value,
+      imageSource: targetImageBlob.value ?? targetImageSource.value,
       overall: overall.value,
       top: top.value,
       fringe: fringe.value,

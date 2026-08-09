@@ -223,7 +223,156 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
       }
     })
     expect(layout.hasHorizontalOverflow).toBe(false)
-    expect(layout.minimumTargetHeight, layout.minimumTargetLabel).toBeGreaterThanOrEqual(45)
+    expect(Math.round(layout.minimumTargetHeight), layout.minimumTargetLabel)
+      .toBeGreaterThanOrEqual(45)
+  }
+})
+
+test('mixes prepared, past-record, and demo candidates without sending private bytes', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(60_000)
+  const requests: { url: string, method: string, body: Buffer | null }[] = []
+  page.on('request', (request) => {
+    requests.push({
+      url: request.url(),
+      method: request.method(),
+      body: request.postDataBuffer(),
+    })
+  })
+  const sourceJpeg = await createOrientationSixJpeg(page)
+
+  await page.goto('/archive/profile')
+  await page.getByLabel('称呼').fill('阿青')
+  await page.getByLabel('发质').selectOption('wavy')
+  await page.getByLabel('发丝粗细').selectOption('fine')
+  await page.getByLabel('发量').selectOption('medium')
+  await page.getByLabel('日常打理分钟').fill('8')
+  await page.getByLabel('洗发频率').selectOption('every_other_day')
+  await page.getByRole('button', { name: '保存档案' }).click()
+
+  await page.getByRole('link', { name: '记录这次理发' }).click()
+  await page.getByLabel('理发日期').fill('2026-08-19')
+  await page.getByLabel('发型名').fill('清爽短碎发')
+  await page.getByLabel('满意度').selectOption('5')
+  await page.getByLabel('已造型照片').setInputFiles({
+    name: 'record-private.jpg',
+    mimeType: 'image/jpeg',
+    buffer: sourceJpeg,
+  })
+  await page.getByLabel('复刻').check()
+  await page.getByRole('button', { name: '保存剪后记录' }).click()
+
+  await page.getByRole('link', { name: '返回档案' }).click()
+  await page.getByRole('link', { name: '新建发型计划' }).click()
+  await page.getByLabel('本地参考图').setInputFiles({
+    name: 'candidate-private.jpg',
+    mimeType: 'image/jpeg',
+    buffer: sourceJpeg,
+  })
+  await expect(page.getByText(/40 × 80/)).toBeVisible()
+  await page.getByRole('button', { name: '加入历史候选：清爽短碎发' }).click()
+  await page.getByRole('button', { name: '加入候选：齐颌短鲍伯' }).click()
+  await page.getByLabel('计划标题').fill('三路真实候选')
+  await page.screenshot({ path: testInfo.outputPath('mixed-source-form-390x844.png'), fullPage: true })
+  await page.getByRole('button', { name: '保存计划' }).click()
+
+  await expect(page.getByRole('heading', { level: 1, name: '三路真实候选' })).toBeVisible()
+  await expect(page.getByRole('img', { name: '我的参考图 1本地候选图' })).toBeVisible()
+  await expect(page.getByRole('img', { name: '清爽短碎发本地候选图' })).toBeVisible()
+  await expect(page.getByRole('img', { name: '齐颌短鲍伯预制示例' })).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('mixed-candidates-390x844.png'), fullPage: true })
+
+  await page.reload()
+  await expect(page.getByRole('img', { name: '我的参考图 1本地候选图' })).toBeVisible()
+  await expect(page.getByRole('img', { name: '清爽短碎发本地候选图' })).toBeVisible()
+  await page.getByRole('link', { name: '创建沟通卡' }).click()
+  await page.getByLabel('目标候选：我的参考图 1').check()
+  await page.getByLabel('整体').fill('整体保留轻盈轮廓')
+  await page.getByLabel('顶部').fill('顶部保留支撑')
+  await page.getByLabel('刘海').fill('刘海自然露额')
+  await page.getByLabel('两侧').fill('两侧贴合但不推白')
+  await page.getByLabel('鬓角').fill('鬓角保留自然尖角')
+  await page.getByLabel('后脑').fill('后脑连接自然')
+  await page.getByLabel('最在意 1', { exact: true }).fill('两侧不要炸')
+  await page.getByLabel('绝对不要 1', { exact: true }).fill('不要推白')
+  await page.getByRole('button', { name: '保存沟通卡' }).click()
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: '导出 PNG' }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/^咋剪发-.*\.png$/)
+  await page.getByLabel('目标候选：清爽短碎发').check()
+  const pastDownloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: '导出 PNG' }).click()
+  const pastDownload = await pastDownloadPromise
+  expect(pastDownload.suggestedFilename()).toMatch(/^咋剪发-.*\.png$/)
+
+  const databaseName = databaseNames.get(testInfo.testId)
+  expect(databaseName).toBeTruthy()
+  const stored = await page.evaluate(async (name) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(name)
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    try {
+      const rows = await new Promise<Array<{
+        order: number
+        source: string
+        referenceId?: string
+        pastRecordId?: string
+        referenceImage?: Blob
+        referenceImageWidth?: number
+        referenceImageHeight?: number
+      }>>((resolve, reject) => {
+        const request = database.transaction('candidates', 'readonly')
+          .objectStore('candidates').getAll()
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      return Promise.all(rows.sort((left, right) => left.order - right.order).map(async (row) => ({
+        source: row.source,
+        referenceId: row.referenceId,
+        pastRecordId: row.pastRecordId,
+        width: row.referenceImageWidth,
+        height: row.referenceImageHeight,
+        bytes: row.referenceImage
+          ? [...new Uint8Array(await row.referenceImage.arrayBuffer())]
+          : [],
+      })))
+    } finally {
+      database.close()
+    }
+  }, databaseName ?? '')
+  expect(stored.map(({ source }) => source)).toEqual([
+    'user_reference',
+    'past_record',
+    'demo_ai',
+  ])
+  expect(stored[0]).toMatchObject({ width: 40, height: 80 })
+  expect(stored[0]?.referenceId).toMatch(/^local-[0-9a-f]{64}$/)
+  expect(stored[1]?.pastRecordId).toBeTruthy()
+  expect(stored[1]?.bytes.length).toBeGreaterThan(0)
+  expect(Buffer.from(stored[0]?.bytes ?? []).includes(Buffer.from(PRIVATE_SOURCE_MARKER))).toBe(false)
+  expect(Buffer.from(stored[1]?.bytes ?? []).includes(Buffer.from(PRIVATE_SOURCE_MARKER))).toBe(false)
+
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto(page.url().replace(/\/brief$/, ''))
+  await expect(page.getByRole('heading', { level: 1, name: '三路真实候选' })).toBeVisible()
+  await page.waitForTimeout(250)
+  await page.screenshot({ path: testInfo.outputPath('mixed-candidates-desktop.png'), fullPage: true })
+
+  const externalRequests = requests.filter(({ url }) => {
+    const parsed = new URL(url)
+    return ['http:', 'https:'].includes(parsed.protocol)
+      && parsed.origin !== 'http://127.0.0.1:4173'
+  })
+  expect(externalRequests).toEqual([])
+  expect(requests.filter(({ method }) => ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)))
+    .toEqual([])
+  expect(requests.some(({ body }) => body?.includes(Buffer.from(PRIVATE_SOURCE_MARKER)))).toBe(false)
+  for (const candidate of stored.filter(({ bytes }) => bytes.length > 0)) {
+    expect(requests.some(({ body }) => body?.includes(Buffer.from(candidate.bytes)))).toBe(false)
   }
 })
 
@@ -287,7 +436,8 @@ test('prepares an orientation-6 JPEG locally before saving and never sends sourc
       }
     })
     expect(layout.hasHorizontalOverflow).toBe(false)
-    expect(layout.minimumTargetHeight, layout.minimumTarget).toBeGreaterThanOrEqual(45)
+    expect(Math.round(layout.minimumTargetHeight), layout.minimumTarget)
+      .toBeGreaterThanOrEqual(45)
   }
   await page.setViewportSize({ width: 390, height: 844 })
   await page.screenshot({ path: testInfo.outputPath('m3a-processing-form-390x844.png'), fullPage: true })

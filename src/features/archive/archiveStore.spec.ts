@@ -478,6 +478,60 @@ describe('archive store', () => {
     expect(refreshed.profile?.id).toBe('profile-existing')
   })
 
+  test('saves mixed local sources, keeps stable ids, and rejects duplicate source pointers', async () => {
+    repository.profiles = [fullProfile()]
+    ids = ['plan-new', 'candidate-user', 'candidate-record']
+    const store = useTestStore()
+    await store.load()
+    const prepared = new Blob(['prepared'], { type: 'image/webp' })
+    const mixed = [
+      {
+        name: '我的参考图',
+        notes: '本地处理',
+        source: 'user_reference' as const,
+        referenceId: 'reference-1',
+        referenceImage: prepared,
+        referenceImageWidth: 960,
+        referenceImageHeight: 1280,
+        referenceImageBytes: prepared.size,
+        referenceImageProcessedAt: '2026-08-10T10:00:00.000Z',
+      },
+      {
+        name: '清爽短碎发',
+        notes: '来自真实剪后记录',
+        source: 'past_record' as const,
+        pastRecordId: 'record-existing',
+        referenceImage: localPhoto,
+        referenceImageWidth: 900,
+        referenceImageHeight: 1200,
+        referenceImageBytes: localPhoto.size,
+        referenceImageProcessedAt: '2026-08-18T10:00:00.000Z',
+      },
+    ]
+
+    const duplicate = await store.savePlan(planDraft({ candidates: [mixed[0]!, mixed[0]!] }))
+    expect(duplicate).toBeNull()
+    expect(store.error).toMatch(/不重复/)
+
+    const created = await store.savePlan(planDraft({ candidates: mixed }))
+    expect(created?.candidates.map(({ id }) => id)).toEqual(['candidate-user', 'candidate-record'])
+    expect(await created?.candidates[0]?.referenceImage?.text()).toBe('prepared')
+    expect(created?.candidates[0]).toMatchObject({
+      referenceId: 'reference-1',
+      referenceImageWidth: 960,
+      referenceImageHeight: 1280,
+      referenceImageBytes: prepared.size,
+    })
+
+    const edited = await store.savePlan(planDraft({
+      id: created?.plan.id,
+      title: '保留来源的修改',
+      candidates: created?.candidates ?? [],
+    }))
+    expect(edited?.candidates.map(({ id }) => id)).toEqual(['candidate-user', 'candidate-record'])
+    expect(await edited?.candidates[1]?.referenceImage?.text()).toBe('local-photo')
+  })
+
   test('loads, creates, edits, reloads, and deletes a brief mapped by plan id', async () => {
     repository.profiles = [fullProfile()]
     repository.plans = [fullPlan()]
@@ -725,7 +779,7 @@ describe('archive store', () => {
     expect(store.saving).toBe(false)
   })
 
-  test('does not reuse an undefined source identity for new candidates', async () => {
+  test('does not reuse distinct local reference identities for new candidates', async () => {
     repository.profiles = [fullProfile()]
     ids = ['plan-new', 'candidate-new-1', 'candidate-new-2']
     const store = useTestStore()
@@ -736,6 +790,12 @@ describe('archive store', () => {
         name: `本地参考 ${index}`,
         notes: '',
         source: 'user_reference' as const,
+        referenceId: `reference-${index}`,
+        referenceImage: localPhoto,
+        referenceImageWidth: 800,
+        referenceImageHeight: 1000,
+        referenceImageBytes: localPhoto.size,
+        referenceImageProcessedAt: '2026-08-10T10:00:00.000Z',
       })),
     }))
 
