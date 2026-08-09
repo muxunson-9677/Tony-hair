@@ -7,6 +7,7 @@ import BottomNav from './components/BottomNav.vue'
 const activeRoute = useRoute()
 const mainContent = ref<HTMLElement | null>(null)
 const hidesBottomNav = computed(() => activeRoute.meta.hideBottomNav === true)
+const usesWideLayout = computed(() => activeRoute.meta.wideLayout === true)
 
 watch(
   () => activeRoute.fullPath,
@@ -23,7 +24,10 @@ watch(
 </script>
 
 <template>
-  <div class="app-shell">
+  <div
+    class="app-shell"
+    :class="{ 'app-shell--wide': usesWideLayout }"
+  >
     <a
       class="skip-link"
       href="#main-content"

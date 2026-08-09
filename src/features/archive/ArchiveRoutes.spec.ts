@@ -191,6 +191,8 @@ describe('archive routes and forms', () => {
     expect(screen.getAllByText('示例体验 · 非用户生成').length).toBeGreaterThan(0)
     expect(screen.getByRole('img', { name: /齐颌短鲍伯/ })).toBeTruthy()
     expect(screen.getByRole('img', { name: /纹理短碎发/ })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '发起好友投票' }).getAttribute('href'))
+      .toBe(`/archive/plans/${router.currentRoute.value.params.id}/poll/new`)
 
     await fireEvent.click(screen.getByRole('link', { name: '编辑计划' }))
     await fireEvent.update(await screen.findByLabelText('计划标题'), '更新后的夏末计划')

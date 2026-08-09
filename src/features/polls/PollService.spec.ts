@@ -133,6 +133,13 @@ describe('PollService', () => {
     expect(body).not.toContain(draft.managementToken)
   })
 
+  test('does not send a create request without a local management token', async () => {
+    await expect(service.createPoll({ ...draft, managementToken: undefined })).rejects.toMatchObject({
+      code: 'LOCAL_MANAGEMENT_KEY_MISSING',
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   test('GETs to establish the voter session before posting a vote', async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse(publicPoll))
@@ -181,8 +188,8 @@ describe('PollService', () => {
       .mockResolvedValueOnce(jsonResponse({ total: 2, none: 1, options: [], comments: [] }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
 
-    await service.getResults(publicPoll.pollId, draft.managementToken)
-    await service.revoke(publicPoll.pollId, draft.managementToken)
+    await service.getResults(publicPoll.pollId, draft.managementToken!)
+    await service.revoke(publicPoll.pollId, draft.managementToken!)
 
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual({
       'x-poll-management-token': draft.managementToken,
@@ -212,5 +219,15 @@ describe('PollService', () => {
       code: 'POLL_GONE',
       status: 410,
     } satisfies Partial<PollServiceError>))
+  })
+
+  test('invokes a browser-like fetch without rebinding its receiver to PollService', async () => {
+    const browserFetch = vi.fn(function (this: unknown) {
+      if (this instanceof PollService) throw new TypeError('Illegal invocation')
+      return Promise.resolve(jsonResponse(publicPoll))
+    }) as unknown as typeof fetch
+    service = new PollService(browserFetch)
+
+    await expect(service.getPoll(publicPoll.pollId)).resolves.toEqual(publicPoll)
   })
 })

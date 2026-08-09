@@ -90,6 +90,9 @@ export class PollService {
     if (draft.options.some(({ assetId }) => !assetId)) {
       throw new PollServiceError('http', 'LOCAL_DRAFT_INCOMPLETE', '还有图片没有上传完成')
     }
+    if (!draft.managementToken) {
+      throw new PollServiceError('http', 'LOCAL_MANAGEMENT_KEY_MISSING', '本机管理密钥不存在')
+    }
     return this.requestJson('/api/polls', {
       method: 'POST',
       credentials: 'same-origin',
@@ -167,7 +170,7 @@ export class PollService {
   private async request(url: string, init: RequestInit): Promise<Response> {
     let response: Response
     try {
-      response = await this.fetchImpl(url, init)
+      response = await this.fetchImpl.call(globalThis, url, init)
     } catch {
       throw new PollServiceError('offline', 'NETWORK_UNAVAILABLE', '网络不可用，请检查连接后重试')
     }

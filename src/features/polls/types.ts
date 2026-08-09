@@ -29,7 +29,7 @@ export interface PollDraft {
   readonly planId: string
   readonly title: string
   readonly clientRequestId: string
-  readonly managementToken: string
+  readonly managementToken?: string
   readonly status: PollDraftStatus
   readonly options: readonly PollDraftOption[]
   readonly pollId?: string

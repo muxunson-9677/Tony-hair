@@ -143,6 +143,13 @@ onBeforeUnmount(revokeCandidateUrls)
         <p>{{ plan.date }} · {{ statusLabel }}</p>
         <div class="detail-actions">
           <RouterLink
+            v-if="canEdit"
+            class="text-link"
+            :to="`/archive/plans/${plan.id}/poll/new`"
+          >
+            发起好友投票
+          </RouterLink>
+          <RouterLink
             class="text-link"
             :to="`/archive/plans/${plan.id}/brief`"
           >

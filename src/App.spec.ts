@@ -34,11 +34,29 @@ describe('app shell', () => {
       '/archive/plans/new',
       '/archive/plans/:id',
       '/archive/plans/:id/edit',
+      '/archive/plans/:id/poll/new',
       '/archive/records/new',
       '/archive/records/:id',
       '/archive/records/:id/edit',
+      '/p/:id',
+      '/polls/:id/manage',
       '/me',
     ]))
+  })
+
+  test('gives poll workspaces a wide shell without the product navigation', () => {
+    const router = createAppRouter(createMemoryHistory())
+
+    for (const path of [
+      '/archive/plans/plan-1/poll/new',
+      '/p/public-poll',
+      '/polls/public-poll/manage',
+    ]) {
+      expect(router.resolve(path).meta).toMatchObject({
+        hideBottomNav: true,
+        wideLayout: true,
+      })
+    }
   })
 
   test('shows the brand promise, main actions, and local data risks on home', async () => {

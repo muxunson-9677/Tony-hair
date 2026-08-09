@@ -44,7 +44,7 @@ export class PollDraftRepository {
     }
     return this.db.transaction('rw', this.db.drafts, async () => {
       const existing = await this.db.drafts.where('planId').equals(input.planId).first()
-      if (existing) return existing
+      if (existing && existing.status !== 'revoked') return existing
 
       const timestamp = this.dependencies.now()
       const draft: PollDraft = {
@@ -62,7 +62,7 @@ export class PollDraftRepository {
         createdAt: timestamp,
         updatedAt: timestamp,
       }
-      await this.db.drafts.add(draft)
+      await this.db.drafts.put(draft)
       return draft
     })
   }
@@ -155,6 +155,7 @@ export class PollDraftRepository {
       status: 'active',
       pollId,
       expiresAt,
+      options: draft.options.map(this.withoutMaskedImage),
     }))
   }
 
@@ -162,17 +163,20 @@ export class PollDraftRepository {
     return this.updateDraft(draftId, (draft) => ({
       ...draft,
       status: 'revoked',
-      options: draft.options.map((option) => ({
-        ...option,
-        maskedImage: undefined,
-        maskedMimeType: undefined,
-        maskedWidth: undefined,
-        maskedHeight: undefined,
-        maskedBytes: undefined,
-        maskedAt: undefined,
-      })),
+      managementToken: undefined,
+      options: draft.options.map(this.withoutMaskedImage),
     }))
   }
+
+  private readonly withoutMaskedImage = (option: PollDraft['options'][number]) => ({
+    ...option,
+    maskedImage: undefined,
+    maskedMimeType: undefined,
+    maskedWidth: undefined,
+    maskedHeight: undefined,
+    maskedBytes: undefined,
+    maskedAt: undefined,
+  })
 
   private async updateDraft(
     draftId: string,

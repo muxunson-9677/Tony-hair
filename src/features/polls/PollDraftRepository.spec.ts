@@ -73,7 +73,6 @@ describe('PollDraftRepository', () => {
       assetId: '123e4567-e89b-42d3-a456-426614174000',
       imageUrl: 'https://example.test/masked.webp',
     })
-
     const restored = await repository.get(draft.id)
     expect(restored?.options[0]).toMatchObject({
       uploadStatus: 'uploaded',
@@ -84,8 +83,21 @@ describe('PollDraftRepository', () => {
     expect(restored?.options[0]?.maskedImage).toEqual(maskedImage)
   })
 
-  test('marks a poll active and finds its local management record by poll id', async () => {
+  test('marks a poll active, clears local masked blobs, and finds its management record', async () => {
     const draft = await repository.createDraft({ planId: 'plan-1', title: '帮我选一个' }, candidates)
+    const maskedImage = new NodeBlob(['masked'], { type: 'image/webp' }) as unknown as Blob
+    await repository.saveMaskedImage(draft.id, 'candidate-1', {
+      blob: maskedImage,
+      mimeType: 'image/webp',
+      width: 900,
+      height: 1125,
+      bytes: maskedImage.size,
+      processedAt: '2026-08-10T04:01:00.000Z',
+    })
+    await repository.saveUploadedAsset(draft.id, 'candidate-1', {
+      assetId: '123e4567-e89b-42d3-a456-426614174000',
+      imageUrl: 'https://example.test/masked.webp',
+    })
 
     await repository.markActive(
       draft.id,
@@ -93,11 +105,14 @@ describe('PollDraftRepository', () => {
       '2026-08-17T04:00:00.000Z',
     )
 
-    expect(await repository.getByPollId('public_poll_id_1234567890')).toMatchObject({
+    const active = await repository.getByPollId('public_poll_id_1234567890')
+    expect(active).toMatchObject({
       status: 'active',
       managementToken: 'management_0000000000000001',
       pollId: 'public_poll_id_1234567890',
     })
+    expect(active?.options[0]?.assetId).toBe('123e4567-e89b-42d3-a456-426614174000')
+    expect(active?.options.every(({ maskedImage }) => maskedImage === undefined)).toBe(true)
   })
 
   test('persists upload failure and creation retry states without replacing stable ids', async () => {
@@ -117,7 +132,7 @@ describe('PollDraftRepository', () => {
     })
   })
 
-  test('revocation clears local image blobs but retains the minimal management record', async () => {
+  test('revocation clears local image blobs and the management secret', async () => {
     const draft = await repository.createDraft({ planId: 'plan-1', title: '帮我选一个' }, candidates)
     const maskedImage = new NodeBlob(['masked'], { type: 'image/webp' }) as unknown as Blob
     await repository.saveMaskedImage(draft.id, 'candidate-1', {
@@ -135,5 +150,22 @@ describe('PollDraftRepository', () => {
     const revoked = await repository.get(draft.id)
     expect(revoked).toMatchObject({ status: 'revoked', pollId: 'public_poll_id_1234567890' })
     expect(revoked?.options.every(({ maskedImage }) => maskedImage === undefined)).toBe(true)
+    expect(revoked?.managementToken).toBeUndefined()
+  })
+
+  test('creates fresh ids when explicitly starting again from a revoked plan', async () => {
+    const original = await repository.createDraft({ planId: 'plan-1', title: '第一次' }, candidates)
+    await repository.markActive(original.id, 'public_poll_id_1234567890', '2026-08-17T04:00:00.000Z')
+    await repository.markRevoked(original.id)
+
+    const restarted = await repository.createDraft({ planId: 'plan-1', title: '第二次' }, candidates)
+
+    expect(restarted.status).toBe('draft')
+    expect(restarted.title).toBe('第二次')
+    expect(restarted.pollId).toBeUndefined()
+    expect(restarted.clientRequestId).not.toBe(original.clientRequestId)
+    expect(restarted.managementToken).not.toBe(original.managementToken)
+    expect(restarted.options.map(({ uploadId }) => uploadId))
+      .not.toEqual(original.options.map(({ uploadId }) => uploadId))
   })
 })
