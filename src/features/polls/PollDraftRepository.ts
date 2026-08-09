@@ -1,7 +1,12 @@
 import Dexie, { type DexieOptions, type Table } from 'dexie'
 
 import type { MaskExportResult } from '../privacy/types'
-import type { PollCandidateSeed, PollDraft, UploadedMaskedAsset } from './types'
+import type {
+  PollCandidateSeed,
+  PollDraft,
+  PollDraftStatus,
+  UploadedMaskedAsset,
+} from './types'
 
 export class PollDraftDb extends Dexie {
   drafts!: Table<PollDraft, string>
@@ -31,6 +36,23 @@ export class PollDraftCandidatesChangedError extends Error {
 
   constructor(readonly draftStatus: PollDraft['status']) {
     super('计划候选已变化，需要确认后重新开始投票草稿')
+  }
+}
+
+const ARCHIVE_DELETION_BLOCKING_STATUSES = new Set<PollDraftStatus>([
+  'creating',
+  'active',
+  'revoking',
+])
+
+export class PollDraftDiscardBlockedError extends Error {
+  readonly name = 'PollDraftDiscardBlockedError'
+
+  constructor(readonly blockedDrafts: readonly {
+    planId: string
+    status: PollDraftStatus
+  }[]) {
+    super('仍有需要恢复或管理的好友投票，不能清除本地管理信息。')
   }
 }
 
@@ -85,6 +107,22 @@ export class PollDraftRepository {
 
   async getByPollId(pollId: string): Promise<PollDraft | undefined> {
     return this.db.drafts.where('pollId').equals(pollId).first()
+  }
+
+  async discardByPlanIds(planIds: readonly string[]): Promise<void> {
+    const uniquePlanIds = [...new Set(planIds)]
+    if (uniquePlanIds.length === 0) return
+
+    await this.db.transaction('rw', this.db.drafts, async () => {
+      const drafts = await this.db.drafts.where('planId').anyOf(uniquePlanIds).toArray()
+      const blockedDrafts = drafts
+        .filter(({ status }) => ARCHIVE_DELETION_BLOCKING_STATUSES.has(status))
+        .map(({ planId, status }) => ({ planId, status }))
+      if (blockedDrafts.length > 0) {
+        throw new PollDraftDiscardBlockedError(blockedDrafts)
+      }
+      await this.db.drafts.bulkDelete(drafts.map(({ id }) => id))
+    })
   }
 
   async saveMaskedImage(

@@ -120,6 +120,7 @@ describe('PollCreateView', () => {
     callOrder = []
     repository = {
       getByPlanId: vi.fn(async () => undefined),
+      discardByPlanIds: vi.fn(async () => {}),
       createDraft: vi.fn(async () => {
         callOrder.push('persist-draft')
         return currentDraft

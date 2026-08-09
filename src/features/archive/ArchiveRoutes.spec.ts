@@ -160,7 +160,7 @@ describe('archive routes and forms', () => {
     await fireEvent.click(screen.getByRole('link', { name: '编辑档案' }))
     await fireEvent.click(await screen.findByRole('button', { name: '删除档案及其内容' }))
 
-    expect(confirmDelete).toHaveBeenCalledWith(expect.stringMatching(/同时删除.*计划.*历史/))
+    await waitFor(() => expect(confirmDelete).toHaveBeenCalledWith(expect.stringMatching(/同时删除.*计划.*历史/)))
     expect(await screen.findByText('这台设备还没有发型档案')).toBeTruthy()
   })
 
@@ -202,7 +202,7 @@ describe('archive routes and forms', () => {
 
     const confirmDelete = vi.spyOn(window, 'confirm').mockReturnValue(true)
     await fireEvent.click(screen.getByRole('button', { name: '删除计划' }))
-    expect(confirmDelete).toHaveBeenCalledWith(expect.stringMatching(/删除.*计划/))
+    await waitFor(() => expect(confirmDelete).toHaveBeenCalledWith(expect.stringMatching(/删除.*计划/)))
     expect(await screen.findByRole('heading', { level: 2, name: '阿青的发型档案' })).toBeTruthy()
     expect(screen.getByText(/还没有发型计划/)).toBeTruthy()
   })

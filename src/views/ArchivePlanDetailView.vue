@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
@@ -9,10 +9,21 @@ import {
 } from '../features/archive/candidateSources'
 import { archiveDemoCandidates } from '../features/archive/demoCandidates'
 import type { Candidate } from '../features/archive/types'
+import {
+  blocksArchiveDeletion,
+  isLocalPollDraft,
+  pollDraftRecoveryPath,
+} from '../features/polls/archivePollDeletion'
+import {
+  defaultPollDraftRepository,
+  POLL_DRAFT_REPOSITORY_KEY,
+} from '../features/polls/pollRuntime'
+import type { PollDraft } from '../features/polls/types'
 
 const route = useRoute()
 const router = useRouter()
 const store = useArchiveStore()
+const pollDraftRepository = inject(POLL_DRAFT_REPOSITORY_KEY, defaultPollDraftRepository)
 const planId = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
 const plan = computed(() => store.plans.find(({ id }) => id === planId.value))
 const candidates = computed(() => store.candidatesByPlanId[planId.value] ?? [])
@@ -26,14 +37,44 @@ const canEdit = computed(() => (
   && candidates.value.every((candidate) => isSafelyEditableCandidate(candidate, knownDemoPaths))
 ))
 const hasDemoCandidates = computed(() => candidates.value.some(({ source }) => source === 'demo_ai'))
+const blockedPollDrafts = ref<PollDraft[]>([])
+const pollDeleteError = ref('')
 
 const statusLabel = computed(() => plan.value?.status === 'ready' ? '可带去沟通' : plan.value?.status === 'completed' ? '已完成' : '草稿')
 
 const deletePlan = async () => {
   const current = plan.value
-  if (!current || !window.confirm(`确定删除“${current.title}”计划吗？档案仍会保留。`)) {
+  if (!current) {
     return
   }
+
+  blockedPollDrafts.value = []
+  pollDeleteError.value = ''
+  let pollDraft: PollDraft | undefined
+  try {
+    pollDraft = await pollDraftRepository.getByPlanId(current.id)
+  } catch {
+    pollDeleteError.value = '本地投票草稿暂时无法读取，计划未删除。请稍后重试。'
+    return
+  }
+
+  if (pollDraft && blocksArchiveDeletion(pollDraft)) {
+    blockedPollDrafts.value = [pollDraft]
+    return
+  }
+
+  const confirmation = pollDraft && isLocalPollDraft(pollDraft)
+    ? `此计划还有本地投票草稿。继续会先删除其中的遮罩图、上传进度和管理信息，再删除“${current.title}”计划。确定继续吗？`
+    : `确定删除“${current.title}”计划吗？档案仍会保留。`
+  if (!window.confirm(confirmation)) return
+
+  try {
+    if (pollDraft) await pollDraftRepository.discardByPlanIds([current.id])
+  } catch {
+    pollDeleteError.value = '本地投票草稿未能清理，计划未删除。请稍后重试。'
+    return
+  }
+
   if (await store.deletePlan(current.id)) {
     await router.push('/archive')
   }
@@ -178,6 +219,31 @@ onBeforeUnmount(revokeCandidateUrls)
           </button>
         </div>
       </header>
+
+      <aside
+        v-if="blockedPollDrafts.length > 0"
+        class="form-alert"
+        role="alert"
+      >
+        <b>这个计划还有未完成的好友投票</b>
+        <p>请先恢复创建或进入投票管理。当前设备中的管理信息不会被删除。</p>
+        <RouterLink
+          v-for="pollDraft in blockedPollDrafts"
+          :key="pollDraft.id"
+          class="text-link"
+          :to="pollDraftRecoveryPath(pollDraft)"
+        >
+          {{ pollDraft.status === 'creating' ? `恢复“${pollDraft.title}”的投票创建` : `管理“${pollDraft.title}”的好友投票` }}
+        </RouterLink>
+      </aside>
+
+      <p
+        v-else-if="pollDeleteError"
+        class="form-alert"
+        role="alert"
+      >
+        {{ pollDeleteError }}
+      </p>
 
       <aside
         v-if="hasDemoCandidates"

@@ -14,6 +14,7 @@ import type { PollCandidateSeed, PollDraft, UploadedMaskedAsset } from './types'
 export interface PollDraftRepositoryPort {
   getByPlanId(planId: string): Promise<PollDraft | undefined>
   getByPollId(pollId: string): Promise<PollDraft | undefined>
+  discardByPlanIds(planIds: readonly string[]): Promise<void>
   createDraft(
     input: { planId: string; title: string },
     candidates: readonly PollCandidateSeed[],

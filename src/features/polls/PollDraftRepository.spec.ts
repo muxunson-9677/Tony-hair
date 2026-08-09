@@ -210,4 +210,74 @@ describe('PollDraftRepository', () => {
     expect(restarted.options.map(({ uploadId }) => uploadId))
       .not.toEqual(original.options.map(({ uploadId }) => uploadId))
   })
+
+  test('atomically discards local and revoked drafts including blobs and management tokens', async () => {
+    const localDraft = await repository.createDraft(
+      { planId: 'plan-1', title: '本地草稿' },
+      candidates,
+    )
+    const maskedImage = new NodeBlob(['masked'], { type: 'image/webp' }) as unknown as Blob
+    await repository.saveMaskedImage(localDraft.id, 'candidate-1', {
+      blob: maskedImage,
+      mimeType: 'image/webp',
+      width: 900,
+      height: 1125,
+      bytes: maskedImage.size,
+      processedAt: '2026-08-10T04:01:00.000Z',
+    })
+
+    const revokedDraft = await repository.createDraft(
+      { planId: 'plan-2', title: '已撤销投票' },
+      candidates.map((candidate) => ({
+        ...candidate,
+        candidateId: `plan-2-${candidate.candidateId}`,
+      })),
+    )
+    await repository.markActive(
+      revokedDraft.id,
+      'public_poll_id_1234567890',
+      '2026-08-17T04:00:00.000Z',
+    )
+    await repository.markRevoked(revokedDraft.id)
+
+    await repository.discardByPlanIds(['plan-1', 'plan-2'])
+
+    expect(await repository.getByPlanId('plan-1')).toBeUndefined()
+    expect(await repository.getByPlanId('plan-2')).toBeUndefined()
+  })
+
+  test.each(['creating', 'active', 'revoking'] as const)(
+    'refuses to discard %s drafts and preserves recovery identities atomically',
+    async (status) => {
+      const safeDraft = await repository.createDraft(
+        { planId: 'plan-safe', title: '本地草稿' },
+        candidates,
+      )
+      const blockedDraft = await repository.createDraft(
+        { planId: 'plan-blocked', title: '待恢复投票' },
+        candidates.map((candidate) => ({
+          ...candidate,
+          candidateId: `blocked-${candidate.candidateId}`,
+        })),
+      )
+      await db.drafts.put({
+        ...blockedDraft,
+        status,
+        pollId: status === 'creating' ? undefined : 'public_poll_id_1234567890',
+      })
+
+      await expect(repository.discardByPlanIds(['plan-safe', 'plan-blocked']))
+        .rejects.toMatchObject({
+          name: 'PollDraftDiscardBlockedError',
+          blockedDrafts: [{ planId: 'plan-blocked', status }],
+        })
+
+      expect(await repository.getByPlanId('plan-safe')).toEqual(safeDraft)
+      expect(await repository.getByPlanId('plan-blocked')).toMatchObject({
+        managementToken: blockedDraft.managementToken,
+        clientRequestId: blockedDraft.clientRequestId,
+        status,
+      })
+    },
+  )
 })
