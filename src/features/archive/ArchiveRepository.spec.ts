@@ -1,6 +1,7 @@
 /// <reference types="node" />
 
 import { Blob as NodeBlob } from 'node:buffer'
+import { createHash } from 'node:crypto'
 
 import Dexie from 'dexie'
 import { IDBKeyRange, indexedDB } from 'fake-indexeddb'
@@ -950,8 +951,8 @@ describe('ArchiveRepository', () => {
     expect(await repository.listAvoidRules('record-2-avoid')).toHaveLength(1)
   })
 
-  test('defines indexes for profile, plan, record, date, and status queries', () => {
-    expect(db.verno).toBe(2)
+  test('defines v3 archive and device-level hairstyle-library indexes', () => {
+    expect(db.verno).toBe(3)
     expect(db.profiles.schema.indexes.map(({ name }) => name)).toContain('updatedAt')
     expect(db.plans.schema.indexes.map(({ name }) => name)).toEqual(
       expect.arrayContaining(['profileId', 'date', 'status', 'updatedAt']),
@@ -970,6 +971,22 @@ describe('ArchiveRepository', () => {
     expect(db.standardStyles.schema.indexes.map(({ name }) => name)).toEqual(
       expect.arrayContaining(['profileId', 'recordId']),
     )
+    expect(db.privateReferences.schema.indexes.map(({ name, unique }) => ({ name, unique })))
+      .toEqual(expect.arrayContaining([
+        { name: 'fingerprint', unique: true },
+        { name: 'updatedAt', unique: false },
+      ]))
+    expect(db.favoriteFolders.schema.indexes.map(({ name, unique }) => ({ name, unique })))
+      .toEqual(expect.arrayContaining([
+        { name: 'name', unique: true },
+        { name: 'updatedAt', unique: false },
+      ]))
+    expect(db.favorites.schema.indexes.map(({ name, unique }) => ({ name, unique })))
+      .toEqual(expect.arrayContaining([
+        { name: 'folderId', unique: false },
+        { name: 'itemKey', unique: true },
+        { name: 'updatedAt', unique: false },
+      ]))
   })
 
   test('upgrades version 1 profile, plan, candidate Blob, and record data without replacing it', async () => {
@@ -986,35 +1003,36 @@ describe('ArchiveRepository', () => {
       standardStyles: 'id, profileId, recordId',
     })
     const legacyImage = new NodeBlob(['legacy-reference'], { type: 'image/webp' }) as unknown as Blob
-
-    await legacy.table('profiles').add({ id: 'legacy-profile', name: '旧档案' })
-    await legacy.table('plans').add({
-      id: 'legacy-plan',
-      profileId: 'legacy-profile',
-      date: '2025-02-03',
-      status: 'completed',
-    })
-    await legacy.table('candidates').bulkAdd([
-      {
-        id: 'legacy-candidate-1',
-        planId: 'legacy-plan',
-        order: 1,
-        name: '旧候选一',
-        source: 'user_reference',
-        referenceImage: legacyImage,
-      },
-      {
-        id: 'legacy-candidate-2',
-        planId: 'legacy-plan',
-        order: 2,
-        name: '旧候选二',
-        source: 'demo_ai',
-      },
-    ])
-    await legacy.table('briefs').add({
+    const legacyCandidateOne = {
+      id: 'legacy-candidate-1',
+      planId: 'legacy-plan',
+      order: 1,
+      name: '旧候选一',
+      notes: '完整保留候选备注',
+      source: 'user_reference',
+      referenceId: 'legacy-reference-1',
+      referenceImage: legacyImage,
+      referenceImageWidth: 900,
+      referenceImageHeight: 1200,
+      referenceImageBytes: legacyImage.size,
+      referenceImageProcessedAt: '2025-02-02T08:00:00.000Z',
+      legacyExtension: { keep: 'candidate-one' },
+    }
+    const legacyCandidateTwo = {
+      id: 'legacy-candidate-2',
+      planId: 'legacy-plan',
+      order: 2,
+      name: '旧候选二',
+      notes: '完整保留演示候选',
+      source: 'demo_ai',
+      demoImagePath: '/demo/legacy-option.webp',
+      legacyExtension: { keep: 'candidate-two' },
+    }
+    const legacyBriefRow = {
       id: 'legacy-v1-brief',
       profileId: 'legacy-profile',
       planId: 'legacy-plan',
+      targetCandidateId: 'legacy-candidate-1',
       overall: 'v1 整体要求',
       top: 'v1 顶部要求',
       fringe: 'v1 刘海要求',
@@ -1023,7 +1041,20 @@ describe('ArchiveRepository', () => {
       back: 'v1 后脑要求',
       topPriorities: ['v1 最在意'],
       absoluteAvoids: ['v1 绝对不要'],
+      createdAt: '2025-02-02T09:00:00.000Z',
+      updatedAt: '2025-02-02T10:00:00.000Z',
+      legacyExtension: { keep: 'brief' },
+    }
+
+    await legacy.table('profiles').add({ id: 'legacy-profile', name: '旧档案' })
+    await legacy.table('plans').add({
+      id: 'legacy-plan',
+      profileId: 'legacy-profile',
+      date: '2025-02-03',
+      status: 'completed',
     })
+    await legacy.table('candidates').bulkAdd([legacyCandidateOne, legacyCandidateTwo])
+    await legacy.table('briefs').add(legacyBriefRow)
     await legacy.table('records').add({
       id: 'legacy-record',
       profileId: 'legacy-profile',
@@ -1049,7 +1080,10 @@ describe('ArchiveRepository', () => {
     const migratedCandidates = await upgradedRepository.listCandidates('legacy-plan')
     const migratedBrief = await upgradedRepository.getBrief('legacy-plan')
 
-    expect(upgraded.verno).toBe(2)
+    expect(upgraded.verno).toBe(3)
+    expect(await upgraded.privateReferences.count()).toBe(0)
+    expect(await upgraded.favoriteFolders.count()).toBe(0)
+    expect(await upgraded.favorites.count()).toBe(0)
     expect(migratedProfile).toMatchObject({
       id: 'legacy-profile',
       name: '旧档案',
@@ -1068,15 +1102,26 @@ describe('ArchiveRepository', () => {
       status: 'completed',
     })
     expect(migratedPlan?.createdAt).toBe(migratedPlan?.updatedAt)
-    expect(migratedCandidates.map(({ notes }) => notes)).toEqual(['', ''])
+    expect(migratedCandidates.map((candidate) => ({
+      ...candidate,
+      referenceImage: undefined,
+    }))).toEqual([
+      { ...legacyCandidateOne, referenceImage: undefined },
+      { ...legacyCandidateTwo, referenceImage: undefined },
+    ])
     expect(await migratedCandidates[0]?.referenceImage?.text()).toBe('legacy-reference')
-    expect(migratedBrief).toMatchObject({
-      id: 'legacy-v1-brief',
-      targetCandidateId: undefined,
-      overall: 'v1 整体要求',
-      createdAt: '1970-01-01T00:00:00.000Z',
-      updatedAt: '1970-01-01T00:00:00.000Z',
-    })
+    expect(
+      createHash('sha256')
+        .update(new Uint8Array(
+          await migratedCandidates[0]?.referenceImage?.arrayBuffer() ?? new ArrayBuffer(0),
+        ))
+        .digest('hex'),
+    ).toBe(
+      createHash('sha256')
+        .update(Buffer.from(await legacyImage.arrayBuffer()))
+        .digest('hex'),
+    )
+    expect(migratedBrief).toEqual(legacyBriefRow)
     expect(await upgradedRepository.getRecord('legacy-record')).toMatchObject({
       outcome: 'repeat',
       styleName: '旧发型',
@@ -1111,6 +1156,43 @@ describe('ArchiveRepository', () => {
       standardStyles: 'id, profileId, recordId',
     })
     const legacyPhoto = new NodeBlob(['legacy-photo'], { type: 'image/webp' }) as unknown as Blob
+    const legacyCandidateImage = new NodeBlob(
+      ['legacy-candidate-image'],
+      { type: 'image/webp' },
+    ) as unknown as Blob
+    const legacyCandidate = {
+      id: 'legacy-v2-candidate',
+      planId: 'legacy-plan',
+      order: 1,
+      name: '旧候选',
+      notes: '保留这个旧备注',
+      source: 'user_reference',
+      referenceId: 'legacy-reference',
+      referenceImage: legacyCandidateImage,
+      referenceImageWidth: 900,
+      referenceImageHeight: 1200,
+      referenceImageBytes: legacyCandidateImage.size,
+      referenceImageProcessedAt: '2025-03-03T10:00:00.000Z',
+      legacyExtension: { keep: true },
+    }
+    const legacyBriefRow = {
+      id: 'legacy-v2-brief',
+      profileId: 'legacy-profile',
+      planId: 'legacy-plan',
+      targetCandidateId: 'legacy-v2-candidate',
+      overall: 'v2 整体要求',
+      top: 'v2 顶部要求',
+      fringe: 'v2 刘海要求',
+      sides: 'v2 两侧要求',
+      sideburns: 'v2 鬓角要求',
+      back: 'v2 后脑要求',
+      topPriorities: ['v2 最在意'],
+      absoluteAvoids: ['v2 绝对不要'],
+      createdAt: '2025-03-03T11:00:00.000Z',
+      updatedAt: '2025-03-03T12:00:00.000Z',
+      legacyExtension: { keep: 'brief' },
+    }
+    await legacy.table('candidates').add(legacyCandidate)
     await legacy.table('records').add({
       id: 'legacy-v2-record',
       profileId: 'legacy-profile',
@@ -1133,19 +1215,7 @@ describe('ArchiveRepository', () => {
       recordId: 'legacy-v2-record',
       text: '不要推白',
     })
-    await legacy.table('briefs').add({
-      id: 'legacy-v2-brief',
-      profileId: 'legacy-profile',
-      planId: 'legacy-plan',
-      overall: 'v2 整体要求',
-      top: 'v2 顶部要求',
-      fringe: 'v2 刘海要求',
-      sides: 'v2 两侧要求',
-      sideburns: 'v2 鬓角要求',
-      back: 'v2 后脑要求',
-      topPriorities: ['v2 最在意'],
-      absoluteAvoids: ['v2 绝对不要'],
-    })
+    await legacy.table('briefs').add(legacyBriefRow)
     legacy.close()
 
     const upgraded = openDatabase()
@@ -1154,8 +1224,12 @@ describe('ArchiveRepository', () => {
     const photos = await upgradedRepository.listPhotos('legacy-v2-record')
     const rules = await upgradedRepository.listAvoidRules('legacy-v2-record')
     const legacyBrief = await upgradedRepository.getBrief('legacy-plan')
+    const [migratedCandidate] = await upgradedRepository.listCandidates('legacy-plan')
 
-    expect(upgraded.verno).toBe(2)
+    expect(upgraded.verno).toBe(3)
+    expect(await upgraded.privateReferences.count()).toBe(0)
+    expect(await upgraded.favoriteFolders.count()).toBe(0)
+    expect(await upgraded.favorites.count()).toBe(0)
     expect(record).toMatchObject({
       id: 'legacy-v2-record',
       planId: undefined,
@@ -1177,18 +1251,28 @@ describe('ArchiveRepository', () => {
     expect(photos[0]).not.toHaveProperty('bytes')
     expect(photos[0]).not.toHaveProperty('processedAt')
     expect(await photos[0]?.image.text()).toBe('legacy-photo')
+    expect({ ...migratedCandidate, referenceImage: undefined }).toEqual({
+      ...legacyCandidate,
+      referenceImage: undefined,
+    })
+    expect(await migratedCandidate?.referenceImage?.text()).toBe('legacy-candidate-image')
+    expect(
+      createHash('sha256')
+        .update(new Uint8Array(
+          await migratedCandidate?.referenceImage?.arrayBuffer() ?? new ArrayBuffer(0),
+        ))
+        .digest('hex'),
+    ).toBe(
+      createHash('sha256')
+        .update(Buffer.from(await legacyCandidateImage.arrayBuffer()))
+        .digest('hex'),
+    )
     expect(rules).toMatchObject([{
       id: 'legacy-v2-rule',
       active: true,
       createdAt: '1970-01-01T00:00:00.000Z',
     }])
-    expect(legacyBrief).toMatchObject({
-      id: 'legacy-v2-brief',
-      targetCandidateId: undefined,
-      overall: 'v2 整体要求',
-      createdAt: '1970-01-01T00:00:00.000Z',
-      updatedAt: '1970-01-01T00:00:00.000Z',
-    })
+    expect(legacyBrief).toEqual(legacyBriefRow)
   })
 
   test('uses the legacy timestamp when an old record date is unreadable', async () => {

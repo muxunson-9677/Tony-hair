@@ -54,3 +54,57 @@ export interface CuratedCatalogFilters {
   readonly maintenanceLevels?: readonly MaintenanceLevel[]
   readonly hairTextures?: readonly HairTexture[]
 }
+
+export interface PrivateHairstyleReference {
+  readonly id: string
+  readonly fingerprint: string
+  readonly name: string
+  readonly notes: string
+  readonly tags: readonly string[]
+  readonly image: Blob
+  readonly width: number
+  readonly height: number
+  readonly bytes: number
+  readonly processedAt: string
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+export type PrivateHairstyleReferenceWrite = Omit<
+  PrivateHairstyleReference,
+  'id' | 'fingerprint' | 'createdAt' | 'updatedAt'
+>
+
+export type PrivateHairstyleReferenceDetailsWrite = Pick<
+  PrivateHairstyleReference,
+  'name' | 'notes' | 'tags'
+>
+
+export type PrivateHairstyleReferenceImageWrite = Pick<
+  PrivateHairstyleReference,
+  'image' | 'width' | 'height' | 'bytes' | 'processedAt'
+>
+
+export interface FavoriteFolder {
+  readonly id: string
+  readonly name: string
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+export type FavoriteFolderWrite = Pick<FavoriteFolder, 'name'>
+
+export type HairstyleFavoriteItemType = 'curated_style' | 'private_reference'
+
+export interface HairstyleFavoriteTarget {
+  readonly itemType: HairstyleFavoriteItemType
+  readonly itemId: string
+}
+
+export interface HairstyleFavorite extends HairstyleFavoriteTarget {
+  readonly id: string
+  readonly itemKey: string
+  readonly folderId: string | null
+  readonly createdAt: string
+  readonly updatedAt: string
+}

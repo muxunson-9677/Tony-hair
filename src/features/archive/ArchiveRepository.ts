@@ -16,6 +16,11 @@ import type {
   HaircutRecordBundle,
   StandardStyle,
 } from './types'
+import type {
+  FavoriteFolder,
+  HairstyleFavorite,
+  PrivateHairstyleReference,
+} from '../hairstyle-library/types'
 
 const LEGACY_TIMESTAMP = '1970-01-01T00:00:00.000Z'
 
@@ -41,6 +46,12 @@ const ARCHIVE_STORES_V2 = {
   plans: 'id, profileId, date, status, updatedAt',
 } as const
 
+const ARCHIVE_STORES_V3 = {
+  privateReferences: 'id, &fingerprint, updatedAt',
+  favoriteFolders: 'id, &name, updatedAt',
+  favorites: 'id, folderId, &itemKey, updatedAt',
+} as const
+
 export class ZajianfaDb extends Dexie {
   profiles!: Table<HairProfile, string>
   plans!: Table<HaircutPlan, string>
@@ -50,6 +61,9 @@ export class ZajianfaDb extends Dexie {
   photos!: Table<HaircutPhoto, string>
   avoidRules!: Table<AvoidRule, string>
   standardStyles!: Table<StandardStyle, string>
+  privateReferences!: Table<PrivateHairstyleReference, string>
+  favoriteFolders!: Table<FavoriteFolder, string>
+  favorites!: Table<HairstyleFavorite, string>
 
   constructor(name = 'zajianfa-archive', options?: DexieOptions) {
     super(name, options)
@@ -74,6 +88,7 @@ export class ZajianfaDb extends Dexie {
         plan.updatedAt ??= migratedAt
       })
     })
+    this.version(3).stores(ARCHIVE_STORES_V3)
 
     this.profiles = this.table('profiles')
     this.plans = this.table('plans')
@@ -125,6 +140,9 @@ export class ZajianfaDb extends Dexie {
       createdAt: style.createdAt ?? LEGACY_TIMESTAMP,
       active: style.active ?? true,
     }))
+    this.privateReferences = this.table('privateReferences')
+    this.favoriteFolders = this.table('favoriteFolders')
+    this.favorites = this.table('favorites')
   }
 }
 
@@ -216,7 +234,7 @@ const hasErrorName = (error: unknown, names: ReadonlySet<string>): boolean => {
   return false
 }
 
-const mapStorageError = (error: unknown): never => {
+export const mapArchiveStorageError = (error: unknown): never => {
   if (error instanceof ArchiveStorageError) {
     throw error
   }
@@ -448,7 +466,7 @@ export class ArchiveRepository {
     try {
       return await operation()
     } catch (error) {
-      return mapStorageError(error)
+      return mapArchiveStorageError(error)
     }
   }
 
