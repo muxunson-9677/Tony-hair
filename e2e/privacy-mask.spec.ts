@@ -6,7 +6,6 @@ import path from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 
 const PRIVATE_SOURCE_MARKER = 'M3C_PRIVATE_ORIGINAL_SOURCE_MARKER'
-const ORIGIN = 'http://127.0.0.1:4173'
 const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' blob: data: https://*.public.blob.vercel-storage.com; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 
 const openAuthorizedEditor = async (page: Page) => {
@@ -55,17 +54,62 @@ const createTwoFaceImage = async (page: Page) => Buffer.from(await page.evaluate
   }
 }))
 
-test('runs real same-origin MediaPipe under strict CSP and exports only a flat local image', async ({
-  page,
-}, testInfo) => {
-  test.setTimeout(90_000)
-  const requests: Array<{ url: string, method: string, body: Buffer | null }> = []
-  const responseCsp = new Map<string, string | undefined>()
-  page.on('request', (request) => requests.push({
+type PrivacyRequest = {
+  readonly url: string
+  readonly method: string
+  readonly body: Buffer | null
+  readonly headers: Readonly<Record<string, string>>
+}
+
+const capturePrivacyTraffic = (page: Page) => {
+  const traffic: { requests: PrivacyRequest[], webSockets: string[] } = {
+    requests: [],
+    webSockets: [],
+  }
+  page.on('request', (request) => traffic.requests.push({
     url: request.url(),
     method: request.method(),
     body: request.postDataBuffer(),
+    headers: request.headers(),
   }))
+  page.on('websocket', (socket) => traffic.webSockets.push(socket.url()))
+  return traffic
+}
+
+const expectPrivacyLocalOnly = (
+  traffic: ReturnType<typeof capturePrivacyTraffic>,
+  origin: string,
+  privateNeedles: readonly Buffer[],
+) => {
+  const { requests, webSockets } = traffic
+  expect(requests.filter(({ url }) => {
+    const parsed = new URL(url)
+    return ['http:', 'https:'].includes(parsed.protocol) && parsed.origin !== origin
+  })).toEqual([])
+  expect(requests.filter(({ url }) => new URL(url).pathname.startsWith('/api/'))).toEqual([])
+  expect(requests.filter(({ method }) => ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method))).toEqual([])
+  expect(webSockets).toEqual([])
+  for (const needle of privateNeedles) {
+    const encodedNeedle = Buffer.from(needle.toString('base64'))
+    expect(requests.some(({ url, headers, body }) => {
+      const metadata = Buffer.from(`${decodeURIComponent(url)}\n${JSON.stringify(headers)}`)
+      return body?.includes(needle)
+        || body?.includes(encodedNeedle)
+        || metadata.includes(needle)
+        || metadata.includes(encodedNeedle)
+    })).toBe(false)
+  }
+}
+
+test('runs real same-origin MediaPipe under strict CSP and exports only a flat local image', async ({
+  baseURL,
+  page,
+}, testInfo) => {
+  test.setTimeout(90_000)
+  const traffic = capturePrivacyTraffic(page)
+  const { requests } = traffic
+  const origin = new URL(baseURL as string).origin
+  const responseCsp = new Map<string, string | undefined>()
   page.on('response', async (response) => {
     responseCsp.set(response.url(), (await response.allHeaders())['content-security-policy'])
   })
@@ -107,7 +151,7 @@ test('runs real same-origin MediaPipe under strict CSP and exports only a flat l
   expect(inferenceRequests.some(({ url }) => url.endsWith('/mediapipe/models/face-landmarker-float16-v1.task'))).toBe(true)
   expect(inferenceRequests.some(({ url }) => url.endsWith('.wasm'))).toBe(true)
   for (const request of inferenceRequests) {
-    expect(new URL(request.url).origin).toBe(ORIGIN)
+    expect(new URL(request.url).origin).toBe(origin)
     expect(request.method).toBe('GET')
     expect(request.body).toBeNull()
   }
@@ -160,19 +204,22 @@ test('runs real same-origin MediaPipe under strict CSP and exports only a flat l
   expect(flatBytes.includes(Buffer.from('Exif\0\0', 'binary'))).toBe(false)
   expect(download.suggestedFilename()).toMatch(/^咋剪发-隐私遮罩-\d{4}-\d{2}-\d{2}\.(webp|jpg)$/)
 
-  const external = requests.filter(({ url }) => {
-    const parsed = new URL(url)
-    return ['http:', 'https:'].includes(parsed.protocol) && parsed.origin !== ORIGIN
-  })
-  expect(external).toEqual([])
-  expect(requests.filter(({ method }) => ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method))).toEqual([])
-  expect(requests.some(({ body }) => body?.includes(Buffer.from(PRIVATE_SOURCE_MARKER)))).toBe(false)
-  expect([...responseCsp.entries()].filter(([url]) => url.startsWith(ORIGIN)).every(([, csp]) => csp === CSP)).toBe(true)
+  expectPrivacyLocalOnly(traffic, origin, [
+    Buffer.from(PRIVATE_SOURCE_MARKER),
+    Buffer.from('Exif\0\0', 'binary'),
+    source,
+  ])
+  expect([...responseCsp.entries()].filter(([url]) => url.startsWith(origin)).every(([, csp]) => csp === CSP)).toBe(true)
   expect([...responseCsp.keys()].some((url) => /faceLandmarker\.worker-.*\.js$/.test(url))).toBe(true)
 })
 
-test('keeps multiple faces hard-blocked with no manual or export path', async ({ page }, testInfo) => {
+test('keeps multiple faces hard-blocked with no manual or export path', async ({
+  baseURL,
+  page,
+}, testInfo) => {
   test.setTimeout(90_000)
+  const traffic = capturePrivacyTraffic(page)
+  const origin = new URL(baseURL as string).origin
   await page.setViewportSize({ width: 390, height: 844 })
   const input = await openAuthorizedEditor(page)
   const fixture = await createTwoFaceImage(page)
@@ -185,10 +232,19 @@ test('keeps multiple faces hard-blocked with no manual or export path', async ({
   await alert.scrollIntoViewIfNeeded()
   await expect(alert).toBeInViewport()
   await page.screenshot({ path: testInfo.outputPath('privacy-multiple-hard-block-390x844.png') })
+  expectPrivacyLocalOnly(traffic, origin, [
+    Buffer.from('Exif\0\0', 'binary'),
+    fixture,
+  ])
 })
 
-test('uses explicit manual fallback and recovers on the next image after model initialization fails', async ({ page }) => {
+test('uses explicit manual fallback and recovers on the next image after model initialization fails', async ({
+  baseURL,
+  page,
+}) => {
   test.setTimeout(60_000)
+  const traffic = capturePrivacyTraffic(page)
+  const origin = new URL(baseURL as string).origin
   let modelRequests = 0
   await page.route('**/mediapipe/models/face-landmarker-float16-v1.task', (route) => {
     modelRequests += 1
@@ -208,4 +264,9 @@ test('uses explicit manual fallback and recovers on the next image after model i
   await page.getByLabel('换一张照片').setInputFiles({ ...source, name: 'retry-after-model-failure.webp' })
   await expect(page.getByText('已自动放置初始遮罩，请确认后再调整。')).toBeVisible({ timeout: 60_000 })
   expect(modelRequests).toBe(2)
+  expectPrivacyLocalOnly(traffic, origin, [
+    Buffer.from(PRIVATE_SOURCE_MARKER),
+    Buffer.from('Exif\0\0', 'binary'),
+    source.buffer,
+  ])
 })

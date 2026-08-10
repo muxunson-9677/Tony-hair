@@ -163,8 +163,11 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '首页' }).click()
   await expect(page.getByRole('link', { name: '查看上次发型：纹理短碎发' })).toBeVisible()
   await expect(page.getByText('上次发型 · 纹理短碎发')).toBeVisible()
-  await expect(page.getByText('下次可以复刻这次记录，并把细节带给理发师确认。')).toBeVisible()
+  await expect(page.getByText('下次可以复刻：把细节带给理发师确认。')).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('home-history-390x844.png'), fullPage: true })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.screenshot({ path: testInfo.outputPath('home-history-1440x900.png'), fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
 
   await page.getByRole('link', { name: '查看上次发型：纹理短碎发' }).click()
   await page.getByRole('link', { name: '编辑记录' }).click()
@@ -229,6 +232,7 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
 })
 
 test('mixes prepared, past-record, and demo candidates without sending private bytes', async ({
+  baseURL,
   page,
 }, testInfo) => {
   test.setTimeout(60_000)
@@ -365,7 +369,7 @@ test('mixes prepared, past-record, and demo candidates without sending private b
   const externalRequests = requests.filter(({ url }) => {
     const parsed = new URL(url)
     return ['http:', 'https:'].includes(parsed.protocol)
-      && parsed.origin !== 'http://127.0.0.1:4173'
+      && parsed.origin !== new URL(baseURL as string).origin
   })
   expect(externalRequests).toEqual([])
   expect(requests.filter(({ method }) => ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)))
@@ -377,6 +381,7 @@ test('mixes prepared, past-record, and demo candidates without sending private b
 })
 
 test('prepares an orientation-6 JPEG locally before saving and never sends source bytes', async ({
+  baseURL,
   page,
 }, testInfo) => {
   const requests: { url: string, body: Buffer | null }[] = []
@@ -533,7 +538,7 @@ test('prepares an orientation-6 JPEG locally before saving and never sends sourc
   const externalRequests = requests.filter(({ url }) => {
     const parsed = new URL(url)
     return ['http:', 'https:'].includes(parsed.protocol)
-      && parsed.origin !== 'http://127.0.0.1:4173'
+      && parsed.origin !== new URL(baseURL as string).origin
   })
   expect(externalRequests).toEqual([])
   expect(requests.some(({ body }) => body?.includes(Buffer.from(PRIVATE_SOURCE_MARKER)))).toBe(false)

@@ -5,7 +5,7 @@ test('navigates through the four primary destinations', async ({ page }) => {
 
   const destinations = [
     { label: '首页', path: '/', heading: '咋剪发' },
-    { label: '试发型', path: '/try', heading: '试发型' },
+    { label: '找发型', path: '/styles', heading: '找发型' },
     { label: '档案', path: '/archive', heading: '档案' },
     { label: '我的', path: '/me', heading: '我的' },
   ] as const
@@ -18,6 +18,13 @@ test('navigates through the four primary destinations', async ({ page }) => {
     await expect(page.getByRole('heading', { level: 1, name: destination.heading })).toBeVisible()
     await expect(link).toHaveAttribute('aria-current', 'page')
   }
+})
+
+test('keeps the demo try-on reachable as a direct local tool', async ({ page }) => {
+  await page.goto('/try')
+
+  await expect(page.getByRole('heading', { level: 1, name: '试发型' })).toBeVisible()
+  await expect(page.getByText('预先制作的合成人物素材，不会处理你的照片')).toBeVisible()
 })
 
 test('serves an unknown deep link and returns home', async ({ page }) => {

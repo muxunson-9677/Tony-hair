@@ -36,6 +36,7 @@ const cleanupDatabase = async (
 }
 
 test('creates, refreshes, exports, prints, edits, and deletes a barber brief without deleting its plan', async ({
+  baseURL,
   context,
   page,
 }, testInfo) => {
@@ -43,7 +44,7 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
   const databaseName = `zajianfa-brief-e2e-${testInfo.workerIndex}-${Date.now()}-${crypto.randomUUID()}`
   const externalRequests: string[] = []
   page.on('request', (request) => {
-    if (new URL(request.url()).origin !== 'http://127.0.0.1:4173') {
+    if (new URL(request.url()).origin !== new URL(baseURL as string).origin) {
       externalRequests.push(request.url())
     }
   })
