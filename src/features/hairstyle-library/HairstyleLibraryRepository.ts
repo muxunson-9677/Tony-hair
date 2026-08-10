@@ -331,6 +331,43 @@ export class HairstyleLibraryRepository {
     ))
   }
 
+  async updatePrivateReferenceWithImage(
+    id: string,
+    write: PrivateHairstyleReferenceWrite,
+  ): Promise<PrivateHairstyleReference> {
+    assertNoRepositoryFields(write)
+    const details = normalizeReferenceDetails(write)
+    const { fingerprint, ...image } = await materializePreparedImage(validateImageWrite(write))
+    const updatedAt = this.timestamp()
+
+    return this.run(() => this.db.transaction(
+      'rw',
+      this.db.privateReferences,
+      async () => {
+        const current = await this.db.privateReferences.get(id)
+        if (!current) {
+          throw new Error(`private reference not found: ${id}`)
+        }
+        const duplicate = await this.db.privateReferences
+          .where('fingerprint')
+          .equals(fingerprint)
+          .first()
+        if (duplicate && duplicate.id !== id) {
+          throw new Error('a private reference with these prepared bytes already exists')
+        }
+        const updated = {
+          ...current,
+          ...details,
+          ...image,
+          fingerprint,
+          updatedAt,
+        }
+        await this.db.privateReferences.put(updated)
+        return updated
+      },
+    ))
+  }
+
   async replaceReferenceImage(
     id: string,
     write: PrivateHairstyleReferenceImageWrite,

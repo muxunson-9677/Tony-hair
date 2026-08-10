@@ -20,6 +20,9 @@ defineEmits<{
     <RouterLink to="/styles">
       返回找发型
     </RouterLink>
+    <RouterLink :to="`/styles/catalog/${style.id}/show`">
+      给理发师看
+    </RouterLink>
     <button
       type="button"
       :aria-label="`收藏：${style.name}`"

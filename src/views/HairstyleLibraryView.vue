@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import HairstyleTile from '../features/hairstyle-library/components/HairstyleTile.vue'
@@ -12,6 +12,7 @@ import { useHairstyleLibraryStore } from '../features/hairstyle-library/libraryS
 import type {
   CuratedHairstyle,
   MaintenanceLevel,
+  PrivateHairstyleReference,
   StyleGoal,
 } from '../features/hairstyle-library/types'
 
@@ -24,13 +25,30 @@ const selectedFolder = ref<'all' | 'unfiled' | string>('all')
 const folderFormOpen = ref(false)
 const folderName = ref('')
 const renameName = ref('')
+const referenceObjectUrls = ref<Record<string, string>>({})
 
 const showingFavorites = computed(() => route.name === 'styles-favorites')
-const heading = computed(() => showingFavorites.value ? '我的收藏' : '找发型')
+const showingReferences = computed(() => route.name === 'styles-references')
+const showingCatalog = computed(() => !showingFavorites.value && !showingReferences.value)
+const heading = computed(() => {
+  if (showingFavorites.value) return '我的收藏'
+  if (showingReferences.value) return '我的参考'
+  return '找发型'
+})
+const titleId = computed(() => {
+  if (showingFavorites.value) return 'favorites-title'
+  if (showingReferences.value) return 'references-title'
+  return 'styles-title'
+})
 const activeStyles = computed(() => curatedHairstyles.filter(({ status }) => status === 'active'))
 const favoriteByStyleId = computed(() => new Map(
   store.favorites
     .filter(({ itemType }) => itemType === 'curated_style')
+    .map((favorite) => [favorite.itemId, favorite]),
+))
+const favoriteByReferenceId = computed(() => new Map(
+  store.favorites
+    .filter(({ itemType }) => itemType === 'private_reference')
     .map((favorite) => [favorite.itemId, favorite]),
 ))
 const activeFolder = computed(() => (
@@ -46,8 +64,7 @@ const filteredCatalog = computed(() => filterCuratedHairstyles({
   maintenanceLevels: maintenanceLevels.value,
 }))
 
-const belongsToSelectedFolder = (style: CuratedHairstyle) => {
-  const favorite = favoriteByStyleId.value.get(style.id)
+const belongsToSelectedFolder = (favorite: { readonly folderId: string | null } | undefined) => {
   if (!favorite) {
     return false
   }
@@ -60,15 +77,45 @@ const belongsToSelectedFolder = (style: CuratedHairstyle) => {
   return favorite.folderId === selectedFolder.value
 }
 
-const resultStyles = computed(() => (
-  showingFavorites.value
-    ? filteredCatalog.value.filter(belongsToSelectedFolder)
+const resultStyles = computed(() => {
+  if (showingReferences.value) {
+    return []
+  }
+  return showingFavorites.value
+    ? filteredCatalog.value.filter((style) => (
+        belongsToSelectedFolder(favoriteByStyleId.value.get(style.id))
+      ))
     : filteredCatalog.value
-))
+})
 
+const resultReferences = computed(() => {
+  if (showingReferences.value) {
+    return store.references
+  }
+  if (!showingFavorites.value) {
+    return []
+  }
+  return store.references.filter((reference) => (
+    belongsToSelectedFolder(favoriteByReferenceId.value.get(reference.id))
+  ))
+})
+
+const hasResults = computed(() => resultStyles.value.length > 0 || resultReferences.value.length > 0)
 const hasFilters = computed(() => (
   Boolean(query.value) || goals.value.length > 0 || maintenanceLevels.value.length > 0
 ))
+
+const releaseReferenceUrls = () => {
+  Object.values(referenceObjectUrls.value).forEach((url) => URL.revokeObjectURL(url))
+  referenceObjectUrls.value = {}
+}
+
+watch(() => store.references, (references) => {
+  releaseReferenceUrls()
+  referenceObjectUrls.value = Object.fromEntries(
+    references.map((reference) => [reference.id, URL.createObjectURL(reference.image)]),
+  )
+}, { immediate: true })
 
 const resetFilters = () => {
   query.value = ''
@@ -135,7 +182,18 @@ const moveFavorite = async (style: CuratedHairstyle, event: Event) => {
   )
 }
 
-watch(showingFavorites, (isFavorites) => {
+const moveReferenceFavorite = async (reference: PrivateHairstyleReference, event: Event) => {
+  if (libraryBusy.value) {
+    return
+  }
+  const value = (event.target as HTMLSelectElement).value
+  await store.moveFavorite(
+    { itemType: 'private_reference', itemId: reference.id },
+    value || null,
+  )
+}
+
+watch([showingFavorites, showingReferences], ([isFavorites]) => {
   if (!isFavorites) {
     selectedFolder.value = 'all'
   }
@@ -144,23 +202,27 @@ watch(showingFavorites, (isFavorites) => {
 const loadLibrary = () => store.load()
 
 onMounted(loadLibrary)
+onBeforeUnmount(releaseReferenceUrls)
 </script>
 
 <template>
   <section
     class="style-library-view"
-    :aria-labelledby="showingFavorites ? 'favorites-title' : 'styles-title'"
+    :aria-labelledby="titleId"
   >
     <header class="style-library-header">
       <div>
         <p class="eyebrow">
-          CURATED · LOCAL FAVORITES
+          {{ showingReferences ? 'PRIVATE · THIS DEVICE' : 'CURATED · LOCAL FAVORITES' }}
         </p>
-        <h1 :id="showingFavorites ? 'favorites-title' : 'styles-title'">
+        <h1 :id="titleId">
           {{ heading }}
         </h1>
         <p v-if="showingFavorites">
           只在当前设备整理，清除浏览器数据后可能丢失。
+        </p>
+        <p v-else-if="showingReferences">
+          只保存在当前设备。把你真正想留给下次理发看的图片，整理成私人参考。
         </p>
         <p v-else>
           六个诚实的短发方向，先看维护与现实限制，再决定要不要继续。
@@ -170,7 +232,7 @@ onMounted(loadLibrary)
       <nav aria-label="发型库分区">
         <RouterLink
           to="/styles"
-          :aria-current="!showingFavorites ? 'page' : undefined"
+          :aria-current="showingCatalog ? 'page' : undefined"
         >
           精选发型
         </RouterLink>
@@ -180,11 +242,32 @@ onMounted(loadLibrary)
         >
           我的收藏
         </RouterLink>
+        <RouterLink
+          to="/styles/references"
+          :aria-current="showingReferences ? 'page' : undefined"
+        >
+          我的参考
+        </RouterLink>
       </nav>
     </header>
 
-    <p class="style-library-disclosure">
-      项目内 AI 合成成年人物正面示例；不代表侧面、后脑或真实剪后效果。
+    <div
+      v-if="showingReferences"
+      class="reference-library-intro"
+    >
+      <p>处理后的图片、名称、备注和标签都不会上传。</p>
+      <RouterLink
+        v-if="store.references.length"
+        to="/styles/references/new"
+      >
+        添加私人参考
+      </RouterLink>
+    </div>
+    <p
+      v-else
+      class="style-library-disclosure"
+    >
+      精选图为项目内 AI 合成成年人物正面示例；不代表侧面、后脑或真实剪后效果。
     </p>
 
     <div
@@ -281,8 +364,12 @@ onMounted(loadLibrary)
       </form>
     </div>
 
-    <div class="style-library-layout">
+    <div
+      class="style-library-layout"
+      :class="{ 'style-library-layout--references': showingReferences }"
+    >
       <StyleFilterBar
+        v-if="!showingReferences"
         v-model:query="query"
         v-model:goals="goals"
         v-model:maintenance-levels="maintenanceLevels"
@@ -295,7 +382,7 @@ onMounted(loadLibrary)
           class="library-state"
           role="status"
         >
-          正在读取本机收藏…
+          正在读取本机发型库…
         </p>
         <div
           v-else-if="store.error"
@@ -312,67 +399,146 @@ onMounted(loadLibrary)
         </div>
 
         <div
-          v-if="resultStyles.length"
-          class="hairstyle-grid"
+          v-if="hasResults"
+          class="library-result-groups"
         >
-          <div
-            v-for="style in resultStyles"
-            :key="style.id"
-            class="hairstyle-grid__item"
+          <section
+            v-if="resultReferences.length"
+            class="reference-library-section"
+            aria-labelledby="reference-library-section-title"
           >
-            <HairstyleTile
-              :style="style"
-              :favorite="store.isFavorite(`curated_style:${style.id}`)"
-              :busy="libraryBusy"
-              @toggle-favorite="toggleFavorite(style)"
-            />
-            <label
-              v-if="showingFavorites"
-              class="favorite-move"
-            >
-              <span>移动“{{ style.name }}”到收藏夹</span>
-              <select
-                :value="favoriteByStyleId.get(style.id)?.folderId ?? ''"
-                :disabled="libraryBusy"
-                @change="moveFavorite(style, $event)"
+            <h2 id="reference-library-section-title">
+              {{ showingFavorites ? '私人参考' : '已保存的参考' }}
+            </h2>
+            <div class="reference-library-grid">
+              <article
+                v-for="reference in resultReferences"
+                :key="reference.id"
+                class="reference-library-item"
               >
-                <option value="">未分类</option>
-                <option
-                  v-for="folder in store.folders"
-                  :key="folder.id"
-                  :value="folder.id"
+                <RouterLink
+                  :to="`/styles/references/${reference.id}`"
+                  :aria-label="`查看私人参考：${reference.name}`"
                 >
-                  {{ folder.name }}
-                </option>
-              </select>
-            </label>
-          </div>
+                  <span class="reference-library-item__media">
+                    <img
+                      :src="referenceObjectUrls[reference.id]"
+                      :alt="`${reference.name}的私人参考`"
+                      loading="lazy"
+                      decoding="async"
+                    >
+                    <span>仅本机</span>
+                  </span>
+                  <span class="reference-library-item__copy">
+                    <strong>{{ reference.name }}</strong>
+                    <small>{{ reference.tags.length ? reference.tags.join(' · ') : '未添加标签' }}</small>
+                  </span>
+                </RouterLink>
+                <label
+                  v-if="showingFavorites"
+                  class="favorite-move"
+                >
+                  <span>移动“{{ reference.name }}”到收藏夹</span>
+                  <select
+                    :value="favoriteByReferenceId.get(reference.id)?.folderId ?? ''"
+                    :disabled="libraryBusy"
+                    @change="moveReferenceFavorite(reference, $event)"
+                  >
+                    <option value="">未分类</option>
+                    <option
+                      v-for="folder in store.folders"
+                      :key="folder.id"
+                      :value="folder.id"
+                    >
+                      {{ folder.name }}
+                    </option>
+                  </select>
+                </label>
+              </article>
+            </div>
+          </section>
+
+          <section
+            v-if="resultStyles.length"
+            class="curated-library-section"
+            :aria-labelledby="showingFavorites ? 'curated-favorites-title' : undefined"
+          >
+            <h2
+              v-if="showingFavorites"
+              id="curated-favorites-title"
+            >
+              精选发型
+            </h2>
+            <div class="hairstyle-grid">
+              <div
+                v-for="style in resultStyles"
+                :key="style.id"
+                class="hairstyle-grid__item"
+              >
+                <HairstyleTile
+                  :style="style"
+                  :favorite="store.isFavorite(`curated_style:${style.id}`)"
+                  :busy="libraryBusy"
+                  @toggle-favorite="toggleFavorite(style)"
+                />
+                <label
+                  v-if="showingFavorites"
+                  class="favorite-move"
+                >
+                  <span>移动“{{ style.name }}”到收藏夹</span>
+                  <select
+                    :value="favoriteByStyleId.get(style.id)?.folderId ?? ''"
+                    :disabled="libraryBusy"
+                    @change="moveFavorite(style, $event)"
+                  >
+                    <option value="">未分类</option>
+                    <option
+                      v-for="folder in store.folders"
+                      :key="folder.id"
+                      :value="folder.id"
+                    >
+                      {{ folder.name }}
+                    </option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div
           v-else-if="!store.loading && !store.error"
           class="library-empty"
         >
-          <h2>{{ showingFavorites && !hasFilters ? '还没有收藏' : '没有符合条件的发型' }}</h2>
-          <p v-if="showingFavorites && !hasFilters">
-            收藏是本机私人的整理动作。先从六个精选方向里留住真正想看的。
-          </p>
-          <p v-else>
-            当前组合没有结果，清空条件后可以重新浏览全部 {{ activeStyles.length }} 款。
-          </p>
-          <RouterLink
-            v-if="showingFavorites && !hasFilters"
-            to="/styles"
-          >
-            浏览精选发型
-          </RouterLink>
-          <button
-            v-else
-            type="button"
-            @click="resetFilters"
-          >
-            清空筛选
-          </button>
+          <template v-if="showingReferences">
+            <h2>还没有私人参考</h2>
+            <p>上传的图片会先在本机处理，只保存处理后的版本。你不需要先建立发型档案。</p>
+            <RouterLink to="/styles/references/new">
+              添加第一张参考
+            </RouterLink>
+          </template>
+          <template v-else>
+            <h2>{{ showingFavorites && !hasFilters ? '还没有收藏' : '没有符合条件的发型' }}</h2>
+            <p v-if="showingFavorites && !hasFilters">
+              收藏是本机私人的整理动作。先从精选方向或自己的参考里留住真正想看的。
+            </p>
+            <p v-else>
+              当前组合没有结果，清空条件后可以重新浏览全部 {{ activeStyles.length }} 款。
+            </p>
+            <RouterLink
+              v-if="showingFavorites && !hasFilters"
+              to="/styles"
+            >
+              浏览精选发型
+            </RouterLink>
+            <button
+              v-else
+              type="button"
+              @click="resetFilters"
+            >
+              清空筛选
+            </button>
+          </template>
         </div>
       </div>
     </div>

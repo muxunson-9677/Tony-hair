@@ -126,6 +126,24 @@ class MemoryLibraryRepository implements HairstyleLibraryRepositoryPort {
     return updated
   }
 
+  async updatePrivateReferenceWithImage(
+    id: string,
+    write: PrivateHairstyleReferenceWrite,
+  ) {
+    const current = await this.getPrivateReference(id)
+    if (!current) {
+      throw new Error('reference missing')
+    }
+    const updated = {
+      ...current,
+      ...write,
+      fingerprint: 'combined-update-fingerprint',
+      updatedAt: '2026-08-12T00:00:00.000Z',
+    }
+    this.references = this.references.map((item) => item.id === id ? updated : item)
+    return updated
+  }
+
   async replaceReferenceImage(
     id: string,
     write: PrivateHairstyleReferenceImageWrite,
@@ -337,6 +355,25 @@ describe('hairstyle library store', () => {
     })
     expect(replaced?.image).toBe(replacement)
     expect(updated?.image).toBe(preparedImage)
+
+    const combinedImage = new Blob(['combined'], { type: 'image/webp' })
+    const combined = await store.updateReferenceWithImage(saved!.id, {
+      name: '图片文字一起更新',
+      notes: '同一次本地写入',
+      tags: ['原子更新'],
+      image: combinedImage,
+      width: 720,
+      height: 960,
+      bytes: combinedImage.size,
+      processedAt: '2026-08-12T01:00:00.000Z',
+    })
+    expect(combined).toMatchObject({
+      name: '图片文字一起更新',
+      notes: '同一次本地写入',
+      tags: ['原子更新'],
+      image: combinedImage,
+    })
+    expect(store.getReference(saved!.id)?.name).toBe('图片文字一起更新')
 
     repository.favorites = [favorite({
       itemType: 'private_reference',

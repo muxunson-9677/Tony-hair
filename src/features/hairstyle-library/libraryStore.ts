@@ -25,6 +25,10 @@ export interface HairstyleLibraryRepositoryPort {
     id: string,
     write: PrivateHairstyleReferenceDetailsWrite,
   ): Promise<PrivateHairstyleReference>
+  updatePrivateReferenceWithImage(
+    id: string,
+    write: PrivateHairstyleReferenceWrite,
+  ): Promise<PrivateHairstyleReference>
   replaceReferenceImage(
     id: string,
     write: PrivateHairstyleReferenceImageWrite,
@@ -211,6 +215,22 @@ export const createHairstyleLibraryStore = (
     return result.ok ? result.value : null
   }
 
+  const updateReferenceWithImage = async (
+    id: string,
+    write: PrivateHairstyleReferenceWrite,
+  ) => {
+    const result = await mutate(
+      () => repository.updatePrivateReferenceWithImage(id, write),
+      (updated) => {
+        references.value = sortByUpdatedAt([
+          ...references.value.filter((item) => item.id !== updated.id),
+          updated,
+        ])
+      },
+    )
+    return result.ok ? result.value : null
+  }
+
   const replaceReferenceImage = async (
     id: string,
     write: PrivateHairstyleReferenceImageWrite,
@@ -332,6 +352,7 @@ export const createHairstyleLibraryStore = (
     isFavorite,
     saveReference,
     updateReference,
+    updateReferenceWithImage,
     replaceReferenceImage,
     deleteReference,
     toggleFavorite,

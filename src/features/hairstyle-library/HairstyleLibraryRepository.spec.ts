@@ -252,6 +252,74 @@ describe('HairstyleLibraryRepository', () => {
     expect(await updated.image.text()).toBe('replacement')
   })
 
+  test('updates image and user-entered details in one private-reference transaction', async () => {
+    const saved = await repository.savePrivateReference(referenceWrite())
+    const replacement = {
+      ...preparedImage('combined-replacement', 'image/jpeg'),
+      width: 720,
+      height: 960,
+      processedAt: '2026-08-10T07:30:00.000Z',
+    }
+
+    const updated = await repository.updatePrivateReferenceWithImage(saved.id, referenceWrite({
+      name: '替换后的名称',
+      notes: '只保存用户写下的备注',
+      tags: ['新标签'],
+      ...replacement,
+    }))
+
+    expect(updated).toMatchObject({
+      id: saved.id,
+      name: '替换后的名称',
+      notes: '只保存用户写下的备注',
+      tags: ['新标签'],
+      width: 720,
+      height: 960,
+      bytes: replacement.image.size,
+      processedAt: replacement.processedAt,
+      createdAt: saved.createdAt,
+      updatedAt: NOW,
+    })
+    expect(await updated.image.text()).toBe('combined-replacement')
+  })
+
+  test('rolls back image, fingerprint, metadata and text when an atomic replacement write fails', async () => {
+    const saved = await repository.savePrivateReference(referenceWrite())
+    const replacement = {
+      ...preparedImage('replacement-that-must-not-stick', 'image/jpeg'),
+      width: 720,
+      height: 960,
+      processedAt: '2026-08-10T07:30:00.000Z',
+    }
+    vi.spyOn(db.privateReferences, 'put').mockRejectedValueOnce(
+      new DOMException('Storage is full', 'QuotaExceededError'),
+    )
+
+    await expect(repository.updatePrivateReferenceWithImage(saved.id, referenceWrite({
+      name: '不应写入的名称',
+      notes: '不应写入的备注',
+      tags: ['不应写入'],
+      ...replacement,
+    }))).rejects.toMatchObject({
+      name: 'ArchiveStorageError',
+      code: 'quota_exceeded',
+    })
+
+    const unchanged = await repository.getPrivateReference(saved.id)
+    expect(unchanged).toMatchObject({
+      name: saved.name,
+      notes: saved.notes,
+      tags: saved.tags,
+      fingerprint: saved.fingerprint,
+      width: saved.width,
+      height: saved.height,
+      bytes: saved.bytes,
+      processedAt: saved.processedAt,
+      updatedAt: saved.updatedAt,
+    })
+    expect(await unchanged?.image.text()).toBe(await saved.image.text())
+  })
+
   test('keeps every old image field and byte on replace conflicts, invalid input, or hash failure', async () => {
     const first = await repository.savePrivateReference(referenceWrite())
     const secondImage = preparedImage('second-reference')

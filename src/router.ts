@@ -9,6 +9,9 @@ import ArchiveRecordDetailView from './views/ArchiveRecordDetailView.vue'
 import ArchiveRecordFormView from './views/ArchiveRecordFormView.vue'
 import HairstyleDetailView from './views/HairstyleDetailView.vue'
 import HairstyleLibraryView from './views/HairstyleLibraryView.vue'
+import HairstyleReferenceDetailView from './views/HairstyleReferenceDetailView.vue'
+import HairstyleReferenceFormView from './views/HairstyleReferenceFormView.vue'
+import HairstyleShowView from './views/HairstyleShowView.vue'
 import HomeView from './views/HomeView.vue'
 import MeView from './views/MeView.vue'
 import NotFoundView from './views/NotFoundView.vue'
@@ -44,10 +47,46 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         meta: { title: '我的收藏｜咋剪发', wideLayout: true },
       },
       {
+        path: '/styles/references',
+        name: 'styles-references',
+        component: HairstyleLibraryView,
+        meta: { title: '我的参考｜咋剪发', wideLayout: true },
+      },
+      {
+        path: '/styles/references/new',
+        name: 'style-reference-new',
+        component: HairstyleReferenceFormView,
+        meta: { title: '添加私人参考｜咋剪发', wideLayout: true },
+      },
+      {
+        path: '/styles/references/:id/edit',
+        name: 'style-reference-edit',
+        component: HairstyleReferenceFormView,
+        meta: { title: '编辑私人参考｜咋剪发', wideLayout: true },
+      },
+      {
+        path: '/styles/references/:id/show',
+        name: 'style-reference-show',
+        component: HairstyleShowView,
+        meta: { title: '私人参考｜给理发师看', wideLayout: true, hideBottomNav: true },
+      },
+      {
+        path: '/styles/references/:id',
+        name: 'style-reference-detail',
+        component: HairstyleReferenceDetailView,
+        meta: { title: '私人参考｜咋剪发', wideLayout: true },
+      },
+      {
         path: '/styles/catalog/:id',
         name: 'style-detail',
         component: HairstyleDetailView,
         meta: { title: '发型详情｜咋剪发', wideLayout: true },
+      },
+      {
+        path: '/styles/catalog/:id/show',
+        name: 'style-catalog-show',
+        component: HairstyleShowView,
+        meta: { title: '精选发型｜给理发师看', wideLayout: true, hideBottomNav: true },
       },
       {
         path: '/archive',
