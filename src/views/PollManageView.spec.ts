@@ -53,6 +53,7 @@ describe('PollManageView', () => {
     repository = {
       getByPlanId: vi.fn(),
       discardByPlanIds: vi.fn(async () => {}),
+      retireForArchiveDeletion: vi.fn(async () => {}),
       getByPollId: vi.fn(async () => localDraft),
       createDraft: vi.fn(),
       restartDraft: vi.fn(),

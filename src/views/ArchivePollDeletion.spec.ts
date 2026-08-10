@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/vue'
+import { fireEvent, render, screen, waitFor } from '@testing-library/vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -104,11 +104,23 @@ const repositoryFor = (initialDraft: PollDraft, callOrder: string[]) => {
     callOrder.push('discard-poll-draft')
     storedDraft = undefined
   })
+  const retireForArchiveDeletion = vi.fn(async () => {
+    callOrder.push('retire-poll-draft')
+    if (storedDraft && ['draft', 'uploading', 'revoked'].includes(storedDraft.status)) {
+      storedDraft = undefined
+    }
+  })
   return {
-    repository: { getByPlanId, discardByPlanIds } as unknown as PollDraftRepositoryPort,
+    repository: {
+      getByPlanId,
+      discardByPlanIds,
+      retireForArchiveDeletion,
+    } as unknown as PollDraftRepositoryPort,
     getByPlanId,
     discardByPlanIds,
+    retireForArchiveDeletion,
     getStoredDraft: () => storedDraft,
+    setStoredDraft: (draft: PollDraft) => { storedDraft = draft },
   }
 }
 
@@ -220,17 +232,19 @@ describe('ArchivePlanDetailView poll-aware deletion', () => {
       await fireEvent.click(screen.getByRole('button', { name: '删除计划' }))
 
       await waitFor(() => expect(deletePlan).toHaveBeenCalledWith(plan.id))
-      expect(callOrder).toEqual(['discard-poll-draft', 'delete-plan'])
-      expect(local.discardByPlanIds).toHaveBeenCalledWith([plan.id])
+      expect(callOrder).toEqual(['retire-poll-draft', 'delete-plan'])
+      expect(local.retireForArchiveDeletion).toHaveBeenCalledWith([plan.id])
+      expect(local.discardByPlanIds).not.toHaveBeenCalled()
       expect(local.getStoredDraft()).toBeUndefined()
       expect(confirmDelete).toHaveBeenCalledWith(status === 'revoked'
         ? expect.stringMatching(/删除.*计划/)
-        : expect.stringMatching(/投票草稿.*遮罩图.*管理信息/))
+        : expect.stringMatching(/旧分享草稿.*遮罩图.*管理信息/))
+      expect(confirmDelete.mock.calls.flat().join('')).not.toMatch(/投票/)
     },
   )
 
   test.each(['creating', 'active', 'revoking'] as const)(
-    'blocks plan deletion for %s and exposes a recovery or management link',
+    'preserves a complete %s PollDraft while allowing plan deletion without a retired UI link',
     async (status) => {
       const callOrder: string[] = []
       const original = draftFor(status)
@@ -240,30 +254,48 @@ describe('ArchivePlanDetailView poll-aware deletion', () => {
 
       await fireEvent.click(screen.getByRole('button', { name: '删除计划' }))
 
-      const alert = await screen.findByRole('alert')
-      const link = within(alert).getByRole('link', {
-        name: status === 'creating' ? /恢复.*投票创建/ : /管理.*好友投票/,
-      })
-      expect(link.getAttribute('href')).toBe(status === 'creating'
-        ? `/archive/plans/${plan.id}/poll/new`
-        : '/polls/public_poll_id_1234567890/manage')
-      expect(deletePlan).not.toHaveBeenCalled()
+      await waitFor(() => expect(deletePlan).toHaveBeenCalledWith(plan.id))
+      expect(callOrder).toEqual(['retire-poll-draft', 'delete-plan'])
+      expect(local.retireForArchiveDeletion).toHaveBeenCalledWith([plan.id])
       expect(local.discardByPlanIds).not.toHaveBeenCalled()
-      expect(confirmDelete).not.toHaveBeenCalled()
-      expect(local.getStoredDraft()?.managementToken).toBe(original.managementToken)
+      expect(confirmDelete).toHaveBeenCalledWith(expect.stringMatching(/删除.*计划/))
+      expect(local.getStoredDraft()).toEqual(original)
+      expect(screen.queryByRole('link', { name: /投票/ })).toBeNull()
     },
   )
 
-  test('keeps the plan and shows an alert when PollDraft cleanup fails', async () => {
+  test('preserves a draft promoted to creating after preflight and still deletes the plan', async () => {
     const callOrder: string[] = []
-    const local = repositoryFor(draftFor('draft'), callOrder)
-    local.discardByPlanIds.mockRejectedValueOnce(new Error('IndexedDB unavailable'))
+    const original = draftFor('draft')
+    const promoted: PollDraft = { ...original, status: 'creating' }
+    const local = repositoryFor(original, callOrder)
+    local.retireForArchiveDeletion.mockImplementationOnce(async () => {
+      callOrder.push('retire-poll-draft')
+      local.setStoredDraft(promoted)
+    })
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { deletePlan } = await renderPlan(local.repository, callOrder)
 
     await fireEvent.click(screen.getByRole('button', { name: '删除计划' }))
 
-    expect((await screen.findByRole('alert')).textContent).toMatch(/投票草稿.*未删除/)
+    await waitFor(() => expect(deletePlan).toHaveBeenCalledWith(plan.id))
+    expect(callOrder).toEqual(['retire-poll-draft', 'delete-plan'])
+    expect(local.discardByPlanIds).not.toHaveBeenCalled()
+    expect(local.getStoredDraft()).toEqual(promoted)
+    expect(local.getStoredDraft()?.managementToken).toBe(original.managementToken)
+  })
+
+  test('keeps the plan and shows an alert when PollDraft cleanup fails', async () => {
+    const callOrder: string[] = []
+    const local = repositoryFor(draftFor('draft'), callOrder)
+    local.retireForArchiveDeletion.mockRejectedValueOnce(new Error('IndexedDB unavailable'))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { deletePlan } = await renderPlan(local.repository, callOrder)
+
+    await fireEvent.click(screen.getByRole('button', { name: '删除计划' }))
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/旧分享草稿.*未删除/)
+    expect(screen.getByRole('alert').textContent).not.toMatch(/投票/)
     expect(deletePlan).not.toHaveBeenCalled()
   })
 
@@ -276,7 +308,7 @@ describe('ArchivePlanDetailView poll-aware deletion', () => {
     await fireEvent.click(screen.getByRole('button', { name: '删除计划' }))
 
     await waitFor(() => expect(deletePlan).toHaveBeenCalledWith(plan.id))
-    expect(callOrder).toEqual(['discard-poll-draft', 'delete-plan'])
+    expect(callOrder).toEqual(['retire-poll-draft', 'delete-plan'])
     expect(local.getStoredDraft()).toBeUndefined()
     expect(router.currentRoute.value.path).toBe(`/archive/plans/${plan.id}`)
     expect((await screen.findByRole('alert')).textContent).toMatch(/保存失败/)
@@ -295,17 +327,19 @@ describe('ArchiveProfileView poll-aware deletion', () => {
       await fireEvent.click(screen.getByRole('button', { name: '删除档案及其内容' }))
 
       await waitFor(() => expect(deleteProfile).toHaveBeenCalledWith(profile.id))
-      expect(callOrder).toEqual(['discard-poll-draft', 'delete-profile'])
-      expect(local.discardByPlanIds).toHaveBeenCalledWith([plan.id])
+      expect(callOrder).toEqual(['retire-poll-draft', 'delete-profile'])
+      expect(local.retireForArchiveDeletion).toHaveBeenCalledWith([plan.id])
+      expect(local.discardByPlanIds).not.toHaveBeenCalled()
       expect(local.getStoredDraft()).toBeUndefined()
       expect(confirmDelete).toHaveBeenCalledWith(status === 'revoked'
         ? expect.stringMatching(/删除档案.*计划.*历史记录/)
-        : expect.stringMatching(/投票草稿.*遮罩图.*管理信息/))
+        : expect.stringMatching(/旧分享草稿.*遮罩图.*管理信息/))
+      expect(confirmDelete.mock.calls.flat().join('')).not.toMatch(/投票/)
     },
   )
 
   test.each(['creating', 'active', 'revoking'] as const)(
-    'blocks profile deletion for %s and exposes every recovery or management link',
+    'preserves a complete %s PollDraft while allowing profile deletion without a retired UI link',
     async (status) => {
       const callOrder: string[] = []
       const original = draftFor(status)
@@ -315,34 +349,31 @@ describe('ArchiveProfileView poll-aware deletion', () => {
 
       await fireEvent.click(screen.getByRole('button', { name: '删除档案及其内容' }))
 
-      const alert = await screen.findByRole('alert')
-      const link = within(alert).getByRole('link', {
-        name: status === 'creating' ? /恢复.*投票创建/ : /管理.*好友投票/,
-      })
-      expect(link.getAttribute('href')).toBe(status === 'creating'
-        ? `/archive/plans/${plan.id}/poll/new`
-        : '/polls/public_poll_id_1234567890/manage')
-      expect(deleteProfile).not.toHaveBeenCalled()
+      await waitFor(() => expect(deleteProfile).toHaveBeenCalledWith(profile.id))
+      expect(callOrder).toEqual(['retire-poll-draft', 'delete-profile'])
+      expect(local.retireForArchiveDeletion).toHaveBeenCalledWith([plan.id])
       expect(local.discardByPlanIds).not.toHaveBeenCalled()
-      expect(confirmDelete).not.toHaveBeenCalled()
-      expect(local.getStoredDraft()?.managementToken).toBe(original.managementToken)
+      expect(confirmDelete).toHaveBeenCalledWith(expect.stringMatching(/删除档案.*计划.*历史记录/))
+      expect(local.getStoredDraft()).toEqual(original)
+      expect(screen.queryByRole('link', { name: /投票/ })).toBeNull()
     },
   )
 
   test('keeps the profile and shows an alert when PollDraft cleanup fails', async () => {
     const callOrder: string[] = []
     const local = repositoryFor(draftFor('uploading'), callOrder)
-    local.discardByPlanIds.mockRejectedValueOnce(new Error('IndexedDB unavailable'))
+    local.retireForArchiveDeletion.mockRejectedValueOnce(new Error('IndexedDB unavailable'))
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { deleteProfile } = await renderProfile(local.repository, callOrder)
 
     await fireEvent.click(screen.getByRole('button', { name: '删除档案及其内容' }))
 
-    expect((await screen.findByRole('alert')).textContent).toMatch(/投票草稿.*未删除/)
+    expect((await screen.findByRole('alert')).textContent).toMatch(/旧分享草稿.*未删除/)
+    expect(screen.getByRole('alert').textContent).not.toMatch(/投票/)
     expect(deleteProfile).not.toHaveBeenCalled()
   })
 
-  test('does not partially discard profile drafts when one related poll is active', async () => {
+  test('discards only local-only drafts while preserving an active row and deleting the profile', async () => {
     const callOrder: string[] = []
     const localDraft = draftFor('draft')
     const activeDraft: PollDraft = {
@@ -351,11 +382,26 @@ describe('ArchiveProfileView poll-aware deletion', () => {
       planId: secondPlan.id,
       title: '另一个计划的投票',
     }
-    const getByPlanId = vi.fn(async (planId: string) => (
-      planId === plan.id ? localDraft : activeDraft
-    ))
+    const storedDrafts = new Map([
+      [plan.id, localDraft],
+      [secondPlan.id, activeDraft],
+    ])
+    const getByPlanId = vi.fn(async (planId: string) => storedDrafts.get(planId))
     const discardByPlanIds = vi.fn(async () => { callOrder.push('discard-poll-drafts') })
-    const repository = { getByPlanId, discardByPlanIds } as unknown as PollDraftRepositoryPort
+    const retireForArchiveDeletion = vi.fn(async (planIds: readonly string[]) => {
+      callOrder.push('retire-poll-drafts')
+      planIds.forEach((planId) => {
+        const draft = storedDrafts.get(planId)
+        if (draft && ['draft', 'uploading', 'revoked'].includes(draft.status)) {
+          storedDrafts.delete(planId)
+        }
+      })
+    })
+    const repository = {
+      getByPlanId,
+      discardByPlanIds,
+      retireForArchiveDeletion,
+    } as unknown as PollDraftRepositoryPort
     const confirmDelete = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { deleteProfile } = await renderProfile(
       repository,
@@ -366,14 +412,15 @@ describe('ArchiveProfileView poll-aware deletion', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: '删除档案及其内容' }))
 
-    const alert = await screen.findByRole('alert')
-    expect(within(alert).getByRole('link', {
-      name: /管理.*另一个计划的投票.*好友投票/,
-    }).getAttribute('href')).toBe('/polls/public_poll_id_1234567890/manage')
+    await waitFor(() => expect(deleteProfile).toHaveBeenCalledWith(profile.id))
     expect(getByPlanId).toHaveBeenCalledTimes(2)
+    expect(retireForArchiveDeletion).toHaveBeenCalledWith([plan.id, secondPlan.id])
     expect(discardByPlanIds).not.toHaveBeenCalled()
-    expect(deleteProfile).not.toHaveBeenCalled()
-    expect(confirmDelete).not.toHaveBeenCalled()
+    expect(callOrder).toEqual(['retire-poll-drafts', 'delete-profile'])
+    expect(storedDrafts.has(plan.id)).toBe(false)
+    expect(storedDrafts.get(secondPlan.id)).toEqual(activeDraft)
+    expect(confirmDelete).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('link', { name: /投票/ })).toBeNull()
   })
 
   test('keeps the profile in place when archive deletion fails after confirmed PollDraft cleanup', async () => {
@@ -385,13 +432,13 @@ describe('ArchiveProfileView poll-aware deletion', () => {
     await fireEvent.click(screen.getByRole('button', { name: '删除档案及其内容' }))
 
     await waitFor(() => expect(deleteProfile).toHaveBeenCalledWith(profile.id))
-    expect(callOrder).toEqual(['discard-poll-draft', 'delete-profile'])
+    expect(callOrder).toEqual(['retire-poll-draft', 'delete-profile'])
     expect(local.getStoredDraft()).toBeUndefined()
     expect(router.currentRoute.value.path).toBe('/archive/profile')
     expect((await screen.findByRole('alert')).textContent).toMatch(/保存失败/)
   })
 
-  test('refreshes stale plans before preflight and blocks a poll added in another tab', async () => {
+  test('refreshes stale plans and preserves a poll added in another tab without blocking deletion', async () => {
     const callOrder: string[] = []
     const activeDraft: PollDraft = {
       ...draftFor('active'),
@@ -403,7 +450,12 @@ describe('ArchiveProfileView poll-aware deletion', () => {
       planId === secondPlan.id ? activeDraft : undefined
     ))
     const discardByPlanIds = vi.fn(async () => { callOrder.push('discard-poll-drafts') })
-    const repository = { getByPlanId, discardByPlanIds } as unknown as PollDraftRepositoryPort
+    const retireForArchiveDeletion = vi.fn(async () => { callOrder.push('retire-poll-drafts') })
+    const repository = {
+      getByPlanId,
+      discardByPlanIds,
+      retireForArchiveDeletion,
+    } as unknown as PollDraftRepositoryPort
     const confirmDelete = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { deleteProfile, store } = await renderProfile(repository, callOrder)
     store.load = vi.fn(async () => {
@@ -412,15 +464,14 @@ describe('ArchiveProfileView poll-aware deletion', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: '删除档案及其内容' }))
 
-    const alert = await screen.findByRole('alert')
-    expect(within(alert).getByRole('link', {
-      name: /管理.*跨标签新增计划的投票.*好友投票/,
-    }).getAttribute('href')).toBe('/polls/public_poll_id_1234567890/manage')
+    await waitFor(() => expect(deleteProfile).toHaveBeenCalledWith(profile.id))
     expect(store.load).toHaveBeenCalledOnce()
     expect(getByPlanId).toHaveBeenCalledWith(secondPlan.id)
+    expect(retireForArchiveDeletion).toHaveBeenCalledWith([plan.id, secondPlan.id])
     expect(discardByPlanIds).not.toHaveBeenCalled()
-    expect(deleteProfile).not.toHaveBeenCalled()
-    expect(confirmDelete).not.toHaveBeenCalled()
+    expect(confirmDelete).toHaveBeenCalledOnce()
+    expect(callOrder).toEqual(['retire-poll-drafts', 'delete-profile'])
+    expect(screen.queryByRole('link', { name: /投票/ })).toBeNull()
   })
 
   test('blocks profile deletion when the authoritative refresh fails and leaves stale state', async () => {

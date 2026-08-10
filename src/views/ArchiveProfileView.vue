@@ -6,11 +6,7 @@ import {
   useArchiveStore,
   type HairProfileDraft,
 } from '../features/archive/archiveStore'
-import {
-  blocksArchiveDeletion,
-  isLocalPollDraft,
-  pollDraftRecoveryPath,
-} from '../features/polls/archivePollDeletion'
+import { shouldDiscardPollDraftOnArchiveDeletion } from '../features/polls/archivePollDeletion'
 import {
   defaultPollDraftRepository,
   POLL_DRAFT_REPOSITORY_KEY,
@@ -21,7 +17,6 @@ const router = useRouter()
 const store = useArchiveStore()
 const pollDraftRepository = inject(POLL_DRAFT_REPOSITORY_KEY, defaultPollDraftRepository)
 const initializing = ref(true)
-const blockedPollDrafts = ref<PollDraft[]>([])
 const pollDeleteError = ref('')
 
 const form = reactive<HairProfileDraft>({
@@ -56,7 +51,6 @@ const submit = async () => {
 }
 
 const deleteProfile = async () => {
-  blockedPollDrafts.value = []
   pollDeleteError.value = ''
   const targetProfileId = store.profile?.id
   if (!targetProfileId) {
@@ -87,25 +81,20 @@ const deleteProfile = async () => {
       planIds.map((planId) => pollDraftRepository.getByPlanId(planId)),
     )).filter((draft): draft is PollDraft => Boolean(draft))
   } catch {
-    pollDeleteError.value = '本地投票草稿暂时无法读取，档案未删除。请稍后重试。'
+    pollDeleteError.value = '旧分享草稿暂时无法读取，档案未删除。请稍后重试。'
     return
   }
 
-  const blockingDrafts = pollDrafts.filter(blocksArchiveDeletion)
-  if (blockingDrafts.length > 0) {
-    blockedPollDrafts.value = blockingDrafts
-    return
-  }
-
-  const confirmation = pollDrafts.some(isLocalPollDraft)
-    ? '此档案还有本地投票草稿。继续会先删除其中的遮罩图、上传进度和管理信息，再删除档案、全部发型计划和历史记录。确定继续吗？'
+  const discardableDrafts = pollDrafts.filter(shouldDiscardPollDraftOnArchiveDeletion)
+  const confirmation = discardableDrafts.some(({ status }) => status !== 'revoked')
+    ? '此档案还有旧分享草稿。继续会先删除其中的遮罩图、上传进度和管理信息，再删除档案、全部发型计划和历史记录。确定继续吗？'
     : '删除档案会同时删除全部发型计划和历史记录，且无法恢复。确定删除吗？'
   if (!window.confirm(confirmation)) return
 
   try {
-    if (pollDrafts.length > 0) await pollDraftRepository.discardByPlanIds(planIds)
+    await pollDraftRepository.retireForArchiveDeletion(planIds)
   } catch {
-    pollDeleteError.value = '本地投票草稿未能清理，档案未删除。请稍后重试。'
+    pollDeleteError.value = '旧分享草稿未能清理，档案未删除。请稍后重试。'
     return
   }
 
@@ -164,30 +153,8 @@ onMounted(async () => {
         {{ store.error }}
       </p>
 
-      <aside
-        v-if="blockedPollDrafts.length > 0"
-        class="form-alert"
-        role="alert"
-      >
-        <b>请先处理这些好友投票</b>
-        <p>档案删除会连同计划一起删除。当前设备中的管理信息已保留，请先恢复创建或进入投票管理。</p>
-        <ul>
-          <li
-            v-for="pollDraft in blockedPollDrafts"
-            :key="pollDraft.id"
-          >
-            <RouterLink
-              class="text-link"
-              :to="pollDraftRecoveryPath(pollDraft)"
-            >
-              {{ pollDraft.status === 'creating' ? `恢复“${pollDraft.title}”的投票创建` : `管理“${pollDraft.title}”的好友投票` }}
-            </RouterLink>
-          </li>
-        </ul>
-      </aside>
-
       <p
-        v-else-if="pollDeleteError"
+        v-if="pollDeleteError"
         class="form-alert"
         role="alert"
       >

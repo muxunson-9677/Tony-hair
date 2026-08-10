@@ -1,6 +1,7 @@
 import Dexie, { type DexieOptions, type Table } from 'dexie'
 
 import type { MaskExportResult } from '../privacy/types'
+import { shouldDiscardPollDraftOnArchiveDeletion } from './archivePollDeletion'
 import type {
   PollCandidateSeed,
   PollDraft,
@@ -122,6 +123,19 @@ export class PollDraftRepository {
         throw new PollDraftDiscardBlockedError(blockedDrafts)
       }
       await this.db.drafts.bulkDelete(drafts.map(({ id }) => id))
+    })
+  }
+
+  async retireForArchiveDeletion(planIds: readonly string[]): Promise<void> {
+    const uniquePlanIds = [...new Set(planIds)]
+    if (uniquePlanIds.length === 0) return
+
+    await this.db.transaction('rw', this.db.drafts, async () => {
+      const drafts = await this.db.drafts.where('planId').anyOf(uniquePlanIds).toArray()
+      const discardableIds = drafts
+        .filter(shouldDiscardPollDraftOnArchiveDeletion)
+        .map(({ id }) => id)
+      if (discardableIds.length > 0) await this.db.drafts.bulkDelete(discardableIds)
     })
   }
 

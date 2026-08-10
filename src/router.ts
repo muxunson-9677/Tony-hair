@@ -11,9 +11,6 @@ import HomeView from './views/HomeView.vue'
 import MeView from './views/MeView.vue'
 import NotFoundView from './views/NotFoundView.vue'
 import PrivacyMaskView from './views/PrivacyMaskView.vue'
-import PollCreateView from './views/PollCreateView.vue'
-import PollManageView from './views/PollManageView.vue'
-import PublicPollView from './views/PublicPollView.vue'
 import TryView from './views/TryView.vue'
 
 export function createAppRouter(history: RouterHistory = createWebHistory()) {
@@ -63,12 +60,6 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         meta: { title: '理发师沟通卡｜咋剪发' },
       },
       {
-        path: '/archive/plans/:id/poll/new',
-        name: 'poll-create',
-        component: PollCreateView,
-        meta: { title: '发起好友投票｜咋剪发', hideBottomNav: true, wideLayout: true },
-      },
-      {
         path: '/archive/plans/:id',
         name: 'archive-plan-detail',
         component: ArchivePlanDetailView,
@@ -103,18 +94,6 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         name: 'privacy-mask',
         component: PrivacyMaskView,
         meta: { title: '隐私遮罩｜咋剪发', hideBottomNav: true },
-      },
-      {
-        path: '/p/:id',
-        name: 'public-poll',
-        component: PublicPollView,
-        meta: { title: '好友投票｜咋剪发', hideBottomNav: true, wideLayout: true },
-      },
-      {
-        path: '/polls/:id/manage',
-        name: 'poll-manage',
-        component: PollManageView,
-        meta: { title: '投票结果｜咋剪发', hideBottomNav: true, wideLayout: true },
       },
       {
         path: '/:pathMatch(.*)*',

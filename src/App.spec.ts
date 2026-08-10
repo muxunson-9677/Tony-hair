@@ -22,7 +22,7 @@ async function renderAt(path: string) {
 }
 
 describe('app shell', () => {
-  test('registers the four primary routes', () => {
+  test('registers product routes without the retired public-poll surface', () => {
     const router = createAppRouter(createMemoryHistory())
     const paths = router.getRoutes().map((route) => route.path)
 
@@ -34,28 +34,38 @@ describe('app shell', () => {
       '/archive/plans/new',
       '/archive/plans/:id',
       '/archive/plans/:id/edit',
-      '/archive/plans/:id/poll/new',
       '/archive/records/new',
       '/archive/records/:id',
       '/archive/records/:id/edit',
+      '/me',
+    ]))
+    expect(paths).not.toEqual(expect.arrayContaining([
+      '/archive/plans/:id/poll/new',
       '/p/:id',
       '/polls/:id/manage',
-      '/me',
     ]))
   })
 
-  test('gives poll workspaces a wide shell without the product navigation', () => {
-    const router = createAppRouter(createMemoryHistory())
+  test.each([
+    '/archive/plans/plan-1/poll/new',
+    '/p/public-poll',
+    '/polls/public-poll/manage',
+  ])('renders the product unavailable state for retired poll URL %s', async (path) => {
+    const router = await renderAt(path)
 
+    expect(router.currentRoute.value.name).toBe('not-found')
+    expect(screen.getByRole('heading', { level: 1, name: '页面没找到' })).toBeTruthy()
+    expect(screen.queryByText(/好友投票|投票结果|发起好友投票/)).toBeNull()
+  })
+
+  test('resolves every retired poll URL through the catch-all route', () => {
+    const router = createAppRouter(createMemoryHistory())
     for (const path of [
       '/archive/plans/plan-1/poll/new',
       '/p/public-poll',
       '/polls/public-poll/manage',
     ]) {
-      expect(router.resolve(path).meta).toMatchObject({
-        hideBottomNav: true,
-        wideLayout: true,
-      })
+      expect(router.resolve(path).name).toBe('not-found')
     }
   })
 

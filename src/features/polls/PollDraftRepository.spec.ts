@@ -280,4 +280,39 @@ describe('PollDraftRepository', () => {
       })
     },
   )
+
+  test('retires only current local-only states in one transaction and preserves remote cleanup identities', async () => {
+    const statuses = ['draft', 'uploading', 'revoked', 'creating', 'active', 'revoking'] as const
+    const originals = new Map<string, Awaited<ReturnType<typeof repository.createDraft>>>()
+
+    for (const [index, status] of statuses.entries()) {
+      const planId = `retire-plan-${status}`
+      const draft = await repository.createDraft(
+        { planId, title: `状态 ${status}` },
+        candidates.map((candidate) => ({
+          ...candidate,
+          candidateId: `${index}-${candidate.candidateId}`,
+        })),
+      )
+      const current = {
+        ...draft,
+        status,
+        pollId: status === 'active' || status === 'revoking'
+          ? `public_${status}_1234567890`
+          : undefined,
+      }
+      await db.drafts.put(current)
+      originals.set(planId, current)
+    }
+
+    await repository.retireForArchiveDeletion([...originals.keys()])
+
+    for (const status of ['draft', 'uploading', 'revoked'] as const) {
+      expect(await repository.getByPlanId(`retire-plan-${status}`)).toBeUndefined()
+    }
+    for (const status of ['creating', 'active', 'revoking'] as const) {
+      expect(await repository.getByPlanId(`retire-plan-${status}`))
+        .toEqual(originals.get(`retire-plan-${status}`))
+    }
+  })
 })
