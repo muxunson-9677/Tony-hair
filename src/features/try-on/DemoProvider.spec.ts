@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'vitest'
 
+import { curatedHairstyles } from '../hairstyle-library/curatedCatalog'
 import { DemoProvider } from './DemoProvider'
-import type { ImageProvider } from './types'
+import type { HairstyleOption, ImageProvider } from './types'
 
 describe('DemoProvider', () => {
   test('returns three distinct fictional adults with different presentation and hair texture', () => {
@@ -52,5 +53,23 @@ describe('DemoProvider', () => {
     expect(images).toHaveLength(9)
     expect(new Set(images).size).toBe(9)
     expect(images.every((image) => image.endsWith('.webp'))).toBe(true)
+  })
+
+  test('uses the curated catalog while preserving persona-local option ids', () => {
+    const optionsByCatalogId = new Map<string, HairstyleOption>(
+      new DemoProvider().getPersonas().flatMap((persona) => (
+        persona.options.map((option) => [`${persona.id}-${option.id}`, option] as const)
+      )),
+    )
+
+    for (const style of curatedHairstyles) {
+      expect(optionsByCatalogId.get(style.id)).toMatchObject({
+        catalogId: style.id,
+        id: style.demoOptionId,
+        name: style.name,
+        image: style.coverImage,
+        maintenance: style.maintenanceSummary,
+      })
+    }
   })
 })

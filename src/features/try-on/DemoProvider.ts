@@ -1,8 +1,14 @@
+import { curatedHairstyles } from '../hairstyle-library/curatedCatalog'
+import type { CuratedHairstyle } from '../hairstyle-library/types'
 import type { DemoPersona, ImageProvider } from './types'
 
 const barberConfirmation = '需理发师现场确认' as const
 
-const demoPersonas: readonly DemoPersona[] = [
+type DemoPersonaBase = Omit<DemoPersona, 'id' | 'options'> & {
+  readonly id: CuratedHairstyle['demoPersonaId']
+}
+
+const demoPersonaBases: readonly DemoPersonaBase[] = [
   {
     id: 'lin',
     name: '林澄',
@@ -15,32 +21,6 @@ const demoPersonas: readonly DemoPersona[] = [
     hairTexture: '细软直发',
     baseImage: '/demo/persona-lin-base.webp',
     baseAlt: 'AI 生成的虚构成年人物林澄，女性化呈现、细软直发的基础肖像',
-    options: [
-      {
-        id: 'bob',
-        name: '齐颌短鲍伯',
-        length: 'short',
-        image: '/demo/persona-lin-bob.webp',
-        imageAlt: '林澄的齐颌短鲍伯示例，预先制作的合成人物素材',
-        source: 'demo_ai',
-        reason: '细软直发容易贴顺，齐颌轮廓能保留发量感，也让脸侧线条更干净。',
-        feasibility: '可剪参考：保留耳前重量，后区只做轻层次，避免过度打薄。',
-        maintenance: '中：吹干时顺着发流压住毛躁，约 6—8 周修剪轮廓。',
-        barberConfirmation,
-      },
-      {
-        id: 'pixie',
-        name: '轻层次精灵短发',
-        length: 'short',
-        image: '/demo/persona-lin-pixie.webp',
-        imageAlt: '林澄的轻层次精灵短发示例，预先制作的合成人物素材',
-        source: 'demo_ai',
-        reason: '较短的顶部层次能给细软发增加空气感，碎刘海让轮廓更轻。',
-        feasibility: '可剪参考：顶部保留可活动长度，鬓角和后颈不要一次推得过短。',
-        maintenance: '中高：早晨需轻吹发根并整理束感，约 4—6 周修剪。',
-        barberConfirmation,
-      },
-    ],
   },
   {
     id: 'qiao',
@@ -54,32 +34,6 @@ const demoPersonas: readonly DemoPersona[] = [
     hairTexture: '厚硬直发',
     baseImage: '/demo/persona-qiao-base.webp',
     baseAlt: 'AI 生成的虚构成年人物乔衡，男性化呈现、厚硬直发的基础肖像',
-    options: [
-      {
-        id: 'ivy',
-        name: '常春藤侧分',
-        length: 'short',
-        image: '/demo/persona-qiao-ivy.webp',
-        imageAlt: '乔衡的常春藤侧分示例，预先制作的合成人物素材',
-        source: 'demo_ai',
-        reason: '厚硬直发能撑住清楚侧分，顶部留长可平衡较利落的两侧。',
-        feasibility: '可剪参考：先确认发旋和自然分缝，再决定分线与顶部最短长度。',
-        maintenance: '中：吹出侧分后用轻定型产品压住侧面，约 5—7 周修剪。',
-        barberConfirmation,
-      },
-      {
-        id: 'taper',
-        name: '清爽渐层',
-        length: 'short',
-        image: '/demo/persona-qiao-taper.webp',
-        imageAlt: '乔衡的清爽渐层示例，预先制作的合成人物素材',
-        source: 'demo_ai',
-        reason: '厚硬直发的支撑力适合做清楚的顶部纹理，缩短两侧会更利落。',
-        feasibility: '可剪参考：采用低渐层并保留顶部长度，避免两侧推得过高。',
-        maintenance: '低至中：吹干后用少量哑光发泥抓出方向。',
-        barberConfirmation,
-      },
-    ],
   },
   {
     id: 'ran',
@@ -93,34 +47,40 @@ const demoPersonas: readonly DemoPersona[] = [
     hairTexture: '自然微卷',
     baseImage: '/demo/persona-ran-base.webp',
     baseAlt: 'AI 生成的虚构成年人物冉青，中性呈现、自然微卷发质的基础肖像',
-    options: [
-      {
-        id: 'crop',
-        name: '纹理短碎发',
-        length: 'short',
-        image: '/demo/persona-ran-crop.webp',
-        imageAlt: '冉青的纹理短碎发示例，预先制作的合成人物素材',
-        source: 'demo_ai',
-        reason: '短碎层次会把自然微卷转成清晰纹理，也减少顶部堆积感。',
-        feasibility: '可剪参考：顺着自然卷向剪出参差边缘，湿发时不要判断得过短。',
-        maintenance: '低：半干时抓入少量轻质造型霜，约 5—7 周修剪。',
-        barberConfirmation,
-      },
-      {
-        id: 'sidepart',
-        name: '柔和侧分',
-        length: 'short',
-        image: '/demo/persona-ran-sidepart.webp',
-        imageAlt: '冉青的柔和侧分示例，预先制作的合成人物素材',
-        source: 'demo_ai',
-        reason: '保留微卷的流动方向，侧分能打开额头，同时维持柔和的中性轮廓。',
-        feasibility: '可剪参考：保留前额可转换分线的长度，耳侧只做柔和收窄。',
-        maintenance: '中：湿发确定分线后自然吹干，必要时用轻蜡整理表层。',
-        barberConfirmation,
-      },
-    ],
   },
 ]
+
+const toHairstyleOption = (style: CuratedHairstyle) => ({
+  catalogId: style.id,
+  id: style.demoOptionId,
+  name: style.name,
+  length: 'short' as const,
+  image: style.coverImage,
+  imageAlt: style.imageAlt,
+  source: 'demo_ai' as const,
+  reason: style.reason,
+  feasibility: style.feasibility,
+  maintenance: style.maintenanceSummary,
+  barberConfirmation,
+})
+
+const optionsForPersona = (
+  personaId: CuratedHairstyle['demoPersonaId'],
+): DemoPersona['options'] => {
+  const options = curatedHairstyles
+    .filter((style) => style.status === 'active' && style.demoPersonaId === personaId)
+    .map(toHairstyleOption)
+  const [first, second] = options
+  if (options.length !== 2 || !first || !second) {
+    throw new Error('Demo persona ' + personaId + ' must have exactly two active catalog styles.')
+  }
+  return [first, second]
+}
+
+const demoPersonas: readonly DemoPersona[] = demoPersonaBases.map((persona) => ({
+  ...persona,
+  options: optionsForPersona(persona.id),
+}))
 
 export class DemoProvider implements ImageProvider {
   getPersonas(): readonly DemoPersona[] {

@@ -2,6 +2,7 @@ export type DemoImageSource = 'demo_ai'
 export type GenderPresentation = 'feminine' | 'masculine' | 'androgynous'
 
 export interface HairstyleOption {
+  readonly catalogId: string
   readonly id: string
   readonly name: string
   readonly length: 'short'
