@@ -3,6 +3,11 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
 import type { HaircutPhoto } from '../features/archive/types'
+import { curatedHairstyles } from '../features/hairstyle-library/curatedCatalog'
+import { useHairstyleLibraryStore } from '../features/hairstyle-library/libraryStore'
+import { resolveHomeAction } from '../features/home/resolveHomeAction'
+import { resolveHomeFavorite } from '../features/home/resolveHomeFavorite'
+import { useLocalDayClock } from '../features/home/useLocalDayClock'
 
 const stageLabels: Record<HaircutPhoto['stage'], string> = {
   before: '剪前',
@@ -14,6 +19,8 @@ const stageLabels: Record<HaircutPhoto['stage'], string> = {
 }
 
 const store = useArchiveStore()
+const libraryStore = useHairstyleLibraryStore()
+const currentTime = useLocalDayClock()
 const latestRecord = computed(() => store.records[0])
 const latestPhoto = computed(() => (
   latestRecord.value ? store.photosByRecordId[latestRecord.value.id]?.[0] : undefined
@@ -22,6 +29,51 @@ const latestAvoidRules = computed(() => store.avoidRules.filter((rule) => (
   rule.recordId === latestRecord.value?.id && rule.active
 )))
 const historyPhotoUrl = ref<string | null>(null)
+const favoriteStyle = computed(() => resolveHomeFavorite(
+  libraryStore.favorites,
+  curatedHairstyles,
+))
+const fallbackStyle = curatedHairstyles.find(({ id, status }) => (
+  id === 'ran-sidepart' && status === 'active'
+))
+const homeVisualStyle = computed(() => favoriteStyle.value ?? fallbackStyle)
+
+const homeAction = computed(() => resolveHomeAction({
+  now: currentTime.value,
+  profile: store.profile,
+  plans: store.plans,
+  candidatesByPlanId: store.candidatesByPlanId,
+  briefsByPlanId: store.briefsByPlanId,
+  records: store.records,
+  photosByRecordId: store.photosByRecordId,
+  standardStyles: store.standardStyles,
+}))
+
+const actionContext = computed(() => {
+  switch (homeAction.value.kind) {
+    case 'record_follow_up':
+      return '记录真实变化，下一次才有可靠依据。'
+    case 'choose_plan':
+      return '你有多个进行中的计划，先明确这次继续哪一个。'
+    case 'open_ready_brief':
+    case 'open_brief':
+      return '到店前再看一遍，把关键要求说清楚。'
+    case 'add_candidates':
+    case 'discover_styles':
+      return '先从维护成本和现实限制开始找方向。'
+    case 'choose_standard':
+    case 'repeat_standard':
+      return '从已经验证过的剪后记录继续，更不容易翻车。'
+    case 'choose_primary':
+      return '候选已经够了，下一步只确定真正要剪的主方案。'
+    case 'continue_plan':
+      return '这个计划还需要补齐信息。'
+    case 'create_profile':
+      return '先记下发质与偏好，之后的选择才更贴近真实条件。'
+    default:
+      return ''
+  }
+})
 
 watch(latestPhoto, (photo) => {
   if (historyPhotoUrl.value) {
@@ -30,7 +82,10 @@ watch(latestPhoto, (photo) => {
   historyPhotoUrl.value = photo ? URL.createObjectURL(photo.image) : null
 }, { immediate: true })
 
-onMounted(() => store.load())
+onMounted(() => {
+  store.load()
+  libraryStore.load()
+})
 onBeforeUnmount(() => {
   if (historyPhotoUrl.value) {
     URL.revokeObjectURL(historyPhotoUrl.value)
@@ -44,37 +99,65 @@ onBeforeUnmount(() => {
     aria-labelledby="home-title"
   >
     <header class="home-hero">
-      <p class="eyebrow">
-        HAIR DECISIONS · LOCAL FIRST
-      </p>
-      <h1
-        id="home-title"
-        class="brand-title"
-      >
-        咋剪发
-      </h1>
-      <p class="brand-promise">
-        剪前看看，剪时说清，剪后记住
-      </p>
+      <div class="home-hero__copy">
+        <p class="eyebrow">
+          PERSONAL HAIR EDIT · LOCAL FIRST
+        </p>
+        <div
+          class="brand-lockup"
+          data-testid="brand-lockup"
+        >
+          <img
+            :src="'/brand/zajianfa-scissors-512.png'"
+            alt=""
+          >
+          <h1
+            id="home-title"
+            class="brand-title"
+          >
+            咋剪发
+          </h1>
+        </div>
+        <p class="brand-promise">
+          剪前看看，剪时说清，剪后记住
+        </p>
+        <p class="home-hero__intro">
+          不是替你追热点，而是把发质、维护和理发要求放到同一页里。
+        </p>
 
-      <p
-        v-if="store.loading"
-        class="archive-loading"
-        role="status"
-      >
-        正在读取本地记录…
-      </p>
+        <p
+          v-if="store.loading"
+          class="archive-loading"
+          role="status"
+        >
+          正在读取本地记录…
+        </p>
+        <p
+          v-else-if="store.error"
+          class="form-alert home-load-error"
+          role="alert"
+        >
+          {{ store.error }}
+        </p>
 
-      <p
-        v-else-if="store.error"
-        class="form-alert home-load-error"
-        role="alert"
-      >
-        {{ store.error }}
-      </p>
+        <div
+          v-else
+          class="home-decision"
+        >
+          <p>{{ actionContext }}</p>
+          <RouterLink
+            class="home-primary-action"
+            :to="homeAction.to"
+            data-testid="home-primary-action"
+          >
+            <span>{{ homeAction.label }}</span>
+            <span aria-hidden="true">↗</span>
+          </RouterLink>
+        </div>
+      </div>
 
       <RouterLink
-        v-else-if="latestRecord"
+        v-if="latestRecord"
         class="home-visual home-visual--history"
         :to="`/archive/records/${latestRecord.id}`"
         :aria-label="`查看上次发型：${latestRecord.styleName}`"
@@ -96,25 +179,37 @@ onBeforeUnmount(() => {
       </RouterLink>
 
       <RouterLink
-        v-else
+        v-else-if="homeVisualStyle"
         class="home-visual"
-        to="/try"
-        aria-label="查看短发示例并进入试发型"
+        :to="`/styles/catalog/${homeVisualStyle.id}`"
+        :aria-label="favoriteStyle
+          ? `查看收藏发型：${homeVisualStyle.name}`
+          : `查看发型：${homeVisualStyle.name}`"
       >
         <img
-          :src="'/demo/persona-ran-sidepart.webp'"
-          alt="AI 生成的虚构成年人物短发造型示例"
+          :src="homeVisualStyle.coverImage"
+          :alt="favoriteStyle
+            ? `${homeVisualStyle.imageAlt}，我的收藏`
+            : `AI 生成的虚构成年人物短发造型示例：${homeVisualStyle.name}正面`"
           fetchpriority="high"
+          decoding="async"
         >
-        <span class="home-visual__index">01 / DEMO</span>
-        <span class="home-visual__caption">从一张示例开始，看清短发方向 <b aria-hidden="true">↗</b></span>
+        <span class="home-visual__index">
+          {{ favoriteStyle ? 'SAVED STYLE · LOCAL' : 'CURATED 06 · AI DEMO' }}
+        </span>
+        <span class="home-visual__caption">
+          {{ homeVisualStyle.name }} · {{ favoriteStyle ? '我的收藏' : '先看现实取舍' }}
+          <b aria-hidden="true">↗</b>
+        </span>
       </RouterLink>
+    </header>
 
+    <footer class="home-footer">
       <p
         v-if="latestRecord?.outcome === 'repeat'"
         class="home-history-reminder"
       >
-        下次可以复刻这次记录，并把细节带给理发师确认。
+        下次可以复刻：把细节带给理发师确认。
       </p>
       <p
         v-else-if="latestRecord?.outcome === 'avoid'"
@@ -122,24 +217,6 @@ onBeforeUnmount(() => {
       >
         下次先避开：{{ latestAvoidRules.map(({ text }) => text).join('；') }}
       </p>
-    </header>
-
-    <div
-      class="home-actions"
-      aria-label="开始使用"
-    >
-      <RouterLink
-        class="action action--primary"
-        to="/try"
-      >
-        <span>准备去剪</span><span aria-hidden="true">↗</span>
-      </RouterLink>
-      <RouterLink
-        class="action action--secondary"
-        to="/archive/records/new"
-      >
-        <span>记录这次理发</span><span aria-hidden="true">＋</span>
-      </RouterLink>
       <p class="local-note">
         <span
           class="local-note__dot"
@@ -150,6 +227,6 @@ onBeforeUnmount(() => {
           <span>清理浏览器数据、使用无痕模式或更换设备，都可能让记录丢失。</span>
         </span>
       </p>
-    </div>
+    </footer>
   </section>
 </template>

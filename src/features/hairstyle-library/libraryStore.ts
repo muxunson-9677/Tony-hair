@@ -90,6 +90,7 @@ export const createHairstyleLibraryStore = (
   const folders = ref<FavoriteFolder[]>([])
   const loading = ref(false)
   const saving = ref(false)
+  const initialized = ref(false)
   const error = ref<string | null>(null)
   let loadRequest: LoadRequest | null = null
   let snapshotGeneration = 0
@@ -134,6 +135,7 @@ export const createHairstyleLibraryStore = (
         const snapshot = await fetchSnapshot()
         if (requestGeneration === snapshotGeneration) {
           applySnapshot(snapshot)
+          initialized.value = true
         }
       } catch (caught) {
         if (requestGeneration === snapshotGeneration) {
@@ -155,8 +157,9 @@ export const createHairstyleLibraryStore = (
   const mutate = async <Value>(
     operation: () => Promise<Value>,
     apply: (value: Value) => void,
+    requiresInitializedSnapshot = false,
   ): Promise<MutationResult<Value>> => {
-    if (saving.value) {
+    if (saving.value || (requiresInitializedSnapshot && !initialized.value)) {
       return { ok: false }
     }
 
@@ -252,6 +255,7 @@ export const createHairstyleLibraryStore = (
             ])
           : favorites.value.filter((item) => item.itemKey !== itemKey)
       },
+      true,
     )
     return result.ok ? result.value : null
   }
@@ -268,6 +272,7 @@ export const createHairstyleLibraryStore = (
           updated,
         ])
       },
+      true,
     )
     return result.ok ? result.value : null
   }
@@ -281,6 +286,7 @@ export const createHairstyleLibraryStore = (
           saved,
         ])
       },
+      true,
     )
     return result.ok ? result.value : null
   }
@@ -294,6 +300,7 @@ export const createHairstyleLibraryStore = (
           updated,
         ])
       },
+      true,
     )
     return result.ok ? result.value : null
   }
@@ -307,6 +314,7 @@ export const createHairstyleLibraryStore = (
           item.folderId === id ? { ...item, folderId: null } : item
         ))
       },
+      true,
     )
     return result.ok
   }
@@ -317,6 +325,7 @@ export const createHairstyleLibraryStore = (
     folders,
     loading,
     saving,
+    initialized,
     error,
     load,
     getReference,

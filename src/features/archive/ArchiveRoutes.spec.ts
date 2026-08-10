@@ -281,7 +281,8 @@ describe('archive routes and forms', () => {
     await waitFor(() => {
       expect(URL.createObjectURL).toHaveBeenCalledWith(preparedBlob)
       expect(URL.createObjectURL).toHaveBeenCalledWith(sourcePhoto)
-      expect(screen.getAllByRole('img')).toHaveLength(3)
+      const candidateList = screen.getByRole('list', { name: '计划候选' })
+      expect(within(candidateList).getAllByRole('img')).toHaveLength(3)
     })
     const originalIds = saved.map(({ id }) => id)
 

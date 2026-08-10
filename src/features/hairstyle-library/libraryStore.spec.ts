@@ -295,6 +295,25 @@ describe('hairstyle library store', () => {
     expect(store.loading).toBe(false)
   })
 
+  test('blocks mutations after an initial load failure until a retry hydrates authoritative state', async () => {
+    repository.favorites = [favorite()]
+    repository.nextLoadFailure = new Error('IndexedDB unavailable')
+    const store = createHairstyleLibraryStore(repository)()
+    const target = { itemType: 'curated_style', itemId: 'lin-bob' } as const
+
+    await store.load()
+
+    expect(store.initialized).toBe(false)
+    expect(store.isFavorite('curated_style:lin-bob')).toBe(false)
+    expect(await store.toggleFavorite(target)).toBeNull()
+    expect(repository.favorites).toEqual([favorite()])
+
+    await store.load()
+
+    expect(store.initialized).toBe(true)
+    expect(store.isFavorite('curated_style:lin-bob')).toBe(true)
+  })
+
   test('creates, edits, replaces, and deletes private references in local state', async () => {
     const store = createHairstyleLibraryStore(repository)()
     await store.load()

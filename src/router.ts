@@ -7,6 +7,8 @@ import ArchivePlanFormView from './views/ArchivePlanFormView.vue'
 import ArchiveProfileView from './views/ArchiveProfileView.vue'
 import ArchiveRecordDetailView from './views/ArchiveRecordDetailView.vue'
 import ArchiveRecordFormView from './views/ArchiveRecordFormView.vue'
+import HairstyleDetailView from './views/HairstyleDetailView.vue'
+import HairstyleLibraryView from './views/HairstyleLibraryView.vue'
 import HomeView from './views/HomeView.vue'
 import MeView from './views/MeView.vue'
 import NotFoundView from './views/NotFoundView.vue'
@@ -21,13 +23,31 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         path: '/',
         name: 'home',
         component: HomeView,
-        meta: { title: '咋剪发' },
+        meta: { title: '咋剪发', wideLayout: true },
       },
       {
         path: '/try',
         name: 'try',
         component: TryView,
         meta: { title: '试发型｜咋剪发' },
+      },
+      {
+        path: '/styles',
+        name: 'styles',
+        component: HairstyleLibraryView,
+        meta: { title: '找发型｜咋剪发', wideLayout: true },
+      },
+      {
+        path: '/styles/favorites',
+        name: 'styles-favorites',
+        component: HairstyleLibraryView,
+        meta: { title: '我的收藏｜咋剪发', wideLayout: true },
+      },
+      {
+        path: '/styles/catalog/:id',
+        name: 'style-detail',
+        component: HairstyleDetailView,
+        meta: { title: '发型详情｜咋剪发', wideLayout: true },
       },
       {
         path: '/archive',
