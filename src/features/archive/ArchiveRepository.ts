@@ -21,8 +21,13 @@ import type {
   HairstyleFavorite,
   PrivateHairstyleReference,
 } from '../hairstyle-library/types'
+import { curatedHairstyles } from '../hairstyle-library/curatedCatalog'
 
 const LEGACY_TIMESTAMP = '1970-01-01T00:00:00.000Z'
+const PLAN_MODES = new Set<HaircutPlan['mode']>(['exploration', 'repeat'])
+const CATALOG_DEMO_IMAGE_PATHS = new Set(
+  curatedHairstyles.map(({ coverImage }) => coverImage),
+)
 
 const timestampFromLegacyDate = (date: string) => {
   const parsed = new Date(date)
@@ -92,6 +97,18 @@ export class ZajianfaDb extends Dexie {
 
     this.profiles = this.table('profiles')
     this.plans = this.table('plans')
+    this.plans.hook('reading', (plan) => {
+      if (!plan) {
+        return plan
+      }
+      if (plan.mode === undefined) {
+        return { ...plan, mode: 'exploration' }
+      }
+      if (!PLAN_MODES.has(plan.mode)) {
+        throw new Error('plan mode is invalid')
+      }
+      return plan
+    })
     this.candidates = this.table('candidates')
     this.candidates.hook('reading', (candidate) => candidate && ({
       ...candidate,
@@ -295,6 +312,9 @@ const validatePlanCandidates = (
   if (candidates.length < 2 || candidates.length > 4) {
     throw new RangeError('A plan must contain between 2 and 4 candidates')
   }
+  if (!PLAN_MODES.has(plan.mode)) {
+    throw new Error('plan mode is invalid')
+  }
   if (plan.title.trim().length === 0) {
     throw new RangeError('plan title must not be empty')
   }
@@ -335,8 +355,16 @@ const validatePlanCandidates = (
     }
     if (
       candidate.source === 'demo_ai'
+      && !CATALOG_DEMO_IMAGE_PATHS.has(candidate.demoImagePath ?? '')
+    ) {
+      throw new Error('demo candidate requires a current catalog image path')
+    }
+    if (
+      candidate.source === 'demo_ai'
       && (
-        candidate.referenceImage !== undefined
+        candidate.referenceId !== undefined
+        || candidate.pastRecordId !== undefined
+        || candidate.referenceImage !== undefined
         || candidate.referenceImageWidth !== undefined
         || candidate.referenceImageHeight !== undefined
         || candidate.referenceImageBytes !== undefined

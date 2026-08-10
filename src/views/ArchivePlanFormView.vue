@@ -17,7 +17,12 @@ import {
   archiveDemoCandidates,
   type ArchiveDemoCandidate,
 } from '../features/archive/demoCandidates'
-import type { Candidate, HaircutPhoto, HaircutRecord } from '../features/archive/types'
+import type {
+  Candidate,
+  HaircutPhoto,
+  HaircutPlan,
+  HaircutRecord,
+} from '../features/archive/types'
 import { prepareLocalImage } from '../features/images/prepareLocalImage'
 
 type SelectedCandidate = CandidateDraft & { readonly uiKey: string }
@@ -47,6 +52,7 @@ let referenceRequest = 0
 const form = reactive({
   title: '',
   date: new Date().toISOString().slice(0, 10),
+  mode: 'exploration' as HaircutPlan['mode'],
   status: 'draft' as 'draft' | 'ready',
 })
 
@@ -269,6 +275,7 @@ const submit = async () => {
     id: isEditing.value ? routePlanId.value : undefined,
     title: form.title,
     date: form.date,
+    mode: form.mode,
     status: form.status,
     candidates: selectedCandidates.value.map(toCandidateDraft),
   })
@@ -312,6 +319,7 @@ onMounted(async () => {
   }
   form.title = plan.title
   form.date = plan.date.slice(0, 10)
+  form.mode = plan.mode
   form.status = plan.status === 'ready' ? 'ready' : 'draft'
   selectedCandidates.value = existingCandidates.map(toSelectedCandidate)
   rebuildPreviewUrls()

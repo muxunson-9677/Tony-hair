@@ -57,6 +57,7 @@ export interface HaircutPlanDraft {
   readonly id?: string
   readonly title: string
   readonly date: string
+  readonly mode: HaircutPlan['mode']
   readonly status: 'draft' | 'ready'
   readonly candidates: readonly CandidateDraft[]
 }
@@ -367,6 +368,7 @@ export const createArchiveStore = (
         profileId: currentProfile.id,
         title: draft.title.trim(),
         date: draft.date,
+        mode: draft.mode,
         status: draft.status,
         createdAt: existingPlan?.createdAt ?? timestamp,
         updatedAt: timestamp,

@@ -21,6 +21,7 @@ const plan: HaircutPlan = {
   profileId: 'profile-1',
   title: '下次短发计划',
   date: '2026-08-10T02:00:00.000Z',
+  mode: 'exploration',
   status: 'ready',
   createdAt: '2026-08-10T02:00:00.000Z',
   updatedAt: '2026-08-10T02:00:00.000Z',

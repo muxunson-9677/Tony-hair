@@ -26,6 +26,7 @@ export interface HaircutPlan {
   readonly profileId: string
   readonly title: string
   readonly date: string
+  readonly mode: 'exploration' | 'repeat'
   readonly status: 'draft' | 'ready' | 'completed'
   readonly createdAt: string
   readonly updatedAt: string

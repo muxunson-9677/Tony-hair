@@ -187,6 +187,9 @@ describe('archive routes and forms', () => {
     await fireEvent.click(screen.getByRole('button', { name: '保存计划' }))
 
     await waitFor(() => expect(router.currentRoute.value.path).not.toBe('/archive/plans/new'))
+    expect((await defaultArchiveRepository.getPlan(
+      router.currentRoute.value.params.id as string,
+    ))?.mode).toBe('exploration')
     expect(await screen.findByRole('heading', { level: 1, name: '夏末短发计划' })).toBeTruthy()
     expect(screen.getAllByText('示例体验 · 非用户生成').length).toBeGreaterThan(0)
     expect(screen.getByRole('img', { name: /齐颌短鲍伯/ })).toBeTruthy()
@@ -353,6 +356,7 @@ describe('archive routes and forms', () => {
       profileId: existingProfile.id,
       title: '夏末短发计划',
       date: '2026-08-22',
+      mode: 'exploration',
       status: 'ready',
       createdAt: '2026-08-10T01:00:00.000Z',
       updatedAt: '2026-08-10T01:00:00.000Z',
@@ -462,6 +466,7 @@ describe('archive routes and forms', () => {
       profileId: existingProfile.id,
       title: '旧版计划',
       date: '2025-08-01',
+      mode: 'exploration',
       status: 'ready',
       createdAt: '2025-08-01T00:00:00.000Z',
       updatedAt: '2025-08-01T00:00:00.000Z',
@@ -513,6 +518,7 @@ describe('archive routes and forms', () => {
       profileId: existingProfile.id,
       title: '旧参考图计划',
       date: '2025-08-01',
+      mode: 'exploration',
       status: 'draft',
       createdAt: '2025-08-01T00:00:00.000Z',
       updatedAt: '2025-08-01T00:00:00.000Z',
@@ -577,6 +583,7 @@ describe('archive routes and forms', () => {
       profileId: existingProfile.id,
       title: '混合来源旧计划',
       date: '2026-08-01',
+      mode: 'exploration',
       status: 'draft',
       createdAt: '2026-08-01T00:00:00.000Z',
       updatedAt: '2026-08-01T00:00:00.000Z',
@@ -954,6 +961,7 @@ describe('archive routes and forms', () => {
       profileId: existingProfile.id,
       title: '保留的计划',
       date: '2026-08-18',
+      mode: 'exploration',
       status: 'ready',
       createdAt: '2026-08-18T00:00:00.000Z',
       updatedAt: '2026-08-18T00:00:00.000Z',

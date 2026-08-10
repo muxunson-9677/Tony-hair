@@ -7,6 +7,7 @@ import Dexie from 'dexie'
 import { IDBKeyRange, indexedDB } from 'fake-indexeddb'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+import { curatedHairstyles } from '../hairstyle-library/curatedCatalog'
 import {
   ArchiveRepository,
   ArchiveStorageError,
@@ -27,6 +28,10 @@ const defaultPhotoImage = new NodeBlob(
   { type: 'image/webp' },
 ) as unknown as Blob
 
+const catalogDemoPath = (order: number) => (
+  curatedHairstyles[(order - 1) % curatedHairstyles.length]!.coverImage
+)
+
 const profile = (overrides: Partial<HairProfile> = {}): HairProfile => ({
   id: 'profile-1',
   name: '我的档案',
@@ -46,6 +51,7 @@ const plan = (overrides: Partial<HaircutPlan> = {}): HaircutPlan => ({
   profileId: 'profile-1',
   title: '下次短发计划',
   date: '2026-08-10T02:00:00.000Z',
+  mode: 'exploration',
   status: 'draft',
   createdAt: '2026-08-10T02:00:00.000Z',
   updatedAt: '2026-08-10T02:00:00.000Z',
@@ -62,7 +68,7 @@ const candidate = (
   name: `候选 ${order}`,
   notes: `候选 ${order} 的决策备注`,
   source: 'demo_ai',
-  demoImagePath: `/demo/candidate-${order}.webp`,
+  demoImagePath: catalogDemoPath(order),
   ...overrides,
 })
 
@@ -210,6 +216,70 @@ describe('ArchiveRepository', () => {
     expect(await restoredPhoto?.image.text()).toBe('local-photo')
   })
 
+  test('normalizes a legacy plan without mode on read without rewriting its row or candidate Blob', async () => {
+    const legacyImage = new NodeBlob(
+      ['legacy-mode-reference'],
+      { type: 'image/webp' },
+    ) as unknown as Blob
+    const { mode: omittedMode, ...legacyPlan } = plan({ id: 'legacy-mode-plan' })
+    expect(omittedMode).toBe('exploration')
+
+    await repository.createProfile(profile())
+    await db.plans.add(legacyPlan as HaircutPlan)
+    await db.candidates.bulkAdd([
+      candidate(1, {
+        id: 'legacy-mode-candidate-1',
+        planId: legacyPlan.id,
+        source: 'user_reference',
+        demoImagePath: undefined,
+        referenceId: 'legacy-mode-reference',
+        referenceImage: legacyImage,
+        referenceImageWidth: 900,
+        referenceImageHeight: 1200,
+        referenceImageBytes: legacyImage.size,
+        referenceImageProcessedAt: '2026-08-10T00:00:00.000Z',
+      }),
+      candidate(2, {
+        id: 'legacy-mode-candidate-2',
+        planId: legacyPlan.id,
+      }),
+    ])
+
+    expect(await repository.getPlan(legacyPlan.id)).toEqual({
+      ...legacyPlan,
+      mode: 'exploration',
+    })
+    expect(await repository.listPlans(legacyPlan.profileId)).toEqual([{
+      ...legacyPlan,
+      mode: 'exploration',
+    }])
+
+    const rawPlan = await new Promise<Record<string, unknown>>((resolve, reject) => {
+      const request = db.backendDB()
+        .transaction('plans', 'readonly')
+        .objectStore('plans')
+        .get(legacyPlan.id)
+      request.onerror = () => reject(request.error)
+      request.onsuccess = () => resolve(request.result as Record<string, unknown>)
+    })
+    expect(rawPlan).toEqual(legacyPlan)
+    expect(rawPlan).not.toHaveProperty('mode')
+
+    const [restoredCandidate] = await repository.listCandidates(legacyPlan.id)
+    expect(await restoredCandidate?.referenceImage?.text()).toBe('legacy-mode-reference')
+    expect(
+      createHash('sha256')
+        .update(new Uint8Array(
+          await restoredCandidate?.referenceImage?.arrayBuffer() ?? new ArrayBuffer(0),
+        ))
+        .digest('hex'),
+    ).toBe(
+      createHash('sha256')
+        .update(Buffer.from(await legacyImage.arrayBuffer()))
+        .digest('hex'),
+    )
+  })
+
   test('supports profile create, list, read, update, and delete', async () => {
     await repository.createProfile(profile())
     expect(await repository.listProfiles()).toEqual([profile()])
@@ -249,6 +319,67 @@ describe('ArchiveRepository', () => {
       ).rejects.toThrow('between 2 and 4 candidates')
       expect(await repository.getPlan(invalidPlan.id)).toBeUndefined()
     }
+  })
+
+  test('rejects non-catalog demo paths and residual hybrid fields on save', async () => {
+    await repository.createProfile(profile())
+    const canonicalSecond = candidate(2, {
+      demoImagePath: '/demo/persona-ran-crop.webp',
+    })
+
+    await expect(repository.savePlanWithCandidates(plan({ id: 'external-demo-plan' }), [
+      candidate(1, {
+        planId: 'external-demo-plan',
+        demoImagePath: 'https://example.com/untrusted.webp',
+      }),
+      { ...canonicalSecond, id: 'external-demo-second', planId: 'external-demo-plan' },
+    ])).rejects.toThrow(/catalog image path/i)
+
+    await expect(repository.savePlanWithCandidates(plan({ id: 'hybrid-demo-plan' }), [
+      candidate(1, {
+        planId: 'hybrid-demo-plan',
+        demoImagePath: '/demo/persona-lin-bob.webp',
+        referenceId: '',
+      }),
+      { ...canonicalSecond, id: 'hybrid-demo-second', planId: 'hybrid-demo-plan' },
+    ])).rejects.toThrow(/demo candidate cannot contain/i)
+
+    expect(await repository.getPlan('external-demo-plan')).toBeUndefined()
+    expect(await repository.getPlan('hybrid-demo-plan')).toBeUndefined()
+  })
+
+  test('accepts two candidates for both plan modes and rejects an invalid runtime mode', async () => {
+    await repository.createProfile(profile())
+
+    for (const mode of ['exploration', 'repeat'] as const) {
+      const savedPlan = plan({ id: `plan-${mode}`, mode })
+      await repository.savePlanWithCandidates(savedPlan, [1, 2].map((order) => candidate(order, {
+        id: `${savedPlan.id}-candidate-${order}`,
+        planId: savedPlan.id,
+      })))
+      expect(await repository.getPlan(savedPlan.id)).toEqual(savedPlan)
+    }
+
+    const invalidPlan = {
+      ...plan({ id: 'plan-invalid-mode' }),
+      mode: 'invalid',
+    } as unknown as HaircutPlan
+    await expect(repository.savePlanWithCandidates(
+      invalidPlan,
+      [1, 2].map((order) => candidate(order, {
+        id: `${invalidPlan.id}-candidate-${order}`,
+        planId: invalidPlan.id,
+      })),
+    )).rejects.toThrow('plan mode is invalid')
+    expect(await repository.getPlan(invalidPlan.id)).toBeUndefined()
+
+    const invalidStoredPlan = {
+      ...plan({ id: 'stored-invalid-mode' }),
+      mode: 'invalid',
+    } as unknown as HaircutPlan
+    await db.plans.add(invalidStoredPlan)
+    await expect(repository.getPlan(invalidStoredPlan.id))
+      .rejects.toThrow('plan mode is invalid')
   })
 
   test('rejects duplicate candidate order without writing the plan or candidates', async () => {
@@ -495,12 +626,12 @@ describe('ArchiveRepository', () => {
         candidate(1, {
           id: 'candidate-2',
           name: '保留的候选',
-          demoImagePath: '/demo/candidate-2.webp',
+          demoImagePath: catalogDemoPath(2),
         }),
         candidate(2, {
           id: 'candidate-3',
           name: '新候选',
-          demoImagePath: '/demo/candidate-3.webp',
+          demoImagePath: catalogDemoPath(3),
         }),
       ],
     )).rejects.toThrow('Plan candidates must retain the brief target')

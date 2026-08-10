@@ -42,6 +42,7 @@ const fullPlan = (overrides: Partial<HaircutPlan> = {}): HaircutPlan => ({
   profileId: 'profile-existing',
   title: '周末理发计划',
   date: '2026-08-16',
+  mode: 'exploration',
   status: 'draft',
   createdAt: '2026-08-09T00:00:00.000Z',
   updatedAt: '2026-08-09T00:00:00.000Z',
@@ -305,6 +306,7 @@ const profileDraft: HairProfileDraft = {
 const planDraft = (overrides: Partial<HaircutPlanDraft> = {}): HaircutPlanDraft => ({
   title: '下次想剪的方向',
   date: '2026-08-20',
+  mode: 'exploration',
   status: 'ready',
   candidates: [
     {
@@ -447,13 +449,18 @@ describe('archive store', () => {
     expect(repository.savePlanCalls).toBe(0)
 
     const created = await store.savePlan(planDraft())
-    expect(created?.plan).toMatchObject({ id: 'plan-new', title: '下次想剪的方向' })
+    expect(created?.plan).toMatchObject({
+      id: 'plan-new',
+      title: '下次想剪的方向',
+      mode: 'exploration',
+    })
     expect(created?.candidates).toHaveLength(2)
     expect(new Set(created?.candidates.map(({ demoImagePath }) => demoImagePath))).toHaveProperty('size', 2)
 
     const edited = await store.savePlan(planDraft({
       id: created?.plan.id,
       title: '更新后的方向',
+      mode: 'repeat',
       candidates: [
         planDraft().candidates[0],
         {
@@ -465,12 +472,14 @@ describe('archive store', () => {
       ],
     }))
     expect(edited?.plan.title).toBe('更新后的方向')
+    expect(edited?.plan.mode).toBe('repeat')
     expect(edited?.plan.createdAt).toBe(created?.plan.createdAt)
 
     setActivePinia(createPinia())
     const refreshed = createArchiveStore(repository)()
     await refreshed.load()
     expect(refreshed.plans[0]?.title).toBe('更新后的方向')
+    expect(refreshed.plans[0]?.mode).toBe('repeat')
     expect(refreshed.candidatesByPlanId[created?.plan.id ?? '']).toHaveLength(2)
 
     await refreshed.deletePlan(created?.plan.id ?? '')
