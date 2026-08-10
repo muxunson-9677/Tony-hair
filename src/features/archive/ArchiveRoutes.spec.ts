@@ -13,6 +13,8 @@ import { ArchiveStorageError } from './ArchiveRepository'
 import { defaultArchiveDb, defaultArchiveRepository } from './archiveStore'
 import * as briefExport from './briefExport'
 import * as localImages from '../images/prepareLocalImage'
+import { defaultHairstyleLibraryRepository } from '../hairstyle-library/libraryStore'
+import type { PrivateHairstyleReference } from '../hairstyle-library/types'
 import type {
   BarberBrief,
   Candidate,
@@ -37,6 +39,28 @@ const existingProfile: HairProfile = {
   preferenceNotes: '不要贴头皮',
   createdAt: '2026-08-10T00:00:00.000Z',
   updatedAt: '2026-08-10T00:00:00.000Z',
+}
+
+const privateReference = (
+  id: string,
+  name: string,
+  content = id,
+): PrivateHairstyleReference => {
+  const image = new NodeBlob([content], { type: 'image/webp' }) as unknown as Blob
+  return {
+    id,
+    fingerprint: `fingerprint-${id}`,
+    name,
+    notes: `${name}的私人备注`,
+    tags: ['私人参考'],
+    image,
+    width: 900,
+    height: 1200,
+    bytes: image.size,
+    processedAt: '2026-08-10T01:00:00.000Z',
+    createdAt: '2026-08-10T01:00:00.000Z',
+    updatedAt: '2026-08-10T01:00:00.000Z',
+  }
 }
 
 async function renderAt(path: string) {
@@ -93,6 +117,183 @@ describe('archive routes and forms', () => {
     expect(screen.queryByText('请先建立发型档案')).toBeNull()
   })
 
+  test('returns through a canonical add pointer after creating a profile without creating a half-plan', async () => {
+    const router = await renderAt('/archive/plans/new?add=catalog:lin-bob')
+
+    await waitFor(() => expect(router.currentRoute.value.path).toBe('/archive/profile'))
+    expect(router.currentRoute.value.query.next)
+      .toBe('/archive/plans/new?add=catalog:lin-bob')
+    expect(await defaultArchiveDb.plans.count()).toBe(0)
+
+    await fireEvent.update(await screen.findByLabelText('称呼'), '小林')
+    await fireEvent.click(screen.getByRole('button', { name: '保存档案' }))
+
+    await waitFor(() => {
+      expect(router.currentRoute.value.path).toBe('/archive/plans/new')
+      expect(router.currentRoute.value.query.add).toBeUndefined()
+    })
+    const selected = await screen.findByRole('region', { name: '已选候选' })
+    expect(within(selected).getByText('齐颌短鲍伯')).toBeTruthy()
+    expect(within(selected).getByText('已选择 1 / 4')).toBeTruthy()
+    expect(await defaultArchiveDb.plans.count()).toBe(0)
+  })
+
+  test('falls back to the archive when the canonical profile return target changes during save', async () => {
+    let releaseSave!: () => void
+    const savePending = new Promise<void>((resolve) => {
+      releaseSave = resolve
+    })
+    const createProfile = vi.spyOn(defaultArchiveRepository, 'createProfile')
+      .mockImplementation(async (profile) => {
+        await savePending
+        return profile.id
+      })
+    const firstReturn = '/archive/plans/new?add=catalog:lin-bob'
+    const secondReturn = '/archive/plans/new?add=catalog:qiao-ivy'
+    const router = await renderAt(
+      `/archive/profile?next=${encodeURIComponent(firstReturn)}`,
+    )
+
+    await fireEvent.update(await screen.findByLabelText('称呼'), '小林')
+    await fireEvent.click(screen.getByRole('button', { name: '保存档案' }))
+    await waitFor(() => expect(createProfile).toHaveBeenCalledOnce())
+    await router.replace(`/archive/profile?next=${encodeURIComponent(secondReturn)}`)
+    releaseSave()
+
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/archive'))
+  })
+
+  test('does not hijack a newer route when profile creation finishes after unmount', async () => {
+    let releaseSave!: () => void
+    const savePending = new Promise<void>((resolve) => {
+      releaseSave = resolve
+    })
+    const createProfile = vi.spyOn(defaultArchiveRepository, 'createProfile')
+      .mockImplementation(async (profile) => {
+        await savePending
+        return profile.id
+      })
+    const returnPath = '/archive/plans/new?add=catalog:lin-bob'
+    const router = await renderAt(
+      `/archive/profile?next=${encodeURIComponent(returnPath)}`,
+    )
+
+    await fireEvent.update(await screen.findByLabelText('称呼'), '小林')
+    await fireEvent.click(screen.getByRole('button', { name: '保存档案' }))
+    await waitFor(() => expect(createProfile).toHaveBeenCalledOnce())
+    await router.push('/styles')
+    releaseSave()
+    await createProfile.mock.results[0]?.value
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(router.currentRoute.value.path).toBe('/styles')
+  })
+
+  test('rejects a next value that was double encoded before Vue decoded the route query', async () => {
+    const canonical = '/archive/plans/new?add=catalog:lin-bob'
+    await renderAt(
+      `/archive/profile?next=${encodeURIComponent(encodeURIComponent(canonical))}`,
+    )
+
+    expect((await screen.findByRole('link', { name: '返回档案' })).getAttribute('href'))
+      .toBe('/archive')
+  })
+
+  test('does not consume an add pointer when the hairstyle library hydration fails', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    vi.spyOn(defaultHairstyleLibraryRepository, 'listPrivateReferences')
+      .mockRejectedValueOnce(new Error('library unavailable'))
+    const router = await renderAt('/archive/plans/new?add=catalog:lin-bob')
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/发型库.*无法读取/)
+    expect(router.currentRoute.value.query.add).toBe('catalog:lin-bob')
+    expect(await defaultArchiveDb.plans.count()).toBe(0)
+  })
+
+  test('rejects a missing private pointer before asking a user without a profile to continue', async () => {
+    const router = await renderAt('/archive/plans/new?add=private_reference:missing')
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/找不到|已删除/)
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/archive/plans/new'))
+    expect(await defaultArchiveDb.plans.count()).toBe(0)
+  })
+
+  test('consumes only the newest add pointer when an older library load finishes late', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const slowReference = privateReference('slow-reference', '慢请求参考')
+    const fastReference = privateReference('fast-reference', '新请求参考')
+    let releaseReferences!: (references: PrivateHairstyleReference[]) => void
+    const referencesPending = new Promise<PrivateHairstyleReference[]>((resolve) => {
+      releaseReferences = resolve
+    })
+    const listReferences = vi.spyOn(defaultHairstyleLibraryRepository, 'listPrivateReferences')
+      .mockReturnValueOnce(referencesPending)
+    const router = await renderAt(
+      '/archive/plans/new?add=private_reference:slow-reference',
+    )
+    await waitFor(() => expect(listReferences).toHaveBeenCalledOnce())
+
+    await router.push('/archive/plans/new?add=private_reference:fast-reference')
+    releaseReferences([slowReference, fastReference])
+
+    const selected = await screen.findByRole('region', { name: '已选候选' })
+    expect(within(selected).getByText('新请求参考')).toBeTruthy()
+    expect(within(selected).queryByText('慢请求参考')).toBeNull()
+    await waitFor(() => expect(router.currentRoute.value.query.add).toBeUndefined())
+    expect(vi.mocked(URL.createObjectURL).mock.calls.some(
+      ([blob]) => blob === slowReference.image,
+    )).toBe(false)
+    const latestPreviewCall = vi.mocked(URL.createObjectURL).mock.calls
+      .map(([blob], index) => ({ blob, index }))
+      .filter(({ blob }) => blob === fastReference.image)
+      .at(-1)
+    const latestPreviewUrl = latestPreviewCall
+      ? vi.mocked(URL.createObjectURL).mock.results[latestPreviewCall.index]?.value
+      : undefined
+    expect(latestPreviewUrl).toMatch(/^blob:test-/)
+    await router.push('/archive')
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(latestPreviewUrl)
+    expect(await defaultArchiveDb.plans.count()).toBe(0)
+  })
+
+  test('does not consume or preview a private add pointer after the plan form unmounts', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const lateReference = privateReference('late-reference', '迟到的私人参考')
+    let releaseReferences!: (references: PrivateHairstyleReference[]) => void
+    const referencesPending = new Promise<PrivateHairstyleReference[]>((resolve) => {
+      releaseReferences = resolve
+    })
+    const listReferences = vi.spyOn(defaultHairstyleLibraryRepository, 'listPrivateReferences')
+      .mockReturnValueOnce(referencesPending)
+    const router = await renderAt(
+      '/archive/plans/new?add=private_reference:late-reference',
+    )
+    await waitFor(() => expect(listReferences).toHaveBeenCalledOnce())
+
+    await router.push('/archive')
+    releaseReferences([lateReference])
+    await waitFor(() => expect(router.currentRoute.value.path).toBe('/archive'))
+
+    expect(vi.mocked(URL.createObjectURL).mock.calls.some(
+      ([blob]) => blob === lateReference.image,
+    )).toBe(false)
+    expect(await defaultArchiveDb.plans.count()).toBe(0)
+  })
+
+  test('rejects missing or noncanonical add pointers honestly and removes the consumed query', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const router = await renderAt('/archive/plans/new?add=private_reference:missing')
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/找不到|已删除/)
+    await waitFor(() => expect(router.currentRoute.value.query.add).toBeUndefined())
+
+    await router.push('/archive/plans/new?add=catalog:lin-bob&unexpected=1')
+    expect((await screen.findByRole('alert')).textContent).toMatch(/无效|过期/)
+    await waitFor(() => expect(router.currentRoute.value.query.add).toBeUndefined())
+    expect(router.currentRoute.value.query.unexpected).toBeUndefined()
+    expect(await defaultArchiveDb.plans.count()).toBe(0)
+  })
+
   test('gives the plan-detail loading failure a real h1 and matching accessible label', async () => {
     vi.spyOn(defaultArchiveRepository, 'listProfiles').mockRejectedValueOnce(
       new ArchiveStorageError('unavailable', new Error('technical')),
@@ -103,6 +304,91 @@ describe('archive routes and forms', () => {
     const heading = await screen.findByRole('heading', { level: 1, name: '暂时无法读取计划' })
     expect(heading.id).toBe('plan-detail-state-title')
     expect(heading.closest('section')?.getAttribute('aria-labelledby')).toBe(heading.id)
+  })
+
+  test.each([
+    '/archive/plans/slow-unmount-plan',
+    '/archive/plans/slow-unmount-plan/brief',
+  ])('does not create candidate Object URLs after %s unmounts during archive load', async (path) => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const localSnapshot = new NodeBlob(['slow-unmount-snapshot'], {
+      type: 'image/webp',
+    }) as unknown as Blob
+    const slowPlan: HaircutPlan = {
+      id: 'slow-unmount-plan',
+      profileId: existingProfile.id,
+      title: '迟到加载计划',
+      date: '2026-08-22',
+      mode: 'exploration',
+      status: 'draft',
+      createdAt: '2026-08-10T02:00:00.000Z',
+      updatedAt: '2026-08-10T02:00:00.000Z',
+    }
+    await defaultArchiveRepository.savePlanWithCandidates(slowPlan, [{
+      id: 'slow-unmount-private',
+      planId: slowPlan.id,
+      order: 1,
+      name: '本地快照',
+      notes: '',
+      source: 'user_reference',
+      referenceId: 'slow-unmount-reference',
+      referenceImage: localSnapshot,
+      referenceImageWidth: 900,
+      referenceImageHeight: 1200,
+      referenceImageBytes: localSnapshot.size,
+      referenceImageProcessedAt: '2026-08-10T02:00:00.000Z',
+    }, {
+      id: 'slow-unmount-demo',
+      planId: slowPlan.id,
+      order: 2,
+      name: '齐颌短鲍伯',
+      notes: '',
+      source: 'demo_ai',
+      demoImagePath: '/demo/persona-lin-bob.webp',
+    }])
+    const storedCandidates = await defaultArchiveRepository.listCandidates(slowPlan.id)
+    let releaseProfiles!: () => void
+    const profilesPending = new Promise<HairProfile[]>((resolve) => {
+      releaseProfiles = () => resolve([existingProfile])
+    })
+    const listProfiles = vi.spyOn(defaultArchiveRepository, 'listProfiles')
+      .mockReturnValueOnce(profilesPending)
+    let releaseCandidates!: () => void
+    const candidatesPending = new Promise<Candidate[]>((resolve) => {
+      releaseCandidates = () => resolve(storedCandidates)
+    })
+    const listCandidates = vi.spyOn(defaultArchiveRepository, 'listCandidates')
+      .mockReturnValueOnce(candidatesPending)
+    const router = await renderAt(path)
+    await waitFor(() => expect(listProfiles).toHaveBeenCalledOnce())
+
+    await router.push('/styles')
+    releaseProfiles()
+    await waitFor(() => expect(listCandidates).toHaveBeenCalledWith(slowPlan.id))
+    releaseCandidates()
+    await candidatesPending
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
+  })
+
+  test('keeps an empty repeat plan editable so the user can repair its StandardStyle selection', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const emptyRepeatPlan: HaircutPlan = {
+      id: 'empty-repeat-plan',
+      profileId: existingProfile.id,
+      title: '待选择标准发型',
+      date: '2026-08-22',
+      mode: 'repeat',
+      status: 'draft',
+      createdAt: '2026-08-10T02:00:00.000Z',
+      updatedAt: '2026-08-10T02:00:00.000Z',
+    }
+    await defaultArchiveDb.plans.add(emptyRepeatPlan)
+
+    await renderAt(`/archive/plans/${emptyRepeatPlan.id}`)
+
+    expect(await screen.findByRole('link', { name: '编辑计划' })).toBeTruthy()
   })
 
   test('gives brief loading and missing states real h1 headings', async () => {
@@ -207,6 +493,162 @@ describe('archive routes and forms', () => {
     await waitFor(() => expect(confirmDelete).toHaveBeenCalledWith(expect.stringMatching(/删除.*计划/)))
     expect(await screen.findByRole('heading', { level: 2, name: '阿青的发型档案' })).toBeTruthy()
     expect(screen.getByText(/还没有发型计划/)).toBeTruthy()
+  })
+
+  test('offers an explicit exploration fallback when no active standard style exists', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const router = await renderAt('/archive/plans/new')
+
+    await fireEvent.click(await screen.findByLabelText(/复刻标准发型/))
+    expect(await screen.findByRole('heading', { name: '还没有可复刻的标准发型' })).toBeTruthy()
+    expect(router.currentRoute.value.path).toBe('/archive/plans/new')
+    expect(screen.queryByRole('heading', { name: '选择预制短发' })).toBeNull()
+
+    await fireEvent.click(screen.getByRole('button', { name: '转为探索计划' }))
+    expect(await screen.findByRole('heading', { name: '选择预制短发' })).toBeTruthy()
+    expect(router.currentRoute.value.path).toBe('/archive/plans/new')
+  })
+
+  test('creates a one-snapshot repeat plan and keeps its detail, brief, and export after source deletion', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const snapshotBlob = new NodeBlob(['repeat-snapshot'], {
+      type: 'image/webp',
+    }) as unknown as Blob
+    const record: HaircutRecord = {
+      id: 'repeat-source-record',
+      profileId: existingProfile.id,
+      date: '2026-08-19',
+      status: 'completed',
+      satisfaction: 5,
+      styleName: '可复刻短碎发',
+      outcome: 'repeat',
+      createdAt: '2026-08-19T10:00:00.000Z',
+      updatedAt: '2026-08-19T10:00:00.000Z',
+    }
+    await defaultArchiveRepository.saveRecordWithPhotos(record, [{
+      id: 'repeat-source-photo',
+      recordId: record.id,
+      stage: 'styled',
+      image: snapshotBlob,
+      capturedAt: record.updatedAt,
+      width: 900,
+      height: 1200,
+      bytes: snapshotBlob.size,
+      processedAt: record.updatedAt,
+    }])
+    const router = await renderAt('/archive/plans/new')
+
+    await fireEvent.click(await screen.findByLabelText(/复刻标准发型/))
+    await fireEvent.click(screen.getByRole('button', { name: '选择标准发型：可复刻短碎发' }))
+    expect(screen.getByText('已选择 1 / 1')).toBeTruthy()
+    await fireEvent.update(screen.getByLabelText('计划标题'), '照上次再剪')
+    await fireEvent.click(screen.getByRole('button', { name: '保存计划' }))
+
+    await waitFor(() => expect(router.currentRoute.value.name).toBe('archive-plan-detail'))
+    const planId = router.currentRoute.value.params.id as string
+    expect(await defaultArchiveRepository.getPlan(planId)).toMatchObject({ mode: 'repeat' })
+    const [savedSnapshot] = await defaultArchiveRepository.listCandidates(planId)
+    expect(savedSnapshot).toMatchObject({ source: 'past_record', pastRecordId: record.id })
+    expect(await savedSnapshot?.referenceImage?.text()).toBe('repeat-snapshot')
+
+    await defaultArchiveRepository.deleteRecord(record.id)
+    await router.push('/archive')
+    await router.push(`/archive/plans/${planId}`)
+    expect(await screen.findByRole('heading', { level: 1, name: '照上次再剪' })).toBeTruthy()
+    expect(await screen.findByRole('img', { name: /可复刻短碎发.*本地候选图/ })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '编辑计划' })).toBeTruthy()
+
+    const exportPng = vi.spyOn(briefExport, 'exportBriefPng').mockResolvedValue({
+      blob: new NodeBlob(['png'], { type: 'image/png' }) as unknown as Blob,
+      filename: 'repeat-brief.png',
+      width: 1440,
+      height: 2200,
+    })
+    await router.push(`/archive/plans/${planId}/brief`)
+    expect(await screen.findByRole('heading', { level: 1, name: '创建理发师沟通卡' })).toBeTruthy()
+    await fireEvent.update(screen.getByLabelText('整体'), '按快照复刻整体轮廓')
+    await fireEvent.update(screen.getByLabelText('顶部'), '保留顶部长度')
+    await fireEvent.update(screen.getByLabelText('刘海'), '自然向前')
+    await fireEvent.update(screen.getByLabelText('两侧'), '不要推白')
+    await fireEvent.update(screen.getByLabelText('鬓角'), '保留自然尖角')
+    await fireEvent.update(screen.getByLabelText('后脑'), '贴合收干净')
+    await fireEvent.update(screen.getByLabelText('最在意 1'), '轮廓一致')
+    await fireEvent.update(screen.getByLabelText('绝对不要 1'), '不要打薄')
+    await fireEvent.click(screen.getByRole('button', { name: '保存沟通卡' }))
+    expect(await defaultArchiveRepository.getBrief(planId)).toMatchObject({
+      targetCandidateId: savedSnapshot?.id,
+    })
+    await fireEvent.click(screen.getByRole('button', { name: '导出 PNG' }))
+    const exported = exportPng.mock.calls[0]?.[0].imageSource
+    expect(typeof exported).not.toBe('string')
+    expect(await (exported as Blob).text()).toBe('repeat-snapshot')
+  })
+
+  test('keeps a private-reference snapshot usable in plan detail, brief, and export after deleting its library source', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const privateImage = new NodeBlob(['private-plan-snapshot'], {
+      type: 'image/webp',
+    }) as unknown as Blob
+    const savedReference = await defaultHairstyleLibraryRepository.savePrivateReference({
+      name: '我的层次短发参考',
+      notes: '顶部保留层次，两侧不要推白。',
+      tags: ['层次', '短发'],
+      image: privateImage,
+      width: 900,
+      height: 1200,
+      bytes: privateImage.size,
+      processedAt: '2026-08-20T09:30:00.000Z',
+    })
+    const router = await renderAt(
+      `/archive/plans/new?add=private_reference:${savedReference.id}`,
+    )
+
+    const selected = await screen.findByRole('region', { name: '已选候选' })
+    expect(within(selected).getByText(savedReference.name)).toBeTruthy()
+    await fireEvent.click(screen.getByRole('button', { name: '加入候选：纹理短碎发' }))
+    await fireEvent.update(screen.getByLabelText('计划标题'), '私人参考探索计划')
+    await fireEvent.click(screen.getByRole('button', { name: '保存计划' }))
+
+    await waitFor(() => expect(router.currentRoute.value.name).toBe('archive-plan-detail'))
+    const planId = router.currentRoute.value.params.id as string
+    const savedCandidates = await defaultArchiveRepository.listCandidates(planId)
+    const privateCandidate = savedCandidates.find(({ source }) => source === 'user_reference')
+    expect(await privateCandidate?.referenceImage?.text()).toBe('private-plan-snapshot')
+
+    await defaultHairstyleLibraryRepository.deletePrivateReference(savedReference.id)
+    await router.push('/archive')
+    await router.push(`/archive/plans/${planId}`)
+    expect(await screen.findByRole('img', {
+      name: /我的层次短发参考.*本地候选图/,
+    })).toBeTruthy()
+
+    const exportPng = vi.spyOn(briefExport, 'exportBriefPng').mockResolvedValue({
+      blob: new NodeBlob(['png'], { type: 'image/png' }) as unknown as Blob,
+      filename: 'private-reference-brief.png',
+      width: 1440,
+      height: 2200,
+    })
+    await router.push(`/archive/plans/${planId}/brief`)
+    expect(await screen.findByRole('heading', {
+      level: 1,
+      name: '创建理发师沟通卡',
+    })).toBeTruthy()
+    await fireEvent.update(screen.getByLabelText('整体'), '按私人参考保留整体轮廓')
+    await fireEvent.update(screen.getByLabelText('顶部'), '顶部保留层次')
+    await fireEvent.update(screen.getByLabelText('刘海'), '自然向前')
+    await fireEvent.update(screen.getByLabelText('两侧'), '不要推白')
+    await fireEvent.update(screen.getByLabelText('鬓角'), '保留自然尖角')
+    await fireEvent.update(screen.getByLabelText('后脑'), '贴合收干净')
+    await fireEvent.update(screen.getByLabelText('最在意 1'), '轮廓一致')
+    await fireEvent.update(screen.getByLabelText('绝对不要 1'), '不要打薄')
+    await fireEvent.click(screen.getByRole('button', { name: '保存沟通卡' }))
+    expect(await defaultArchiveRepository.getBrief(planId)).toMatchObject({
+      targetCandidateId: privateCandidate?.id,
+    })
+    await fireEvent.click(screen.getByRole('button', { name: '导出 PNG' }))
+    const exported = exportPng.mock.calls[0]?.[0].imageSource
+    expect(typeof exported).not.toBe('string')
+    expect(await (exported as Blob).text()).toBe('private-plan-snapshot')
   })
 
   test('mixes a prepared reference, a real past record, and a demo while preserving ids on edit', async () => {

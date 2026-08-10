@@ -32,6 +32,15 @@ export interface HaircutPlan {
   readonly updatedAt: string
 }
 
+export const isValidPlanCandidateCount = (
+  mode: HaircutPlan['mode'],
+  count: number,
+) => (
+  mode === 'exploration'
+    ? count >= 2 && count <= 4
+    : mode === 'repeat' && count === 1
+)
+
 export interface Candidate {
   readonly id: string
   readonly planId: string

@@ -1362,6 +1362,74 @@ button:focus-visible {
   margin: 18px 0 0;
 }
 
+.plan-mode-picker {
+  display: grid;
+  gap: 1px;
+  margin: 4px 0 28px;
+  padding: 0;
+  border: 0;
+  background: var(--ink);
+}
+
+.plan-mode-picker legend {
+  width: 100%;
+  margin: 0;
+  padding-bottom: 9px;
+  color: var(--warm-gray);
+  background: var(--paper);
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+}
+
+.plan-mode-picker label {
+  display: grid;
+  min-height: 76px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 13px 15px;
+  color: var(--ink);
+  background: var(--paper);
+  cursor: pointer;
+}
+
+.archive-form .plan-mode-picker input {
+  width: 18px;
+  min-height: 18px;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.plan-mode-picker label > span {
+  display: grid;
+  gap: 4px;
+}
+
+.plan-mode-picker b {
+  font-size: 0.86rem;
+}
+
+.plan-mode-picker small {
+  color: var(--warm-gray);
+  font-size: 0.66rem;
+  line-height: 1.45;
+}
+
+.plan-mode-picker label:has(input:checked) {
+  color: var(--paper);
+  background: var(--ink);
+}
+
+.plan-mode-picker label:has(input:checked) small {
+  color: #cfc5b8;
+}
+
+.plan-mode-picker label:focus-within {
+  outline: 3px solid #c16f4f;
+  outline-offset: -3px;
+}
+
 .candidate-source-section {
   padding: 31px 0;
   border-top: 1px solid rgba(23, 21, 18, 0.24);
@@ -4581,7 +4649,7 @@ a:focus-visible {
   bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 10px);
   left: 12px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   border: 1px solid rgba(45, 39, 32, 0.14);
   background: rgba(248, 244, 236, 0.91);
   box-shadow: 0 12px 30px rgba(36, 29, 23, 0.16);
@@ -4605,7 +4673,8 @@ a:focus-visible {
   cursor: pointer;
 }
 
-.reference-action-dock > :first-child {
+.reference-action-dock .reference-action-dock__primary {
+  grid-column: span 2;
   color: var(--paper);
   background: var(--ink);
 }
@@ -4784,7 +4853,7 @@ a:focus-visible {
   bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 10px);
   left: 12px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   min-height: 58px;
   border: 1px solid rgba(45, 39, 32, 0.14);
   background: rgba(248, 244, 236, 0.9);
@@ -4807,7 +4876,7 @@ a:focus-visible {
   cursor: pointer;
 }
 
-.style-action-dock button {
+.style-action-dock .style-action-dock__primary {
   color: var(--paper);
   background: var(--ink);
 }
@@ -5325,7 +5394,11 @@ a:focus-visible {
     bottom: 24px;
     left: auto;
     width: min(560px, calc(50vw - 84px));
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .reference-action-dock .reference-action-dock__primary {
+    grid-column: auto;
   }
 
   .style-show-view {

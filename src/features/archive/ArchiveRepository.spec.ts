@@ -22,6 +22,7 @@ import type {
   HaircutPlan,
   HaircutRecord,
 } from './types'
+import { isValidPlanCandidateCount } from './types'
 
 const defaultPhotoImage = new NodeBlob(
   ['local-photo'],
@@ -348,17 +349,130 @@ describe('ArchiveRepository', () => {
     expect(await repository.getPlan('hybrid-demo-plan')).toBeUndefined()
   })
 
-  test('accepts two candidates for both plan modes and rejects an invalid runtime mode', async () => {
-    await repository.createProfile(profile())
+  test('uses exploration two-to-four and repeat one candidate counts', async () => {
+    expect(isValidPlanCandidateCount('exploration', 1)).toBe(false)
+    expect(isValidPlanCandidateCount('exploration', 2)).toBe(true)
+    expect(isValidPlanCandidateCount('exploration', 4)).toBe(true)
+    expect(isValidPlanCandidateCount('exploration', 5)).toBe(false)
+    expect(isValidPlanCandidateCount('repeat', 0)).toBe(false)
+    expect(isValidPlanCandidateCount('repeat', 1)).toBe(true)
+    expect(isValidPlanCandidateCount('repeat', 2)).toBe(false)
+  })
 
-    for (const mode of ['exploration', 'repeat'] as const) {
-      const savedPlan = plan({ id: `plan-${mode}`, mode })
-      await repository.savePlanWithCandidates(savedPlan, [1, 2].map((order) => candidate(order, {
-        id: `${savedPlan.id}-candidate-${order}`,
-        planId: savedPlan.id,
-      })))
-      expect(await repository.getPlan(savedPlan.id)).toEqual(savedPlan)
-    }
+  test('accepts one active same-profile StandardStyle snapshot for repeat mode', async () => {
+    await repository.createProfile(profile())
+    await repository.saveRecordWithPhotos(
+      repeatRecord({ planId: undefined }),
+      [photo()],
+    )
+
+    const repeatPlan = plan({ mode: 'repeat' })
+    const repeatCandidate = candidate(1, {
+      source: 'past_record',
+      demoImagePath: undefined,
+      pastRecordId: 'record-1',
+      referenceImage: defaultPhotoImage,
+    })
+
+    await repository.savePlanWithCandidates(repeatPlan, [repeatCandidate])
+
+    expect(await repository.getPlan(repeatPlan.id)).toEqual(repeatPlan)
+    expect(await repository.listCandidates(repeatPlan.id)).toEqual([repeatCandidate])
+  })
+
+  test('rejects non-standard, cross-profile, non-past-record, and multi-candidate repeat saves', async () => {
+    await repository.createProfile(profile())
+    await repository.createProfile(profile({ id: 'profile-2' }))
+    await repository.saveRecordWithPhotos(
+      repeatRecord({ id: 'record-other', profileId: 'profile-2', planId: undefined }),
+      [photo({ id: 'photo-other', recordId: 'record-other' })],
+    )
+
+    const repeatPlan = plan({ mode: 'repeat' })
+    const snapshot = candidate(1, {
+      source: 'past_record',
+      demoImagePath: undefined,
+      pastRecordId: 'record-other',
+      referenceImage: defaultPhotoImage,
+    })
+
+    await expect(repository.savePlanWithCandidates(repeatPlan, [snapshot]))
+      .rejects.toThrow(/active standard style/i)
+    await expect(repository.savePlanWithCandidates(repeatPlan, [candidate(1)]))
+      .rejects.toThrow(/past-record snapshot/i)
+    await expect(repository.savePlanWithCandidates(repeatPlan, [snapshot, {
+      ...snapshot,
+      id: 'candidate-2',
+      order: 2,
+    }])).rejects.toThrow(/exactly 1 candidate/i)
+    expect(await repository.getPlan(repeatPlan.id)).toBeUndefined()
+  })
+
+  test('revalidates repeat mode switches and candidate replacement inside the save transaction', async () => {
+    await repository.createProfile(profile())
+    await repository.savePlanWithCandidates(plan(), [candidate(1), candidate(2)])
+
+    await expect(repository.savePlanWithCandidates(
+      plan({ mode: 'repeat' }),
+      [candidate(1, {
+        source: 'past_record',
+        demoImagePath: undefined,
+        pastRecordId: 'missing-record',
+        referenceImage: defaultPhotoImage,
+      })],
+    )).rejects.toThrow(/active standard style/i)
+
+    expect(await repository.getPlan('plan-1')).toEqual(plan())
+    expect(await repository.listCandidates('plan-1')).toHaveLength(2)
+  })
+
+  test('keeps an unchanged repeat source snapshot editable after its record and style are deleted', async () => {
+    await repository.createProfile(profile())
+    await repository.saveRecordWithPhotos(
+      repeatRecord({ planId: undefined }),
+      [photo()],
+    )
+    const repeatPlan = plan({ mode: 'repeat' })
+    const repeatCandidate = candidate(1, {
+      source: 'past_record',
+      demoImagePath: undefined,
+      pastRecordId: 'record-1',
+      referenceImage: defaultPhotoImage,
+    })
+    await repository.savePlanWithCandidates(repeatPlan, [repeatCandidate])
+    await repository.saveBrief(brief())
+    await repository.deleteRecord('record-1')
+
+    const editedPlan = { ...repeatPlan, title: '仍按这张快照复刻' }
+    const editedCandidate = { ...repeatCandidate, name: '保留的标准发型快照' }
+    await repository.savePlanWithCandidates(editedPlan, [editedCandidate])
+
+    expect(await repository.getPlan(repeatPlan.id)).toEqual(editedPlan)
+    expect(await repository.listCandidates(repeatPlan.id)).toEqual([editedCandidate])
+    expect(await repository.getBrief(repeatPlan.id)).toEqual(brief())
+
+    const changedSnapshot = new NodeBlob(['changed-repeat-snapshot'], {
+      type: 'image/webp',
+    }) as unknown as Blob
+    await expect(repository.savePlanWithCandidates(editedPlan, [{
+      ...editedCandidate,
+      referenceImage: changedSnapshot,
+    }])).rejects.toThrow(/active standard style/i)
+    await expect(repository.savePlanWithCandidates(editedPlan, [{
+      ...editedCandidate,
+      referenceImageBytes: editedCandidate.referenceImage?.size,
+    }])).rejects.toThrow(/active standard style/i)
+    await expect(repository.savePlanWithCandidates(editedPlan, [{
+      ...editedCandidate,
+      id: 'replacement-candidate',
+    }])).rejects.toThrow(/active standard style/i)
+    expect(await repository.getPlan(repeatPlan.id)).toEqual(editedPlan)
+    expect(await repository.listCandidates(repeatPlan.id)).toEqual([editedCandidate])
+    expect(await repository.getBrief(repeatPlan.id)).toEqual(brief())
+  })
+
+  test('rejects an invalid runtime mode', async () => {
+    await repository.createProfile(profile())
 
     const invalidPlan = {
       ...plan({ id: 'plan-invalid-mode' }),

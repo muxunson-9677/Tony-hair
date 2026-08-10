@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { buildArchivePlanReturnPath } from '../features/archive/archiveReturnPath'
 import { useHairstyleLibraryStore } from '../features/hairstyle-library/libraryStore'
 
 const route = useRoute()
@@ -13,6 +14,9 @@ const imageUrl = ref<string | null>(null)
 const favorite = computed(() => reference.value
   ? store.isFavorite(`private_reference:${reference.value.id}`)
   : false)
+const addToPlanPath = computed(() => reference.value
+  ? buildArchivePlanReturnPath({ kind: 'private_reference', id: reference.value.id })
+  : null)
 const libraryBusy = computed(() => !store.initialized || store.loading || store.saving)
 
 const releaseImage = () => {
@@ -154,6 +158,13 @@ onBeforeUnmount(releaseImage)
       class="reference-action-dock"
       aria-label="私人参考操作"
     >
+      <RouterLink
+        v-if="addToPlanPath"
+        class="reference-action-dock__primary"
+        :to="addToPlanPath"
+      >
+        加入计划
+      </RouterLink>
       <RouterLink :to="`/styles/references/${reference.id}/show`">
         给理发师看
       </RouterLink>

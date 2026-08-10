@@ -190,7 +190,7 @@ onBeforeUnmount(revokeRecordUrls)
           v-if="store.plans.length === 0"
           class="archive-inline-empty"
         >
-          还没有发型计划。先从六个预制短发中选 2—4 个真实候选。
+          还没有发型计划。探索计划可选 2—4 个方向；复刻计划只用 1 个标准发型快照。
         </p>
         <ol
           v-else
@@ -340,7 +340,7 @@ onBeforeUnmount(revokeRecordUrls)
           v-if="savedBriefs.length === 0"
           class="archive-inline-empty"
         >
-          先打开一个包含 2—4 个候选的计划，创建可编辑、可导出的理发师沟通卡。
+          先打开候选数量有效的计划：探索计划 2—4 个，复刻计划 1 个，再创建可编辑、可导出的理发师沟通卡。
         </p>
         <ol
           v-else

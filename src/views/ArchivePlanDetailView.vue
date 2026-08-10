@@ -8,6 +8,7 @@ import {
   resolveCandidateImageBlob,
 } from '../features/archive/candidateSources'
 import { archiveDemoCandidates } from '../features/archive/demoCandidates'
+import { isValidPlanCandidateCount } from '../features/archive/types'
 import type { Candidate } from '../features/archive/types'
 import { shouldDiscardPollDraftOnArchiveDeletion } from '../features/polls/archivePollDeletion'
 import {
@@ -26,12 +27,19 @@ const candidates = computed(() => store.candidatesByPlanId[planId.value] ?? [])
 const brief = computed(() => store.briefsByPlanId[planId.value])
 const candidateObjectUrls = ref<Record<string, string>>({})
 const knownDemoPaths = new Set(archiveDemoCandidates.map(({ image }) => image))
-const canEdit = computed(() => (
-  plan.value?.status !== 'completed'
-  && candidates.value.length >= 2
-  && candidates.value.length <= 4
-  && candidates.value.every((candidate) => isSafelyEditableCandidate(candidate, knownDemoPaths))
-))
+let viewActive = false
+const canEdit = computed(() => {
+  const currentPlan = plan.value
+  return Boolean(
+    currentPlan
+    && currentPlan.status !== 'completed'
+    && (
+      currentPlan.mode === 'repeat'
+      || isValidPlanCandidateCount(currentPlan.mode, candidates.value.length)
+    )
+    && candidates.value.every((candidate) => isSafelyEditableCandidate(candidate, knownDemoPaths)),
+  )
+})
 const hasDemoCandidates = computed(() => candidates.value.some(({ source }) => source === 'demo_ai'))
 const pollDeleteError = ref('')
 
@@ -103,13 +111,18 @@ const candidateSourceLabel = (candidate: Candidate) => {
 }
 
 onMounted(async () => {
+  viewActive = true
   await store.load()
+  if (!viewActive) return
   buildCandidateUrls()
   if (plan.value) {
     document.title = `${plan.value.title}｜咋剪发`
   }
 })
-onBeforeUnmount(revokeCandidateUrls)
+onBeforeUnmount(() => {
+  viewActive = false
+  revokeCandidateUrls()
+})
 </script>
 
 <template>

@@ -7,6 +7,7 @@ import {
   ZajianfaDb,
 } from './ArchiveRepository'
 import { candidateSourceKey } from './candidateSources'
+import { isValidPlanCandidateCount } from './types'
 import type {
   AvoidRule,
   BarberBrief,
@@ -344,13 +345,17 @@ export const createArchiveStore = (
       error.value = '请先建立本设备档案，再创建发型计划。'
       return null
     }
-    if (draft.candidates.length < 2 || draft.candidates.length > 4) {
-      error.value = '请选择 2 到 4 个不重复的候选。'
+    if (!isValidPlanCandidateCount(draft.mode, draft.candidates.length)) {
+      error.value = draft.mode === 'repeat'
+        ? '复刻计划只能选择 1 个标准发型快照。'
+        : '请选择 2 到 4 个不重复的候选。'
       return null
     }
     const sourceKeys = draft.candidates.map(candidateSourceKey)
     if (sourceKeys.some((key) => !key) || new Set(sourceKeys).size !== sourceKeys.length) {
-      error.value = '请选择 2 到 4 个来源不重复且完整的候选。'
+      error.value = draft.mode === 'repeat'
+        ? '请选择 1 个来源完整的标准发型快照。'
+        : '请选择 2 到 4 个来源不重复且完整的候选。'
       return null
     }
     if (saving.value) {

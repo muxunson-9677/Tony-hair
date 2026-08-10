@@ -4,6 +4,7 @@ import {
   candidateSourceKey,
   meetsPreparedReferenceContract,
 } from './candidateSources'
+import { isValidPlanCandidateCount } from './types'
 import type {
   AvoidRule,
   BarberBrief,
@@ -274,6 +275,34 @@ const isBlobValue = (value: unknown): value is Blob => Boolean(
   && typeof (value as Blob).arrayBuffer === 'function',
 )
 
+const haveSameBlobBytes = async (left: Blob | undefined, right: Blob | undefined) => {
+  if (!left || !right) {
+    return left === right
+  }
+  if (left.type !== right.type || left.size !== right.size) {
+    return false
+  }
+  const [leftBuffer, rightBuffer] = await Dexie.waitFor(Promise.all([
+    left.arrayBuffer(),
+    right.arrayBuffer(),
+  ]))
+  const leftBytes = new Uint8Array(leftBuffer)
+  const rightBytes = new Uint8Array(rightBuffer)
+  return leftBytes.every((byte, index) => byte === rightBytes[index])
+}
+
+const hasUnchangedCandidateSourceSnapshot = async (left: Candidate, right: Candidate) => (
+  left.source === right.source
+  && left.referenceId === right.referenceId
+  && left.demoImagePath === right.demoImagePath
+  && left.pastRecordId === right.pastRecordId
+  && left.referenceImageWidth === right.referenceImageWidth
+  && left.referenceImageHeight === right.referenceImageHeight
+  && left.referenceImageBytes === right.referenceImageBytes
+  && left.referenceImageProcessedAt === right.referenceImageProcessedAt
+  && await haveSameBlobBytes(left.referenceImage, right.referenceImage)
+)
+
 const validateProfile = (profile: HairProfile) => {
   if (profile.name.trim().length === 0) {
     throw new RangeError('profile name must not be empty')
@@ -309,11 +338,18 @@ const validatePlanCandidates = (
   plan: HaircutPlan,
   candidates: readonly Candidate[],
 ) => {
-  if (candidates.length < 2 || candidates.length > 4) {
-    throw new RangeError('A plan must contain between 2 and 4 candidates')
-  }
   if (!PLAN_MODES.has(plan.mode)) {
     throw new Error('plan mode is invalid')
+  }
+  if (!isValidPlanCandidateCount(plan.mode, candidates.length)) {
+    throw new RangeError(
+      plan.mode === 'repeat'
+        ? 'A repeat plan must contain exactly 1 candidate'
+        : 'A plan must contain between 2 and 4 candidates',
+    )
+  }
+  if (plan.mode === 'repeat' && candidates[0]?.source !== 'past_record') {
+    throw new Error('A repeat plan requires one past-record snapshot candidate')
   }
   if (plan.title.trim().length === 0) {
     throw new RangeError('plan title must not be empty')
@@ -566,10 +602,64 @@ export class ArchiveRepository {
     validatePlanCandidates(plan, candidates)
     return this.run(() => this.db.transaction(
       'rw',
-      [this.db.profiles, this.db.plans, this.db.candidates, this.db.briefs],
+      [
+        this.db.profiles,
+        this.db.plans,
+        this.db.candidates,
+        this.db.briefs,
+        this.db.records,
+        this.db.standardStyles,
+      ],
       async () => {
         if (!(await this.db.profiles.get(plan.profileId))) {
           throw new Error(`Profile not found: ${plan.profileId}`)
+        }
+        const existingPlan = await this.db.plans.get(plan.id)
+        const existingCandidates = existingPlan
+          ? await this.db.candidates.where('planId').equals(plan.id).toArray()
+          : []
+        const existingRepeatCandidate = existingCandidates.length === 1
+          ? existingCandidates[0]
+          : undefined
+        const nextRepeatCandidate = candidates.length === 1 ? candidates[0] : undefined
+        const retainedRepeatIdentity = Boolean(
+          existingPlan?.mode === 'repeat'
+          && plan.mode === 'repeat'
+          && existingPlan.profileId === plan.profileId
+          && existingRepeatCandidate
+          && nextRepeatCandidate
+          && existingRepeatCandidate.id === nextRepeatCandidate.id
+          && candidateSourceKey(existingRepeatCandidate) !== null
+          && candidateSourceKey(existingRepeatCandidate) === candidateSourceKey(nextRepeatCandidate),
+        )
+        const retainedRepeatSource = Boolean(
+          retainedRepeatIdentity
+          && existingRepeatCandidate
+          && nextRepeatCandidate
+          && await hasUnchangedCandidateSourceSnapshot(
+            existingRepeatCandidate,
+            nextRepeatCandidate,
+          ),
+        )
+
+        if (plan.mode === 'repeat' && !retainedRepeatSource) {
+          const recordId = nextRepeatCandidate?.pastRecordId ?? ''
+          const [record, activeStandardStyle] = await Promise.all([
+            this.db.records.get(recordId),
+            this.db.standardStyles
+              .where('recordId')
+              .equals(recordId)
+              .filter(({ active, profileId }) => active && profileId === plan.profileId)
+              .first(),
+          ])
+          if (
+            !record
+            || record.profileId !== plan.profileId
+            || record.outcome !== 'repeat'
+            || !activeStandardStyle
+          ) {
+            throw new Error('Repeat candidate requires an active standard style from the same profile')
+          }
         }
         const brief = await this.db.briefs.where('planId').equals(plan.id).first()
         if (

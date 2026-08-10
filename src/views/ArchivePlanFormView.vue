@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -17,12 +17,19 @@ import {
   archiveDemoCandidates,
   type ArchiveDemoCandidate,
 } from '../features/archive/demoCandidates'
+import {
+  parseArchivePlanReturnPath,
+  type ArchivePlanAddPointer,
+} from '../features/archive/archiveReturnPath'
+import { isValidPlanCandidateCount } from '../features/archive/types'
 import type {
   Candidate,
   HaircutPhoto,
   HaircutPlan,
   HaircutRecord,
 } from '../features/archive/types'
+import { resolveLibraryCandidateDraft } from '../features/hairstyle-library/libraryCandidates'
+import { useHairstyleLibraryStore } from '../features/hairstyle-library/libraryStore'
 import { prepareLocalImage } from '../features/images/prepareLocalImage'
 
 type SelectedCandidate = CandidateDraft & { readonly uiKey: string }
@@ -37,6 +44,7 @@ interface PastRecordChoice {
 const route = useRoute()
 const router = useRouter()
 const store = useArchiveStore()
+const libraryStore = useHairstyleLibraryStore()
 const isEditing = computed(() => route.name === 'archive-plan-edit')
 const routePlanId = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
 const planMissing = ref(false)
@@ -47,7 +55,11 @@ const selectedCandidates = ref<SelectedCandidate[]>([])
 const previewUrls = ref<Record<string, string>>({})
 const processingReference = ref(false)
 const referenceError = ref<string | null>(null)
+const addNotice = ref<string | null>(null)
 let referenceRequest = 0
+let routeRequest = 0
+let viewActive = false
+let initializedOnce = false
 
 const form = reactive({
   title: '',
@@ -75,6 +87,11 @@ const pastRecordChoices = computed<PastRecordChoice[]>(() => store.records.flatM
     isStandard: Boolean(standard),
   }]
 }))
+const standardRecordChoices = computed(() => pastRecordChoices.value.filter(({ isStandard }) => isStandard))
+const candidateLimit = computed(() => form.mode === 'repeat' ? 1 : 4)
+const candidateCountValid = computed(() => (
+  isValidPlanCandidateCount(form.mode, selectedCandidates.value.length)
+))
 
 const revokePreviewUrls = () => {
   Object.values(previewUrls.value).forEach((url) => URL.revokeObjectURL(url))
@@ -84,7 +101,7 @@ const revokePreviewUrls = () => {
 const rebuildPreviewUrls = () => {
   revokePreviewUrls()
   previewUrls.value = Object.fromEntries([
-    ...pastRecordChoices.value.map((choice) => (
+    ...(form.mode === 'repeat' ? standardRecordChoices.value : pastRecordChoices.value).map((choice) => (
       [`past-record-choice:${choice.record.id}`, URL.createObjectURL(choice.photo.image)] as const
     )),
     ...selectedCandidates.value.flatMap((candidate) => (
@@ -163,6 +180,9 @@ const togglePastRecord = (choice: PastRecordChoice) => {
   if (store.saving || processingReference.value) {
     return
   }
+  if (form.mode === 'repeat' && !choice.isStandard) {
+    return
+  }
   const sourceKey = `past_record:${choice.record.id}`
   const existingIndex = selectedCandidates.value.findIndex(
     (candidate) => candidateSourceKey(candidate) === sourceKey,
@@ -171,7 +191,9 @@ const togglePastRecord = (choice: PastRecordChoice) => {
     removeCandidate(existingIndex)
     return
   }
-  if (selectedCandidates.value.length >= 4) {
+  if (form.mode === 'repeat') {
+    selectedCandidates.value = []
+  } else if (selectedCandidates.value.length >= 4) {
     return
   }
   selectedCandidates.value.push({
@@ -186,6 +208,16 @@ const togglePastRecord = (choice: PastRecordChoice) => {
     referenceImageBytes: choice.photo.bytes ?? choice.photo.image.size,
     referenceImageProcessedAt: choice.photo.processedAt ?? choice.photo.capturedAt,
   })
+  rebuildPreviewUrls()
+}
+
+const setPlanMode = (mode: HaircutPlan['mode']) => {
+  if (form.mode === mode || store.saving || processingReference.value) {
+    return
+  }
+  form.mode = mode
+  selectedCandidates.value = []
+  referenceError.value = null
   rebuildPreviewUrls()
 }
 
@@ -285,28 +317,45 @@ const submit = async () => {
   }
 }
 
-onMounted(async () => {
-  await store.load()
-  if (store.error) {
-    loadError.value = store.error
-    initializing.value = false
-    return
-  }
-  if (!isEditing.value) {
-    rebuildPreviewUrls()
-    initializing.value = false
-    return
-  }
+const addPointerTarget = (pointer: ArchivePlanAddPointer) => ({
+  itemType: pointer.kind === 'catalog' ? 'curated_style' : 'private_reference',
+  itemId: pointer.id,
+} as const)
 
+const resolveLibraryPointer = (pointer: ArchivePlanAddPointer) => (
+  resolveLibraryCandidateDraft(
+    addPointerTarget(pointer),
+    {
+      getPrivateReference: async (id) => libraryStore.getReference(id),
+    },
+  )
+)
+
+const consumeLibraryPointer = (draft: CandidateDraft) => {
+  const sourceKey = candidateSourceKey(draft)
+  if (!sourceKey) {
+    addNotice.value = '这份发型来源不完整，无法加入计划。'
+  } else if (selectedSourceKeys.value.has(sourceKey)) {
+    addNotice.value = '这份发型已经在当前计划里。'
+  } else if (selectedCandidates.value.length >= 4) {
+    addNotice.value = '计划已满 4 个候选，请先移除一个再加入。'
+  } else {
+    if (form.mode !== 'exploration') {
+      form.mode = 'exploration'
+    }
+    selectedCandidates.value.push({ ...draft, uiKey: sourceKey })
+    addNotice.value = `已把“${draft.name}”加入探索计划；再选 1—3 个方向即可保存。`
+  }
+}
+
+const hydrateEditingPlan = () => {
   const plan = store.plans.find(({ id }) => id === routePlanId.value)
   if (!plan) {
     planMissing.value = true
-    initializing.value = false
     return
   }
   if (plan.status === 'completed') {
     readOnlyReason.value = '已完成的旧计划与剪后记录保持只读，本阶段不会把它降级为草稿。'
-    initializing.value = false
     return
   }
   const existingCandidates = store.candidatesByPlanId[plan.id] ?? []
@@ -314,7 +363,6 @@ onMounted(async () => {
     !isSafelyEditableCandidate(candidate, knownDemoPaths)
   ))) {
     readOnlyReason.value = '此计划含有缺少来源指针、图片或处理信息的旧版候选。为避免编辑时丢失来源和原数据，本阶段保持只读。'
-    initializing.value = false
     return
   }
   form.title = plan.title
@@ -324,10 +372,103 @@ onMounted(async () => {
   selectedCandidates.value = existingCandidates.map(toSelectedCandidate)
   rebuildPreviewUrls()
   document.title = '编辑发型计划｜咋剪发'
+}
+
+const initializeForRoute = async () => {
+  const request = routeRequest + 1
+  routeRequest = request
+  const hasQuery = Object.keys(route.query).length > 0
+  const returnTarget = !isEditing.value && hasQuery
+    ? parseArchivePlanReturnPath(route.fullPath)
+    : null
+
+  if (!isEditing.value && !hasQuery && initializedOnce) {
+    initializing.value = false
+    return
+  }
+
+  loadError.value = null
+  planMissing.value = false
+  readOnlyReason.value = null
+  initializing.value = true
+  await Promise.all([
+    store.load(),
+    ...(returnTarget ? [libraryStore.load()] : []),
+  ])
+  if (!viewActive || request !== routeRequest) {
+    return
+  }
+  initializedOnce = true
+  if (store.error) {
+    loadError.value = store.error
+    initializing.value = false
+    return
+  }
+  if (returnTarget && libraryStore.error) {
+    loadError.value = libraryStore.error
+    initializing.value = false
+    return
+  }
+  if (!isEditing.value && hasQuery && !returnTarget) {
+    addNotice.value = '这个加入计划入口无效或已过期，未加入任何候选。'
+    initializing.value = false
+    await router.replace('/archive/plans/new')
+    return
+  }
+  if (!isEditing.value && returnTarget) {
+    let draft: CandidateDraft
+    try {
+      draft = await resolveLibraryPointer(returnTarget.pointer)
+    } catch {
+      if (!viewActive || request !== routeRequest) {
+        return
+      }
+      addNotice.value = returnTarget.pointer.kind === 'catalog'
+        ? '这个精选发型已停用或找不到，未加入计划。'
+        : '这份私人参考已删除或找不到，未加入计划。'
+      initializing.value = false
+      await router.replace('/archive/plans/new')
+      return
+    }
+    if (!viewActive || request !== routeRequest) {
+      return
+    }
+    if (!store.profile) {
+      initializing.value = false
+      await router.replace({
+        path: '/archive/profile',
+        query: { next: returnTarget.path },
+      })
+      return
+    }
+    consumeLibraryPointer(draft)
+    rebuildPreviewUrls()
+    initializing.value = false
+    await router.replace('/archive/plans/new')
+    return
+  }
+  if (isEditing.value) {
+    hydrateEditingPlan()
+  } else {
+    rebuildPreviewUrls()
+  }
   initializing.value = false
+}
+
+watch(() => route.fullPath, () => {
+  if (viewActive) {
+    void initializeForRoute()
+  }
+})
+
+onMounted(() => {
+  viewActive = true
+  void initializeForRoute()
 })
 
 onBeforeUnmount(() => {
+  viewActive = false
+  routeRequest += 1
   referenceRequest += 1
   revokePreviewUrls()
 })
@@ -347,7 +488,7 @@ onBeforeUnmount(() => {
 
     <header class="inner-header">
       <p class="eyebrow">
-        PLAN · 2—4 DIRECTIONS
+        {{ form.mode === 'repeat' ? 'REPEAT · ONE STANDARD' : 'PLAN · 2—4 DIRECTIONS' }}
       </p>
       <h1 id="plan-form-title">
         {{ isEditing ? '编辑发型计划' : '新建发型计划' }}
@@ -377,6 +518,13 @@ onBeforeUnmount(() => {
     >
       <h2>请先建立发型档案</h2>
       <p>计划需要归属于这台设备上的主档案。</p>
+      <p
+        v-if="addNotice"
+        class="form-alert"
+        role="alert"
+      >
+        {{ addNotice }}
+      </p>
       <RouterLink
         class="archive-primary-link"
         to="/archive/profile"
@@ -418,6 +566,13 @@ onBeforeUnmount(() => {
       @submit.prevent="submit"
     >
       <p
+        v-if="addNotice"
+        class="form-alert"
+        role="alert"
+      >
+        {{ addNotice }}
+      </p>
+      <p
         v-if="store.error"
         class="form-alert"
         role="alert"
@@ -458,6 +613,30 @@ onBeforeUnmount(() => {
         </label>
       </div>
 
+      <fieldset class="plan-mode-picker">
+        <legend>计划方式</legend>
+        <label>
+          <input
+            type="radio"
+            name="planMode"
+            value="exploration"
+            :checked="form.mode === 'exploration'"
+            @change="setPlanMode('exploration')"
+          >
+          <span><b>探索计划</b><small>比较 2—4 个不同方向</small></span>
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="planMode"
+            value="repeat"
+            :checked="form.mode === 'repeat'"
+            @change="setPlanMode('repeat')"
+          >
+          <span><b>复刻标准发型</b><small>只带 1 个真实剪后快照</small></span>
+        </label>
+      </fieldset>
+
       <section
         v-if="selectedCandidates.length > 0"
         class="selected-candidates"
@@ -468,7 +647,7 @@ onBeforeUnmount(() => {
             <p class="section-index">
               SELECTED
             </p>
-            <h2>已选择 {{ selectedCandidates.length }} / 4</h2>
+            <h2>已选择 {{ selectedCandidates.length }} / {{ candidateLimit }}</h2>
           </div>
         </div>
         <ol>
@@ -505,6 +684,58 @@ onBeforeUnmount(() => {
       </section>
 
       <section
+        v-if="form.mode === 'repeat'"
+        class="candidate-source-section past-record-picker repeat-standard-picker"
+        aria-labelledby="repeat-standard-title"
+      >
+        <p class="section-index">
+          STANDARD · ACTIVE
+        </p>
+        <h2 id="repeat-standard-title">
+          选择一个标准发型
+        </h2>
+        <p>复刻计划只能使用仍在当前档案中的标准发型，并保存一份独立照片快照。</p>
+        <div
+          v-if="standardRecordChoices.length === 0"
+          class="archive-empty archive-empty--inner"
+        >
+          <h3>还没有可复刻的标准发型</h3>
+          <p>先用探索计划选方向；满意的剪后记录可在之后标为标准发型。</p>
+          <button
+            type="button"
+            class="text-link"
+            @click="setPlanMode('exploration')"
+          >
+            转为探索计划
+          </button>
+        </div>
+        <ol v-else>
+          <li
+            v-for="choice in standardRecordChoices"
+            :key="choice.record.id"
+          >
+            <img
+              :src="previewUrls[`past-record-choice:${choice.record.id}`] || ''"
+              alt=""
+            >
+            <div>
+              <span>标准发型 · {{ choice.record.date }}</span>
+              <b>{{ choice.name }}</b>
+              <small>满意度 {{ choice.record.satisfaction }} / 5</small>
+              <button
+                type="button"
+                :disabled="store.saving || processingReference"
+                @click="togglePastRecord(choice)"
+              >
+                {{ isPastSelected(choice) ? `移除标准发型：${choice.name}` : `选择标准发型：${choice.name}` }}
+              </button>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section
+        v-if="form.mode === 'exploration'"
         class="candidate-source-section local-reference-picker"
         aria-labelledby="local-reference-title"
       >
@@ -549,6 +780,7 @@ onBeforeUnmount(() => {
       </section>
 
       <section
+        v-if="form.mode === 'exploration'"
         class="candidate-source-section past-record-picker"
         aria-labelledby="past-record-title"
       >
@@ -587,6 +819,7 @@ onBeforeUnmount(() => {
       </section>
 
       <section
+        v-if="form.mode === 'exploration'"
         class="demo-candidate-picker candidate-source-section"
         aria-labelledby="demo-candidate-title"
       >
@@ -631,7 +864,7 @@ onBeforeUnmount(() => {
       <button
         class="submit-button"
         type="submit"
-        :disabled="store.saving || processingReference || selectedCandidates.length < 2 || selectedCandidates.length > 4"
+        :disabled="store.saving || processingReference || !candidateCountValid"
       >
         {{ store.saving ? '正在保存…' : isEditing ? '保存修改' : '保存计划' }}
       </button>

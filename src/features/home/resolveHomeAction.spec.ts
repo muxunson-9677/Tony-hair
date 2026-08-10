@@ -182,13 +182,13 @@ describe('resolveHomeAction', () => {
     })
   })
 
-  test('uses the persisted two-to-four candidate contract for repeat plans', () => {
+  test('opens a single repeat snapshot and repairs repeat plans with two or more candidates', () => {
     const repeatPlan = plan({ mode: 'repeat' })
-    const twoCandidates = [candidate('candidate-1'), candidate('candidate-2')]
+    const oneCandidate = [candidate('candidate-1')]
 
     expect(resolve({
       plans: [repeatPlan],
-      candidatesByPlanId: { 'plan-1': twoCandidates },
+      candidatesByPlanId: { 'plan-1': oneCandidate },
     })).toEqual({
       kind: 'choose_primary',
       label: '确定主方案',
@@ -197,7 +197,7 @@ describe('resolveHomeAction', () => {
 
     expect(resolve({
       plans: [repeatPlan],
-      candidatesByPlanId: { 'plan-1': twoCandidates },
+      candidatesByPlanId: { 'plan-1': oneCandidate },
       briefsByPlanId: { 'plan-1': brief() },
     })).toEqual({
       kind: 'open_brief',
@@ -207,12 +207,22 @@ describe('resolveHomeAction', () => {
 
     expect(resolve({
       plans: [repeatPlan],
-      candidatesByPlanId: { 'plan-1': [candidate('candidate-1')] },
+      candidatesByPlanId: {
+        'plan-1': [candidate('candidate-1'), candidate('candidate-2')],
+      },
     })).toEqual({
       kind: 'continue_plan',
       label: '继续完善计划',
       to: '/archive/plans/plan-1/edit',
     })
+
+    expect(resolve({
+      plans: [plan({ mode: 'repeat', status: 'ready', date: '2026-08-10' })],
+      candidatesByPlanId: {
+        'plan-1': [candidate('candidate-1'), candidate('candidate-2')],
+      },
+      briefsByPlanId: { 'plan-1': brief() },
+    })).toMatchObject({ kind: 'continue_plan' })
   })
 
   test('opens a ready plan due within three local calendar days, including overdue plans', () => {

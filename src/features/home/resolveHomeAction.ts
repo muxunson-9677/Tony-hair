@@ -7,6 +7,7 @@ import type {
   HaircutRecord,
   StandardStyle,
 } from '../archive/types'
+import { isValidPlanCandidateCount } from '../archive/types'
 
 export interface HomeActionInput {
   readonly now: Date
@@ -117,11 +118,16 @@ export const resolveHomeAction = (input: HomeActionInput): HomeAction => {
 
   const activePlan = activePlans[0]
   if (activePlan) {
+    const candidates = input.candidatesByPlanId[activePlan.id] ?? []
     const planDay = calendarDateOrdinal(activePlan.date)
     if (
       activePlan.status === 'ready'
       && planDay !== null
       && planDay <= localDayOrdinal(input.now) + 3
+      && (
+        activePlan.mode !== 'repeat'
+        || isValidPlanCandidateCount(activePlan.mode, candidates.length)
+      )
     ) {
       return {
         kind: 'open_ready_brief',
@@ -130,7 +136,6 @@ export const resolveHomeAction = (input: HomeActionInput): HomeAction => {
       }
     }
 
-    const candidates = input.candidatesByPlanId[activePlan.id] ?? []
     if (activePlan.mode === 'exploration' && candidates.length < 2) {
       return {
         kind: 'add_candidates',
@@ -146,7 +151,7 @@ export const resolveHomeAction = (input: HomeActionInput): HomeAction => {
       }
     }
 
-    const hasValidCount = candidates.length >= 2 && candidates.length <= 4
+    const hasValidCount = isValidPlanCandidateCount(activePlan.mode, candidates.length)
     if (hasValidCount) {
       return input.briefsByPlanId[activePlan.id]
         ? {

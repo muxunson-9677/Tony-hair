@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { inject, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, inject, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import {
   useArchiveStore,
   type HairProfileDraft,
 } from '../features/archive/archiveStore'
+import { parseArchivePlanReturnPath } from '../features/archive/archiveReturnPath'
 import { shouldDiscardPollDraftOnArchiveDeletion } from '../features/polls/archivePollDeletion'
 import {
   defaultPollDraftRepository,
@@ -14,10 +15,19 @@ import {
 import type { PollDraft } from '../features/polls/types'
 
 const router = useRouter()
+const route = useRoute()
 const store = useArchiveStore()
 const pollDraftRepository = inject(POLL_DRAFT_REPOSITORY_KEY, defaultPollDraftRepository)
 const initializing = ref(true)
 const pollDeleteError = ref('')
+let viewActive = false
+let submitRequest = 0
+const canonicalReturnPath = computed(() => {
+  const next = route.query.next
+  return typeof next === 'string' && next.startsWith('/')
+    ? parseArchivePlanReturnPath(next)?.path ?? null
+    : null
+})
 
 const form = reactive<HairProfileDraft>({
   name: '',
@@ -44,9 +54,17 @@ const populateForm = () => {
 }
 
 const submit = async () => {
+  const request = submitRequest + 1
+  submitRequest = request
+  const returnPathBeforeSave = canonicalReturnPath.value
   const saved = await store.saveProfile(form)
-  if (saved) {
-    await router.push('/archive')
+  if (saved && viewActive && request === submitRequest) {
+    const returnPathAfterSave = canonicalReturnPath.value
+    await router.replace(
+      returnPathBeforeSave && returnPathAfterSave === returnPathBeforeSave
+        ? returnPathAfterSave
+        : '/archive',
+    )
   }
 }
 
@@ -104,9 +122,16 @@ const deleteProfile = async () => {
 }
 
 onMounted(async () => {
+  viewActive = true
   await store.load()
+  if (!viewActive) return
   populateForm()
   initializing.value = false
+})
+
+onBeforeUnmount(() => {
+  viewActive = false
+  submitRequest += 1
 })
 </script>
 
@@ -117,9 +142,9 @@ onMounted(async () => {
   >
     <RouterLink
       class="back-link"
-      to="/archive"
+      :to="canonicalReturnPath ?? '/archive'"
     >
-      <span aria-hidden="true">←</span> 返回档案
+      <span aria-hidden="true">←</span> {{ canonicalReturnPath ? '返回发型计划' : '返回档案' }}
     </RouterLink>
 
     <header class="inner-header">

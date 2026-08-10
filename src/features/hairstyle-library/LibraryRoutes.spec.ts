@@ -277,7 +277,7 @@ describe('hairstyle library routes', () => {
     expect(screen.getByRole('link', { name: '查看发型：齐颌短鲍伯' })).toBeTruthy()
   })
 
-  test('shows complete reality and barber guidance without a dead add-to-plan action', async () => {
+  test('shows complete reality and barber guidance with a canonical add-to-plan action', async () => {
     await renderAt('/styles/catalog/lin-bob')
 
     expect(await screen.findByRole('heading', { level: 1, name: '齐颌短鲍伯' })).toBeTruthy()
@@ -290,8 +290,8 @@ describe('hairstyle library routes', () => {
     expect(screen.getByText(/顶部只做轻层次维持饱满/)).toBeTruthy()
     expect(screen.getByRole('link', { name: '给理发师看' }).getAttribute('href'))
       .toBe('/styles/catalog/lin-bob/show')
-    expect(screen.queryByRole('button', { name: /加入.*计划/ })).toBeNull()
-    expect(screen.queryByRole('link', { name: /加入.*计划/ })).toBeNull()
+    expect(screen.getByRole('link', { name: '加入计划' }).getAttribute('href'))
+      .toBe('/archive/plans/new?add=catalog:lin-bob')
   })
 
   test('renders an honest terminal state for an invalid or retired catalog id', async () => {
@@ -787,7 +787,8 @@ describe('hairstyle library routes', () => {
       .toBe(`/styles/references/${reference.id}/show`)
     expect(screen.getByRole('link', { name: '编辑私人参考' }).getAttribute('href'))
       .toBe(`/styles/references/${reference.id}/edit`)
-    expect(screen.queryByRole('link', { name: /加入.*计划/ })).toBeNull()
+    expect(screen.getByRole('link', { name: '加入计划' }).getAttribute('href'))
+      .toBe(`/archive/plans/new?add=private_reference:${reference.id}`)
 
     const confirmDelete = vi.spyOn(window, 'confirm').mockReturnValue(true)
     await fireEvent.click(screen.getByRole('button', { name: '删除私人参考' }))

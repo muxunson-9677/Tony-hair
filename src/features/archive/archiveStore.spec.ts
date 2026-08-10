@@ -433,7 +433,7 @@ describe('archive store', () => {
     expect(store.loading).toBe(false)
   })
 
-  test('creates, edits, reloads, and deletes a plan with two to four unique demo candidates', async () => {
+  test('uses two-to-four exploration candidates and one repeat snapshot', async () => {
     repository.profiles = [fullProfile()]
     ids = ['plan-new', 'candidate-new-1', 'candidate-new-2', 'candidate-new-3']
     const store = useTestStore()
@@ -457,19 +457,23 @@ describe('archive store', () => {
     expect(created?.candidates).toHaveLength(2)
     expect(new Set(created?.candidates.map(({ demoImagePath }) => demoImagePath))).toHaveProperty('size', 2)
 
+    expect(await store.savePlan(planDraft({
+      id: created?.plan.id,
+      mode: 'repeat',
+    }))).toBeNull()
+    expect(store.error).toMatch(/1/)
+
     const edited = await store.savePlan(planDraft({
       id: created?.plan.id,
       title: '更新后的方向',
       mode: 'repeat',
-      candidates: [
-        planDraft().candidates[0],
-        {
-          name: '清爽渐层',
-          notes: '低渐层并保留顶部长度。',
-          source: 'demo_ai',
-          demoImagePath: '/demo/persona-qiao-taper.webp',
-        },
-      ],
+      candidates: [{
+        name: '清爽短碎发',
+        notes: '按保存的剪后快照复刻。',
+        source: 'past_record',
+        pastRecordId: 'record-existing',
+        referenceImage: localPhoto,
+      }],
     }))
     expect(edited?.plan.title).toBe('更新后的方向')
     expect(edited?.plan.mode).toBe('repeat')
@@ -480,7 +484,7 @@ describe('archive store', () => {
     await refreshed.load()
     expect(refreshed.plans[0]?.title).toBe('更新后的方向')
     expect(refreshed.plans[0]?.mode).toBe('repeat')
-    expect(refreshed.candidatesByPlanId[created?.plan.id ?? '']).toHaveLength(2)
+    expect(refreshed.candidatesByPlanId[created?.plan.id ?? '']).toHaveLength(1)
 
     await refreshed.deletePlan(created?.plan.id ?? '')
     expect(refreshed.plans).toEqual([])

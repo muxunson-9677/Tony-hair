@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useArchiveStore } from '../features/archive/archiveStore'
 import * as briefExport from '../features/archive/briefExport'
 import { resolveCandidateImageBlob } from '../features/archive/candidateSources'
+import { isValidPlanCandidateCount } from '../features/archive/types'
 import type { Candidate } from '../features/archive/types'
 
 const route = useRoute()
@@ -15,6 +16,9 @@ const plan = computed(() => store.plans.find(({ id }) => id === planId.value))
 const candidates = computed(() => store.candidatesByPlanId[planId.value] ?? [])
 const savedBrief = computed(() => store.briefsByPlanId[planId.value])
 const candidateObjectUrls = ref<Record<string, string>>({})
+const hasValidCandidateCount = computed(() => Boolean(
+  plan.value && isValidPlanCandidateCount(plan.value.mode, candidates.value.length),
+))
 
 const targetCandidateId = ref('')
 const overall = ref('')
@@ -28,6 +32,7 @@ const absoluteAvoids = ref([''])
 const message = ref<string | null>(null)
 const exporting = ref(false)
 const hydrated = ref(false)
+let viewActive = false
 
 const targetCandidate = computed(() => (
   candidates.value.find(({ id }) => id === targetCandidateId.value)
@@ -166,7 +171,9 @@ const deleteBrief = async () => {
 }
 
 onMounted(async () => {
+  viewActive = true
   await store.load()
+  if (!viewActive) return
   buildCandidateUrls()
   hydrate()
   hydrated.value = true
@@ -174,7 +181,10 @@ onMounted(async () => {
     document.title = `${savedBrief.value ? '编辑' : '创建'}理发师沟通卡｜咋剪发`
   }
 })
-onBeforeUnmount(revokeCandidateUrls)
+onBeforeUnmount(() => {
+  viewActive = false
+  revokeCandidateUrls()
+})
 </script>
 
 <template>
@@ -231,13 +241,13 @@ onBeforeUnmount(revokeCandidateUrls)
       </div>
 
       <div
-        v-else-if="candidates.length < 2 || candidates.length > 4"
+        v-else-if="!hasValidCandidateCount"
         class="archive-empty archive-empty--inner"
       >
         <h1 id="brief-title">
           这个计划不能创建沟通卡
         </h1>
-        <p>沟通卡需要计划中保留 2—4 个候选。旧数据不会被删除，请先返回计划确认。</p>
+        <p>{{ plan.mode === 'repeat' ? '复刻计划需要保留 1 个标准发型快照。' : '探索计划需要保留 2—4 个候选。' }}旧数据不会被删除，请先返回计划确认。</p>
       </div>
 
       <template v-else>
@@ -458,7 +468,7 @@ onBeforeUnmount(revokeCandidateUrls)
     </div>
 
     <article
-      v-if="plan && candidates.length >= 2 && candidates.length <= 4"
+      v-if="plan && hasValidCandidateCount"
       class="brief-preview"
       role="region"
       aria-label="理发师沟通卡预览"
