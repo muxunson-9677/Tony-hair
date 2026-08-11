@@ -107,6 +107,12 @@ describe('app shell', () => {
       expect(within(navigation).getByRole('link', { name: label })).toBeTruthy()
     }
 
+    expect(navigation.querySelectorAll('[data-nav-icon]')).toHaveLength(4)
+    expect(navigation.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(4)
+    for (const index of ['01', '02', '03', '04']) {
+      expect(within(navigation).queryByText(index)).toBeNull()
+    }
+
     expect(within(navigation).getByRole('link', { name: '档案' }).getAttribute('aria-current')).toBe(
       'page',
     )

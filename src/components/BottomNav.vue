@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 
+import AppIcon from '../ui/AppIcon.vue'
+
 defineProps<{
   placement: 'desktop' | 'mobile'
 }>()
 
 const route = useRoute()
 const navigationItems = [
-  { index: '01', label: '首页', to: '/' },
-  { index: '02', label: '找发型', to: '/styles' },
-  { index: '03', label: '档案', to: '/archive' },
-  { index: '04', label: '我的', to: '/me' },
+  { icon: 'home', label: '首页', to: '/', tone: 'coral' },
+  { icon: 'styles', label: '找发型', to: '/styles', tone: 'blue' },
+  { icon: 'archive', label: '档案', to: '/archive', tone: 'purple' },
+  { icon: 'me', label: '我的', to: '/me', tone: 'mint' },
 ] as const
 
 const isItemActive = (to: string) => (
@@ -33,6 +35,7 @@ const isItemActive = (to: string) => (
         custom
       >
         <a
+          v-tactile
           class="bottom-nav__brand"
           :href="href"
           aria-label="咋剪发首页"
@@ -53,17 +56,22 @@ const isItemActive = (to: string) => (
         custom
       >
         <a
+          v-tactile
           class="bottom-nav__link"
           :class="{ 'bottom-nav__link--active': isItemActive(item.to) }"
           :href="href"
           :aria-current="isItemActive(item.to) ? 'page' : undefined"
+          :data-tone="item.tone"
           @click="navigate"
         >
           <span
-            class="bottom-nav__index"
+            class="bottom-nav__icon-well"
+            data-nav-icon
             aria-hidden="true"
-          >{{ item.index }}</span>
-          <span>{{ item.label }}</span>
+          >
+            <AppIcon :name="item.icon" />
+          </span>
+          <span class="bottom-nav__label">{{ item.label }}</span>
         </a>
       </RouterLink>
     </div>
