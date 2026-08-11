@@ -1393,20 +1393,42 @@ describe('archive routes and forms', () => {
     expect(screen.getByLabelText('下次调整 1')).toBeTruthy()
   })
 
-  test('starts help-me-choose with one plain-language goal and delays plan settings', async () => {
+  test('turns three plain-language answers into three editable plan candidates', async () => {
     await defaultArchiveRepository.createProfile(existingProfile)
     const router = await renderAt('/archive/plans/new?intent=choose')
 
-    const goals = await screen.findByRole('group', { name: '这次你最想解决什么？' })
     expect(router.currentRoute.value.query.intent).toBe('choose')
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(within(goals).getByRole('button', { name: '每天少打理' })).toBeTruthy()
-    expect(within(goals).getByRole('button', { name: '两侧别太短' })).toBeTruthy()
-    expect(within(goals).getByRole('button', { name: '想明显换个感觉' })).toBeTruthy()
-    const settings = screen.getByText('日期和名称').closest('details')
-    expect(settings?.open).toBe(false)
-    await fireEvent.click(within(goals).getByRole('button', { name: '每天少打理' }))
-    expect((screen.getByLabelText('计划标题') as HTMLInputElement).value).toBe('少打理的下次剪法')
+
+    const goal = await screen.findByRole('group', { name: '这次最想解决什么？' })
+    await fireEvent.click(within(goal).getByRole('button', { name: '每天少打理' }))
+
+    const budget = await screen.findByRole('group', { name: '每天最多愿意打理多久？' })
+    await fireEvent.click(within(budget).getByRole('button', { name: '5 分钟以内' }))
+
+    const change = await screen.findByRole('group', { name: '这次想变化多大？' })
+    await fireEvent.click(within(change).getByRole('button', { name: '有变化，但别太冒险' }))
+
+    expect(await screen.findByRole('heading', { name: '先比较这三个方向' })).toBeTruthy()
+    expect(screen.getByText('最稳妥')).toBeTruthy()
+    expect(screen.getByText('最符合目标')).toBeTruthy()
+    expect(screen.getByText('最值得尝试')).toBeTruthy()
+
+    await fireEvent.click(screen.getByRole('button', { name: '一起比较这 3 个方向' }))
+
+    const selected = await screen.findByRole('region', { name: '已选候选' })
+    expect(within(selected).getByText('已选择 3 / 4')).toBeTruthy()
+    expect(within(selected).getAllByRole('img')).toHaveLength(3)
+    expect((screen.getByLabelText('计划标题') as HTMLInputElement).value).toBe('帮我选的下次剪法')
+  })
+
+  test('keeps the guided questions out of the ordinary plan form', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    await renderAt('/archive/plans/new')
+
+    expect(await screen.findByRole('heading', { name: '新建发型计划' })).toBeTruthy()
+    expect(screen.queryByText('先回答一件事')).toBeNull()
+    expect(await screen.findByText('选择第一个候选')).toBeTruthy()
   })
 
   test('opens the repeat entry as a repeat plan without treating its intent as an add-source error', async () => {

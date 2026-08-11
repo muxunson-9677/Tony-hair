@@ -5777,6 +5777,204 @@ a:focus-visible {
   font-size: 0.82rem;
 }
 
+.guided-direction-picker {
+  display: grid;
+  gap: 20px;
+  padding: 22px;
+  border: 1px solid rgba(124, 136, 154, 0.18);
+  border-radius: 26px;
+  background: #fff;
+  box-shadow: 0 18px 44px rgba(34, 50, 78, 0.1), 0 2px 5px rgba(34, 50, 78, 0.06);
+}
+
+.guided-direction-picker > header h2,
+.guided-direction-results__heading h2 {
+  margin: 4px 0 8px;
+  font-size: clamp(1.65rem, 7vw, 2.35rem);
+  letter-spacing: -0.045em;
+  line-height: 1.04;
+}
+
+.guided-direction-picker > header > p:last-child,
+.guided-direction-disclosure {
+  margin: 0;
+  color: #68717e;
+  line-height: 1.55;
+}
+
+.guided-direction-question {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+}
+
+.guided-direction-question legend {
+  margin-bottom: 14px;
+  font-size: 1.05rem;
+  font-weight: 760;
+}
+
+.guided-direction-question button,
+.guided-direction-results__heading button {
+  min-height: 54px;
+  padding: 0 18px;
+  border: 1px solid rgba(89, 103, 126, 0.16);
+  border-radius: 17px;
+  color: #202938;
+  background: linear-gradient(180deg, #fff 0%, #f7f9fc 100%);
+  box-shadow: 0 8px 18px rgba(34, 50, 78, 0.07), inset 0 1px 0 #fff;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+}
+
+.guided-direction-question .guided-direction-back,
+.guided-direction-results__heading button {
+  border-color: transparent;
+  color: #526071;
+  background: transparent;
+  box-shadow: none;
+  font-weight: 620;
+}
+
+.guided-direction-results,
+.guided-direction-list,
+.guided-direction-card__body {
+  display: grid;
+  gap: 14px;
+}
+
+.guided-direction-results__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.guided-direction-results__heading button {
+  flex: 0 0 auto;
+  min-height: 45px;
+  padding: 0 8px;
+}
+
+.guided-direction-list {
+  padding: 0;
+  list-style: none;
+}
+
+.guided-direction-list > li {
+  overflow: hidden;
+  border: 1px solid rgba(124, 136, 154, 0.16);
+  border-radius: 22px;
+  background: #f7f9fc;
+  box-shadow: 0 10px 24px rgba(34, 50, 78, 0.07);
+}
+
+.guided-direction-list img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.guided-direction-card__body {
+  padding: 17px;
+}
+
+.guided-direction-card__body h3,
+.guided-direction-card__body p {
+  margin: 0;
+}
+
+.guided-direction-card__body h3 {
+  font-size: 1.35rem;
+  letter-spacing: -0.025em;
+}
+
+.guided-direction-role {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: #235b45;
+  background: #e7f7ef;
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.guided-direction-role--goal {
+  color: #285ca4;
+  background: #eaf2ff;
+}
+
+.guided-direction-role--try {
+  color: #925417;
+  background: #fff1d8;
+}
+
+.guided-direction-role svg {
+  width: 16px;
+  height: 16px;
+}
+
+.guided-direction-card__body dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.guided-direction-card__body dl > div {
+  padding: 10px;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.guided-direction-card__body dt {
+  color: #707987;
+  font-size: 0.72rem;
+}
+
+.guided-direction-card__body dd {
+  margin: 4px 0 0;
+  font-size: 0.84rem;
+  font-weight: 680;
+  line-height: 1.4;
+}
+
+.guided-direction-adopt {
+  width: 100%;
+  min-height: 54px;
+  padding: 0 18px;
+  border: 1px solid #185fcf;
+  border-radius: 17px;
+  color: #fff;
+  background: linear-gradient(180deg, #4388f5 0%, #286fdc 100%);
+  box-shadow: 0 10px 22px rgba(40, 111, 220, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  font: inherit;
+  font-weight: 760;
+}
+
+.guided-direction-picker ~ .plan-setup-details,
+.guided-direction-picker ~ .candidate-source-disclosure,
+.guided-direction-picker ~ .submit-button {
+  display: none;
+}
+
+@media (min-width: 760px) {
+  .guided-direction-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .guided-direction-list img {
+    aspect-ratio: 1 / 1;
+  }
+}
+
 .plan-setup-details {
   border-top: 1px solid rgba(43, 57, 80, 0.1);
   border-bottom: 1px solid rgba(43, 57, 80, 0.1);

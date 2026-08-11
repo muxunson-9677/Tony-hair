@@ -31,6 +31,8 @@ import type {
 import { tactileDirective as vTactile } from '../ui/tactile'
 import { resolveLibraryCandidateDraft } from '../features/hairstyle-library/libraryCandidates'
 import { useHairstyleLibraryStore } from '../features/hairstyle-library/libraryStore'
+import GuidedDirectionPicker from '../features/hairstyle-library/components/GuidedDirectionPicker.vue'
+import type { CuratedHairstyle } from '../features/hairstyle-library/types'
 import { prepareLocalImage } from '../features/images/prepareLocalImage'
 
 type SelectedCandidate = CandidateDraft & { readonly uiKey: string }
@@ -53,7 +55,6 @@ const hasRecognizedIntent = computed(() => (
   (isGuidedChoice.value || isRepeatIntent.value)
   && Object.keys(route.query).length === 1
 ))
-const guidedGoal = ref('')
 const routePlanId = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
 const planMissing = ref(false)
 const initializing = ref(true)
@@ -232,18 +233,37 @@ const setPlanMode = (mode: HaircutPlan['mode']) => {
   rebuildPreviewUrls()
 }
 
-const chooseGuidedGoal = (goal: string, title: string) => {
-  guidedGoal.value = goal
-  if (!form.title.trim() || form.title === '这次怎么剪') {
-    form.title = title
-  }
-}
-
 const closeCandidateSources = async () => {
   await nextTick()
   if (candidateSourceDisclosure.value) {
     candidateSourceDisclosure.value.open = false
   }
+}
+
+const adoptGuidedDirections = (styles: readonly CuratedHairstyle[]) => {
+  if (store.saving || processingReference.value) {
+    return
+  }
+  const choices = styles.flatMap((style) => {
+    const choice = archiveDemoCandidates.find(({ image }) => image === style.coverImage)
+    return choice ? [choice] : []
+  })
+  if (choices.length !== styles.length || choices.length < 2 || choices.length > 4) {
+    addNotice.value = '这些方向暂时无法加入计划，请重新选择。'
+    return
+  }
+  selectedCandidates.value = choices.map((choice) => ({
+    uiKey: `demo_ai:${choice.image}`,
+    name: choice.name,
+    notes: choice.notes,
+    source: 'demo_ai',
+    demoImagePath: choice.image,
+  }))
+  if (!form.title.trim() || form.title === '这次怎么剪') {
+    form.title = '帮我选的下次剪法'
+  }
+  addNotice.value = '已加入 3 个不同方向，你可以直接保存或继续更换。'
+  void closeCandidateSources()
 }
 
 const formatBytes = (bytes: number) => (
@@ -613,27 +633,11 @@ onBeforeUnmount(() => {
         {{ store.error }}
       </p>
 
-      <fieldset
-        v-if="isGuidedChoice"
-        class="guided-goal-picker"
-      >
-        <legend>这次你最想解决什么？</legend>
-        <button
-          v-for="choice in [
-            ['easy', '每天少打理', '少打理的下次剪法'],
-            ['length', '两侧别太短', '保留两侧长度的下次剪法'],
-            ['change', '想明显换个感觉', '换个感觉的下次剪法'],
-          ]"
-          :key="choice[0]"
-          v-tactile
-          type="button"
-          :aria-pressed="guidedGoal === choice[0]"
-          @click="chooseGuidedGoal(choice[0] ?? '', choice[2] ?? '')"
-        >
-          {{ choice[1] }}
-        </button>
-        <p>先选最重要的一件事；之后只比较 2—4 个方向。</p>
-      </fieldset>
+      <GuidedDirectionPicker
+        v-if="isGuidedChoice && store.profile && selectedCandidates.length === 0"
+        :profile="store.profile"
+        @adopt="adoptGuidedDirections"
+      />
 
       <details class="plan-setup-details">
         <summary v-tactile>
