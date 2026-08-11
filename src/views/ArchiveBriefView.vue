@@ -8,6 +8,7 @@ import { resolveCandidateImageBlob } from '../features/archive/candidateSources'
 import { isValidPlanCandidateCount } from '../features/archive/types'
 import type { Candidate } from '../features/archive/types'
 import { curatedHairstyles } from '../features/hairstyle-library/curatedCatalog'
+import { tactileDirective as vTactile } from '../ui/tactile'
 
 const route = useRoute()
 const router = useRouter()
@@ -220,6 +221,7 @@ onBeforeUnmount(() => {
   >
     <div class="brief-screen-only">
       <RouterLink
+        v-tactile
         class="back-link"
         :to="`/archive/plans/${planId}`"
       >
@@ -259,6 +261,7 @@ onBeforeUnmount(() => {
         </h1>
         <p>它可能已被删除，或这台设备没有保存过它。</p>
         <RouterLink
+          v-tactile
           class="text-link"
           to="/archive"
         >
@@ -320,6 +323,7 @@ onBeforeUnmount(() => {
               <label
                 v-for="candidate in candidates"
                 :key="candidate.id"
+                v-tactile
                 :class="{ 'brief-target-option--selected': targetCandidateId === candidate.id }"
               >
                 <input
@@ -344,7 +348,7 @@ onBeforeUnmount(() => {
           </fieldset>
 
           <details class="brief-edit-details">
-            <summary>
+            <summary v-tactile>
               <span>需要修改时展开</span>
               <small>已根据主方案、个人偏好和避雷规则生成草稿</small>
             </summary>
@@ -410,6 +414,7 @@ onBeforeUnmount(() => {
                   >
                 </label>
                 <button
+                  v-tactile
                   type="button"
                   :aria-label="`删除最在意 ${index + 1}`"
                   :disabled="topPriorities.length === 1"
@@ -419,6 +424,7 @@ onBeforeUnmount(() => {
                 </button>
               </div>
               <button
+                v-tactile
                 class="brief-add-button"
                 type="button"
                 :disabled="topPriorities.length >= 3"
@@ -444,6 +450,7 @@ onBeforeUnmount(() => {
                   >
                 </label>
                 <button
+                  v-tactile
                   type="button"
                   :aria-label="`删除绝对不要 ${index + 1}`"
                   :disabled="absoluteAvoids.length === 1"
@@ -453,6 +460,7 @@ onBeforeUnmount(() => {
                 </button>
               </div>
               <button
+                v-tactile
                 class="brief-add-button"
                 type="button"
                 :disabled="absoluteAvoids.length >= 3"
@@ -464,6 +472,7 @@ onBeforeUnmount(() => {
           </details>
 
           <button
+            v-tactile
             class="submit-button"
             type="submit"
             :disabled="store.saving"
@@ -474,6 +483,7 @@ onBeforeUnmount(() => {
 
         <div class="brief-output-actions">
           <button
+            v-tactile
             type="button"
             :disabled="exporting || !targetImageSource"
             @click="exportPng"
@@ -481,6 +491,7 @@ onBeforeUnmount(() => {
             {{ exporting ? '正在导出…' : '导出 PNG' }}
           </button>
           <button
+            v-tactile
             type="button"
             @click="printBrief"
           >
@@ -490,6 +501,7 @@ onBeforeUnmount(() => {
 
         <button
           v-if="savedBrief"
+          v-tactile
           class="danger-button"
           type="button"
           :disabled="store.saving"

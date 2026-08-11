@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
 import type { HairProfile, HaircutPlan } from '../features/archive/types'
+import { tactileDirective as vTactile } from '../ui/tactile'
 
 const store = useArchiveStore()
 const recordPhotoUrls = ref<Record<string, string>>({})
@@ -28,6 +29,15 @@ const savedBriefs = computed(() => store.plans.flatMap((plan) => {
   return [{ plan, brief, candidate, candidateLabel }]
 }))
 const latestRecord = computed(() => store.records[0])
+const activeStandardStyles = computed(() => store.standardStyles.filter(({ active }) => active))
+const activeAvoidRules = computed(() => store.avoidRules.filter(({ active }) => active))
+const hasArchiveActivity = computed(() => (
+  store.plans.length > 0
+  || store.records.length > 0
+  || activeStandardStyles.value.length > 0
+  || activeAvoidRules.value.length > 0
+  || savedBriefs.value.length > 0
+))
 const photoForRecord = (recordId: string, stages: readonly string[]) => (
   (store.photosByRecordId[recordId] ?? []).find(({ stage }) => stages.includes(stage))
 )
@@ -164,6 +174,7 @@ onBeforeUnmount(() => {
       <h2>这台设备还没有发型档案</h2>
       <p>先记下你的发质和日常习惯，之后建立的计划与剪后记录才有归属。</p>
       <RouterLink
+        v-tactile
         class="archive-primary-link"
         to="/archive/profile"
       >
@@ -218,11 +229,45 @@ onBeforeUnmount(() => {
           </p>
         </div>
         <RouterLink
+          v-tactile
           class="text-link"
           to="/archive/profile"
         >
           编辑档案
         </RouterLink>
+      </section>
+
+      <section
+        v-if="!hasArchiveActivity"
+        class="archive-next-step"
+        role="region"
+        aria-label="下一步"
+      >
+        <span
+          class="archive-next-step__icon"
+          aria-hidden="true"
+        >✦</span>
+        <div>
+          <p class="section-index">
+            02 / 下一步
+          </p>
+          <h2>现在可以开始留下真正有用的内容</h2>
+          <p>不知道剪什么，先去看适合你的方向；刚剪完头发，就留下剪前或剪后照片。</p>
+        </div>
+        <div class="archive-next-step__actions">
+          <RouterLink
+            v-tactile
+            to="/archive/plans/new"
+          >
+            新建发型计划
+          </RouterLink>
+          <RouterLink
+            v-tactile
+            to="/archive/records/new"
+          >
+            记录这次理发
+          </RouterLink>
+        </div>
       </section>
 
       <section
@@ -240,6 +285,7 @@ onBeforeUnmount(() => {
             </h2>
           </div>
           <RouterLink
+            v-tactile
             class="text-link"
             :to="`/archive/records/${latestRecord.id}`"
           >
@@ -265,6 +311,7 @@ onBeforeUnmount(() => {
       </section>
 
       <section
+        v-if="store.plans.length > 0"
         class="archive-plans"
         aria-labelledby="archive-plans-title"
       >
@@ -278,27 +325,24 @@ onBeforeUnmount(() => {
             </h2>
           </div>
           <RouterLink
+            v-tactile
             class="text-link"
             to="/archive/plans/new"
           >
             新建发型计划
           </RouterLink>
         </div>
-        <p
-          v-if="store.plans.length === 0"
-          class="archive-inline-empty"
-        >
-          还没有发型计划。探索计划可选 2—4 个方向；复刻计划只用 1 个标准发型快照。
-        </p>
         <ol
-          v-else
           class="plan-list"
         >
           <li
             v-for="plan in store.plans"
             :key="plan.id"
           >
-            <RouterLink :to="`/archive/plans/${plan.id}`">
+            <RouterLink
+              v-tactile
+              :to="`/archive/plans/${plan.id}`"
+            >
               <img
                 v-if="store.candidatesByPlanId[plan.id]?.[0]?.demoImagePath"
                 :src="store.candidatesByPlanId[plan.id]?.[0]?.demoImagePath"
@@ -316,6 +360,7 @@ onBeforeUnmount(() => {
       </section>
 
       <section
+        v-if="store.plans.length > 0 || store.records.length > 0"
         class="archive-records"
         aria-labelledby="archive-history-title"
       >
@@ -329,27 +374,25 @@ onBeforeUnmount(() => {
             </h2>
           </div>
           <RouterLink
+            v-tactile
             class="text-link"
             to="/archive/records/new"
           >
             记录这次理发
           </RouterLink>
         </div>
-        <p
-          v-if="store.records.length === 0"
-          class="archive-inline-empty"
-        >
-          还没有剪后记录。记录至少一张照片和满意度，之后才能形成复刻或避雷提醒。
-        </p>
         <ol
-          v-else
+          v-if="store.records.length > 0"
           class="record-list"
         >
           <li
             v-for="record in store.records"
             :key="record.id"
           >
-            <RouterLink :to="`/archive/records/${record.id}`">
+            <RouterLink
+              v-tactile
+              :to="`/archive/records/${record.id}`"
+            >
               <img
                 v-if="recordHeroPhoto(record.id)"
                 :src="recordPhotoUrls[recordHeroPhoto(record.id)?.id ?? '']"
@@ -367,6 +410,7 @@ onBeforeUnmount(() => {
       </section>
 
       <section
+        v-if="activeStandardStyles.length > 0"
         class="archive-guidance"
         aria-labelledby="archive-standard-title"
       >
@@ -376,18 +420,9 @@ onBeforeUnmount(() => {
         <h2 id="archive-standard-title">
           标准发型
         </h2>
-        <p
-          v-if="store.standardStyles.filter(({ active }) => active).length === 0"
-          class="archive-inline-empty"
-        >
-          还没有标准发型。
-        </p>
-        <ul
-          v-else
-          class="guidance-list"
-        >
+        <ul class="guidance-list">
           <li
-            v-for="style in store.standardStyles.filter(({ active }) => active)"
+            v-for="style in activeStandardStyles"
             :key="style.id"
           >
             {{ style.name }}
@@ -396,6 +431,7 @@ onBeforeUnmount(() => {
       </section>
 
       <section
+        v-if="activeAvoidRules.length > 0"
         class="archive-guidance"
         aria-labelledby="archive-avoid-title"
       >
@@ -405,18 +441,9 @@ onBeforeUnmount(() => {
         <h2 id="archive-avoid-title">
           避雷规则
         </h2>
-        <p
-          v-if="store.avoidRules.filter(({ active }) => active).length === 0"
-          class="archive-inline-empty"
-        >
-          还没有避雷规则。
-        </p>
-        <ul
-          v-else
-          class="guidance-list guidance-list--avoid"
-        >
+        <ul class="guidance-list guidance-list--avoid">
           <li
-            v-for="rule in store.avoidRules.filter(({ active }) => active)"
+            v-for="rule in activeAvoidRules"
             :key="rule.id"
           >
             {{ rule.text }}
@@ -425,6 +452,7 @@ onBeforeUnmount(() => {
       </section>
 
       <section
+        v-if="savedBriefs.length > 0"
         class="archive-briefs"
         aria-labelledby="archive-brief-title"
       >
@@ -432,16 +460,9 @@ onBeforeUnmount(() => {
           07 / 沟通卡
         </p>
         <h2 id="archive-brief-title">
-          {{ savedBriefs.length > 0 ? `已保存 ${savedBriefs.length} 张沟通卡` : '还没有沟通卡' }}
+          已保存 {{ savedBriefs.length }} 张沟通卡
         </h2>
-        <p
-          v-if="savedBriefs.length === 0"
-          class="archive-inline-empty"
-        >
-          先打开候选数量有效的计划：探索计划 2—4 个，复刻计划 1 个，再创建可编辑、可导出的理发师沟通卡。
-        </p>
         <ol
-          v-else
           class="brief-list"
         >
           <li
@@ -449,6 +470,7 @@ onBeforeUnmount(() => {
             :key="item.brief.id"
           >
             <RouterLink
+              v-tactile
               :to="`/archive/plans/${item.plan.id}/brief`"
               :aria-label="`${item.plan.title} · ${item.candidateLabel} · 查看沟通卡`"
             >

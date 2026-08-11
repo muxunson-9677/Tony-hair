@@ -211,6 +211,7 @@ onBeforeUnmount(() => {
     aria-labelledby="profile-form-title"
   >
     <RouterLink
+      v-tactile
       class="back-link"
       :to="canonicalReturnPath ?? '/archive'"
     >
@@ -256,187 +257,212 @@ onBeforeUnmount(() => {
         {{ pollDeleteError }}
       </p>
 
-      <label>
-        <span>称呼</span>
-        <input
-          v-model="form.name"
-          name="name"
-          autocomplete="nickname"
-          maxlength="40"
-          required
-        >
-      </label>
+      <details
+        class="profile-setup-step"
+        open
+      >
+        <summary v-tactile>
+          <span class="profile-setup-step__number">1</span>
+          <span><b>先放一张现在的头发照片</b><small>正面最有用，侧面和后脑可以以后再补</small></span>
+        </summary>
+        <div class="profile-setup-step__body">
+          <label>
+            <span>称呼</span>
+            <input
+              v-model="form.name"
+              name="name"
+              autocomplete="nickname"
+              maxlength="40"
+              required
+            >
+          </label>
 
-      <fieldset class="profile-photo-picker">
-        <legend>我的头发照片</legend>
-        <p>拍下正面、侧面或后脑。之后看档案和选发型时，会优先用你自己的真实照片。</p>
-        <div class="profile-photo-picker__grid">
-          <div
-            v-for="item in profilePhotoAngles"
-            :key="item.angle"
-            class="profile-photo-slot"
-          >
-            <img
-              v-if="profilePhotoUrls[item.angle]"
-              :src="profilePhotoUrls[item.angle]"
-              :alt="`我的头发${item.label}照片`"
+          <fieldset class="profile-photo-picker">
+            <legend>我的头发照片</legend>
+            <p>拍下正面、侧面或后脑。之后看档案和选发型时，会优先用你自己的真实照片。</p>
+            <div class="profile-photo-picker__grid">
+              <div
+                v-for="item in profilePhotoAngles"
+                :key="item.angle"
+                class="profile-photo-slot"
+              >
+                <img
+                  v-if="profilePhotoUrls[item.angle]"
+                  :src="profilePhotoUrls[item.angle]"
+                  :alt="`我的头发${item.label}照片`"
+                >
+                <span
+                  v-else
+                  class="profile-photo-slot__placeholder"
+                  aria-hidden="true"
+                >✦</span>
+                <b>{{ item.label }}</b>
+                <label
+                  v-tactile
+                  class="photo-pick-button"
+                >
+                  <span>{{ profilePhotoUrls[item.angle] ? '更换' : '添加' }}</span>
+                  <input
+                    type="file"
+                    :aria-label="`${item.label}头发照片`"
+                    accept="image/jpeg,image/png,image/webp"
+                    :disabled="store.saving || Boolean(processingPhotoAngle)"
+                    @change="setProfilePhoto(item.angle, $event)"
+                  >
+                </label>
+                <button
+                  v-if="profilePhotoUrls[item.angle]"
+                  v-tactile
+                  type="button"
+                  class="photo-remove-button"
+                  @click="removeProfilePhoto(item.angle)"
+                >
+                  移除
+                </button>
+              </div>
+            </div>
+            <p
+              v-if="processingPhotoAngle"
+              role="status"
             >
-            <span
-              v-else
-              class="profile-photo-slot__placeholder"
-              aria-hidden="true"
-            >✦</span>
-            <b>{{ item.label }}</b>
-            <label
-              v-tactile
-              class="photo-pick-button"
+              正在本地处理照片…
+            </p>
+            <p
+              v-if="profilePhotoError"
+              class="form-alert"
+              role="alert"
             >
-              <span>{{ profilePhotoUrls[item.angle] ? '更换' : '添加' }}</span>
+              {{ profilePhotoError }}
+            </p>
+          </fieldset>
+        </div>
+      </details>
+
+      <details class="profile-setup-step">
+        <summary v-tactile>
+          <span class="profile-setup-step__number profile-setup-step__number--coral">2</span>
+          <span><b>再告诉我你想呈现的感觉</b><small>性别可以不透露，真正用于排序的是呈现偏好</small></span>
+        </summary>
+        <div class="profile-setup-step__body form-grid">
+          <label>
+            <span>性别（用于筛选，可不透露）</span>
+            <select
+              v-model="form.genderIdentity"
+              name="genderIdentity"
+            >
+              <option value="unspecified">不透露</option>
+              <option value="woman">女</option>
+              <option value="man">男</option>
+              <option value="nonbinary">其他 / 非二元</option>
+            </select>
+          </label>
+          <label>
+            <span>更喜欢的呈现感觉</span>
+            <select
+              v-model="form.presentationPreference"
+              name="presentationPreference"
+            >
+              <option value="unspecified">都可以</option>
+              <option value="feminine">偏柔和</option>
+              <option value="masculine">偏利落</option>
+              <option value="androgynous">中性</option>
+            </select>
+          </label>
+        </div>
+      </details>
+
+      <details class="profile-setup-step">
+        <summary v-tactile>
+          <span class="profile-setup-step__number profile-setup-step__number--mint">3</span>
+          <span><b>最后补充你确定的头发条件</b><small>不知道就保持“暂不确定”，以后随时可以修改</small></span>
+        </summary>
+        <div class="profile-setup-step__body">
+          <div class="form-grid">
+            <label>
+              <span>发质</span>
+              <select
+                v-model="form.hairTexture"
+                name="hairTexture"
+                required
+              >
+                <option value="straight">直</option>
+                <option value="wavy">微卷</option>
+                <option value="curly">卷</option>
+                <option value="coily">强卷</option>
+                <option value="unsure">暂不确定</option>
+              </select>
+            </label>
+
+            <label>
+              <span>发丝粗细</span>
+              <select
+                v-model="form.strandThickness"
+                name="strandThickness"
+                required
+              >
+                <option value="fine">细</option>
+                <option value="medium">适中</option>
+                <option value="coarse">粗</option>
+                <option value="unsure">暂不确定</option>
+              </select>
+            </label>
+
+            <label>
+              <span>发量</span>
+              <select
+                v-model="form.density"
+                name="density"
+                required
+              >
+                <option value="low">少</option>
+                <option value="medium">适中</option>
+                <option value="high">多</option>
+                <option value="unsure">暂不确定</option>
+              </select>
+            </label>
+
+            <label>
+              <span>日常打理分钟</span>
               <input
-                type="file"
-                :aria-label="`${item.label}头发照片`"
-                accept="image/jpeg,image/png,image/webp"
-                :disabled="store.saving || Boolean(processingPhotoAngle)"
-                @change="setProfilePhoto(item.angle, $event)"
+                v-model.number="form.stylingMinutes"
+                name="stylingMinutes"
+                type="number"
+                min="0"
+                max="180"
+                step="1"
+                inputmode="numeric"
+                placeholder="不确定可留空"
               >
             </label>
-            <button
-              v-if="profilePhotoUrls[item.angle]"
-              v-tactile
-              type="button"
-              class="photo-remove-button"
-              @click="removeProfilePhoto(item.angle)"
-            >
-              移除
-            </button>
           </div>
+
+          <label>
+            <span>洗发频率</span>
+            <select
+              v-model="form.washFrequency"
+              name="washFrequency"
+              required
+            >
+              <option value="daily">每天</option>
+              <option value="every_other_day">隔天</option>
+              <option value="two_to_three_per_week">每周 2—3 次</option>
+              <option value="weekly_or_less">每周 1 次或更少</option>
+              <option value="unsure">暂不确定</option>
+            </select>
+          </label>
+
+          <label>
+            <span>偏好备注</span>
+            <textarea
+              v-model="form.preferenceNotes"
+              name="preferenceNotes"
+              rows="4"
+              maxlength="500"
+              placeholder="例如：希望露耳；两侧不要推白"
+            />
+          </label>
         </div>
-        <p
-          v-if="processingPhotoAngle"
-          role="status"
-        >
-          正在本地处理照片…
-        </p>
-        <p
-          v-if="profilePhotoError"
-          class="form-alert"
-          role="alert"
-        >
-          {{ profilePhotoError }}
-        </p>
-      </fieldset>
-
-      <div class="form-grid">
-        <label>
-          <span>性别（用于筛选，可不透露）</span>
-          <select
-            v-model="form.genderIdentity"
-            name="genderIdentity"
-          >
-            <option value="unspecified">不透露</option>
-            <option value="woman">女</option>
-            <option value="man">男</option>
-            <option value="nonbinary">其他 / 非二元</option>
-          </select>
-        </label>
-        <label>
-          <span>更喜欢的呈现感觉</span>
-          <select
-            v-model="form.presentationPreference"
-            name="presentationPreference"
-          >
-            <option value="unspecified">都可以</option>
-            <option value="feminine">偏柔和</option>
-            <option value="masculine">偏利落</option>
-            <option value="androgynous">中性</option>
-          </select>
-        </label>
-      </div>
-
-      <div class="form-grid">
-        <label>
-          <span>发质</span>
-          <select
-            v-model="form.hairTexture"
-            name="hairTexture"
-            required
-          >
-            <option value="straight">直</option>
-            <option value="wavy">微卷</option>
-            <option value="curly">卷</option>
-            <option value="coily">强卷</option>
-            <option value="unsure">暂不确定</option>
-          </select>
-        </label>
-
-        <label>
-          <span>发丝粗细</span>
-          <select
-            v-model="form.strandThickness"
-            name="strandThickness"
-            required
-          >
-            <option value="fine">细</option>
-            <option value="medium">适中</option>
-            <option value="coarse">粗</option>
-            <option value="unsure">暂不确定</option>
-          </select>
-        </label>
-
-        <label>
-          <span>发量</span>
-          <select
-            v-model="form.density"
-            name="density"
-            required
-          >
-            <option value="low">少</option>
-            <option value="medium">适中</option>
-            <option value="high">多</option>
-            <option value="unsure">暂不确定</option>
-          </select>
-        </label>
-
-        <label>
-          <span>日常打理分钟</span>
-          <input
-            v-model.number="form.stylingMinutes"
-            name="stylingMinutes"
-            type="number"
-            min="0"
-            max="180"
-            step="1"
-            inputmode="numeric"
-            placeholder="不确定可留空"
-          >
-        </label>
-      </div>
-
-      <label>
-        <span>洗发频率</span>
-        <select
-          v-model="form.washFrequency"
-          name="washFrequency"
-          required
-        >
-          <option value="daily">每天</option>
-          <option value="every_other_day">隔天</option>
-          <option value="two_to_three_per_week">每周 2—3 次</option>
-          <option value="weekly_or_less">每周 1 次或更少</option>
-          <option value="unsure">暂不确定</option>
-        </select>
-      </label>
-
-      <label>
-        <span>偏好备注</span>
-        <textarea
-          v-model="form.preferenceNotes"
-          name="preferenceNotes"
-          rows="4"
-          maxlength="500"
-          placeholder="例如：希望露耳；两侧不要推白"
-        />
-      </label>
+      </details>
 
       <aside
         class="privacy-note"

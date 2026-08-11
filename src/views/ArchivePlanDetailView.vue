@@ -16,6 +16,7 @@ import {
   POLL_DRAFT_REPOSITORY_KEY,
 } from '../features/polls/pollRuntime'
 import type { PollDraft } from '../features/polls/types'
+import { tactileDirective as vTactile } from '../ui/tactile'
 
 const route = useRoute()
 const router = useRouter()
@@ -131,6 +132,7 @@ onBeforeUnmount(() => {
     :aria-labelledby="store.loading || store.error ? 'plan-detail-state-title' : plan ? 'plan-detail-title' : 'plan-detail-missing-title'"
   >
     <RouterLink
+      v-tactile
       class="back-link"
       to="/archive"
     >
@@ -174,6 +176,7 @@ onBeforeUnmount(() => {
       </h1>
       <p>它可能已被删除，或这台设备没有保存过它。</p>
       <RouterLink
+        v-tactile
         class="text-link"
         to="/archive"
       >
@@ -192,6 +195,7 @@ onBeforeUnmount(() => {
         <p>{{ plan.date }} · {{ statusLabel }}</p>
         <div class="detail-actions">
           <RouterLink
+            v-tactile
             class="text-link"
             :to="`/archive/plans/${plan.id}/brief`"
           >
@@ -199,6 +203,7 @@ onBeforeUnmount(() => {
           </RouterLink>
           <RouterLink
             v-if="canEdit"
+            v-tactile
             class="text-link"
             :to="`/archive/plans/${plan.id}/edit`"
           >
@@ -211,6 +216,7 @@ onBeforeUnmount(() => {
             旧来源候选或已完成计划暂时只读
           </p>
           <button
+            v-tactile
             class="danger-text-button"
             type="button"
             :disabled="store.saving"
@@ -262,6 +268,7 @@ onBeforeUnmount(() => {
               >当前主方案</span>
               <RouterLink
                 v-else
+                v-tactile
                 class="candidate-main-action"
                 :to="{ path: `/archive/plans/${plan.id}/brief`, query: { target: candidate.id } }"
                 :aria-label="`选“${candidate.name}”为主方案`"

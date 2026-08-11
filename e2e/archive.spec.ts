@@ -8,6 +8,13 @@ const TEST_DB_SESSION_KEY = '__zajianfa_e2e_archive_db__'
 const databaseNames = new Map<string, string>()
 const PRIVATE_SOURCE_MARKER = 'M3A_PRIVATE_SOURCE_BYTES_AND_FILENAME'
 
+const openProfileStep = async (page: Page, index: number) => {
+  const step = page.locator('.profile-setup-step').nth(index)
+  if (await step.getAttribute('open') === null) {
+    await step.locator('summary').click()
+  }
+}
+
 const createOrientationSixJpeg = async (page: Page) => {
   const jpegBytes = await page.evaluate(async () => {
     const canvas = document.createElement('canvas')
@@ -104,6 +111,7 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
   await page.getByRole('link', { name: '建立档案' }).click()
 
   await page.getByLabel('称呼').fill('小林')
+  await openProfileStep(page, 2)
   await page.getByLabel('发质').selectOption('wavy')
   await page.getByLabel('发丝粗细').selectOption('fine')
   await page.getByLabel('发量').selectOption('medium')
@@ -187,7 +195,7 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
   await expect(page.getByRole('img', { name: '纹理短碎发的剪后照片' })).toBeVisible()
 
   await page.getByRole('link', { name: '返回档案' }).click()
-  await expect(page.getByText('还没有标准发型。')).toBeVisible()
+  await expect(page.getByText('还没有标准发型。')).toHaveCount(0)
   await expect(page.getByText('两侧不要推白', { exact: true })).toBeVisible()
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '首页' }).click()
   await expect(page.getByText('下次先避开：两侧不要推白')).toBeVisible()
@@ -197,7 +205,8 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
   await page.getByRole('button', { name: '删除记录' }).click()
   await expect(page).toHaveURL(/\/archive$/)
   await expect(page.getByRole('heading', { level: 2, name: '小林的发型档案' })).toBeVisible()
-  await expect(page.getByText('还没有剪后记录。记录至少一张照片和满意度，之后才能形成复刻或避雷提醒。')).toBeVisible()
+  await expect(page.getByRole('link', { name: '记录这次理发' })).toBeVisible()
+  await expect(page.getByText('还没有剪后记录。记录至少一张照片和满意度，之后才能形成复刻或避雷提醒。')).toHaveCount(0)
   await expect(page.getByRole('link', { name: /夏末短发计划/ })).toBeVisible()
 
   for (const viewport of [
@@ -403,6 +412,7 @@ test('prepares an orientation-6 JPEG locally before saving and never sends sourc
 
   await page.getByRole('link', { name: '建立档案' }).click()
   await page.getByLabel('称呼').fill('本地图片测试')
+  await openProfileStep(page, 2)
   await page.getByLabel('发质').selectOption('straight')
   await page.getByLabel('发丝粗细').selectOption('medium')
   await page.getByLabel('发量').selectOption('medium')
@@ -557,8 +567,10 @@ test('prepares an orientation-6 JPEG locally before saving and never sends sourc
 test('builds a personal photo passport and keeps the haircut record mobile-first', async ({ page }, testInfo) => {
   await page.goto('/archive/profile')
   await page.getByLabel('称呼').fill('小林')
+  await openProfileStep(page, 1)
   await page.getByLabel('性别（用于筛选，可不透露）').selectOption('woman')
   await page.getByLabel('更喜欢的呈现感觉').selectOption('androgynous')
+  await openProfileStep(page, 2)
   await page.getByLabel('发质').selectOption('straight')
   await page.getByLabel('发丝粗细').selectOption('fine')
   await page.getByLabel('发量').selectOption('medium')

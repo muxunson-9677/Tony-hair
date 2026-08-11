@@ -28,6 +28,7 @@ import type {
   HaircutPlan,
   HaircutRecord,
 } from '../features/archive/types'
+import { tactileDirective as vTactile } from '../ui/tactile'
 import { resolveLibraryCandidateDraft } from '../features/hairstyle-library/libraryCandidates'
 import { useHairstyleLibraryStore } from '../features/hairstyle-library/libraryStore'
 import { prepareLocalImage } from '../features/images/prepareLocalImage'
@@ -491,6 +492,7 @@ onBeforeUnmount(() => {
     aria-labelledby="plan-form-title"
   >
     <RouterLink
+      v-tactile
       class="back-link"
       :to="isEditing ? `/archive/plans/${routePlanId}` : '/archive'"
     >
@@ -537,6 +539,7 @@ onBeforeUnmount(() => {
         {{ addNotice }}
       </p>
       <RouterLink
+        v-tactile
         class="archive-primary-link"
         to="/archive/profile"
       >
@@ -550,6 +553,7 @@ onBeforeUnmount(() => {
     >
       <h2>没有找到这个计划</h2>
       <RouterLink
+        v-tactile
         class="text-link"
         to="/archive"
       >
@@ -564,6 +568,7 @@ onBeforeUnmount(() => {
       <h2>此计划暂时只读</h2>
       <p>{{ readOnlyReason }}</p>
       <RouterLink
+        v-tactile
         class="text-link"
         :to="`/archive/plans/${routePlanId}`"
       >
@@ -682,6 +687,7 @@ onBeforeUnmount(() => {
               </small>
               <div class="candidate-inline-actions">
                 <button
+                  v-tactile
                   type="button"
                   :disabled="store.saving || processingReference"
                   @click="removeCandidate(index)"
@@ -699,7 +705,7 @@ onBeforeUnmount(() => {
         class="candidate-source-disclosure"
         :open="selectedCandidates.length === 0"
       >
-        <summary>
+        <summary v-tactile>
           <span>{{ selectedCandidates.length === 0 ? '选择第一个候选' : '继续添加或更换候选' }}</span>
           <small>{{ form.mode === 'repeat' ? '从标准发型中选 1 个' : '从我的照片、历史或精选中选 2—4 个' }}</small>
         </summary>
@@ -723,6 +729,7 @@ onBeforeUnmount(() => {
             <h3>还没有可复刻的标准发型</h3>
             <p>先用探索计划选方向；满意的剪后记录可在之后标为标准发型。</p>
             <button
+              v-tactile
               type="button"
               class="text-link"
               @click="setPlanMode('exploration')"
@@ -744,6 +751,7 @@ onBeforeUnmount(() => {
                 <b>{{ choice.name }}</b>
                 <small>满意度 {{ choice.record.satisfaction }} / 5</small>
                 <button
+                  v-tactile
                   type="button"
                   :disabled="store.saving || processingReference"
                   @click="togglePastRecord(choice)"
@@ -767,7 +775,10 @@ onBeforeUnmount(() => {
             加入自己的参考图
           </h2>
           <p>照片只在当前设备纠正方向、压缩并去除 EXIF，不会上传。</p>
-          <label class="local-reference-input">
+          <label
+            v-tactile
+            class="local-reference-input"
+          >
             <span>本地参考图</span>
             <span
               class="local-reference-control"
@@ -828,6 +839,7 @@ onBeforeUnmount(() => {
                 <b>{{ choice.name }}</b>
                 <small>满意度 {{ choice.record.satisfaction }} / 5</small>
                 <button
+                  v-tactile
                   type="button"
                   :disabled="store.saving || processingReference || (!isPastSelected(choice) && selectedCandidates.length >= 4)"
                   @click="togglePastRecord(choice)"
@@ -871,6 +883,7 @@ onBeforeUnmount(() => {
                 <span>{{ choice.personaName }}</span>
                 <b>{{ choice.name }}</b>
                 <button
+                  v-tactile
                   type="button"
                   :disabled="store.saving || processingReference || (!isDemoSelected(choice) && selectedCandidates.length >= 4)"
                   @click="toggleDemo(choice)"
@@ -884,6 +897,7 @@ onBeforeUnmount(() => {
       </details>
 
       <button
+        v-tactile
         class="submit-button"
         type="submit"
         :disabled="store.saving || processingReference || !candidateCountValid"

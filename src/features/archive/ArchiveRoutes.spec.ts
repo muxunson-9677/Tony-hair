@@ -107,7 +107,8 @@ describe('archive routes and forms', () => {
     await renderAt('/archive/profile')
     expect(await screen.findByRole('heading', { level: 1, name: '建立发型档案' })).toBeTruthy()
     expect(screen.getByRole('link', { name: '返回档案' }).getAttribute('href')).toBe('/archive')
-    expect(screen.getByRole('link', { name: '档案' }).getAttribute('aria-current')).toBe('page')
+    expect(screen.queryByRole('navigation', { name: '主导航' })).toBeNull()
+    expect(document.querySelector('#main-content')?.classList.contains('app-main--without-nav')).toBe(true)
     await waitFor(() => expect(document.title).toBe('建立发型档案｜咋剪发'))
   })
 
@@ -130,6 +131,33 @@ describe('archive routes and forms', () => {
     expect((screen.getByLabelText('发量') as HTMLSelectElement).value).toBe('unsure')
     expect((screen.getByLabelText('洗发频率') as HTMLSelectElement).value).toBe('unsure')
     expect((screen.getByLabelText('日常打理分钟') as HTMLInputElement).value).toBe('')
+  })
+
+  test('reveals profile setup in three calm stages instead of one long form', async () => {
+    await renderAt('/archive/profile')
+    await screen.findByLabelText('称呼')
+
+    const steps = document.querySelectorAll<HTMLDetailsElement>('.profile-setup-step')
+    expect(steps).toHaveLength(3)
+    expect(Array.from(steps, (step) => step.open)).toEqual([true, false, false])
+    expect(Array.from(steps, (step) => step.querySelector('summary')?.getAttribute('data-tactile'))).toEqual(['true', 'true', 'true'])
+    expect(screen.getByText('先放一张现在的头发照片')).toBeTruthy()
+    expect(screen.getByText('再告诉我你想呈现的感觉')).toBeTruthy()
+    expect(screen.getByText('最后补充你确定的头发条件')).toBeTruthy()
+  })
+
+  test('does not stack empty database sections after the first profile is created', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+
+    await renderAt('/archive')
+
+    expect(await screen.findByRole('region', { name: '下一步' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '新建发型计划' }).getAttribute('data-tactile')).toBe('true')
+    expect(screen.getByRole('link', { name: '记录这次理发' }).getAttribute('data-tactile')).toBe('true')
+    expect(screen.queryByRole('heading', { name: '还没有沟通卡' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: '标准发型' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: '避雷规则' })).toBeNull()
+    expect(screen.queryByText(/还没有剪后记录/)).toBeNull()
   })
 
   test('returns through a canonical add pointer after creating a profile without creating a half-plan', async () => {
@@ -448,9 +476,9 @@ describe('archive routes and forms', () => {
     await waitFor(() => expect(router.currentRoute.value.path).toBe('/archive'))
     expect(await screen.findByRole('heading', { level: 2, name: '小林的发型档案' })).toBeTruthy()
     expect(screen.getByText('微卷 · 细 · 发量适中')).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '最近剪后记录' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '还没有沟通卡' })).toBeTruthy()
-    expect(screen.getByText('还没有剪后记录。记录至少一张照片和满意度，之后才能形成复刻或避雷提醒。')).toBeTruthy()
+    expect(screen.getByRole('region', { name: '下一步' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: '最近剪后记录' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: '还没有沟通卡' })).toBeNull()
 
     await fireEvent.click(screen.getByRole('link', { name: '编辑档案' }))
     await fireEvent.update(await screen.findByLabelText('称呼'), '林同学')
@@ -507,7 +535,8 @@ describe('archive routes and forms', () => {
     await fireEvent.click(screen.getByRole('button', { name: '删除计划' }))
     await waitFor(() => expect(confirmDelete).toHaveBeenCalledWith(expect.stringMatching(/删除.*计划/)))
     expect(await screen.findByRole('heading', { level: 2, name: '阿青的发型档案' })).toBeTruthy()
-    expect(screen.getByText(/还没有发型计划/)).toBeTruthy()
+    expect(screen.getByRole('region', { name: '下一步' })).toBeTruthy()
+    expect(screen.queryByText(/还没有发型计划/)).toBeNull()
   })
 
   test('offers an explicit exploration fallback when no active standard style exists', async () => {
@@ -715,7 +744,10 @@ describe('archive routes and forms', () => {
     await fireEvent.click(screen.getByText('继续添加或更换候选'))
     await fireEvent.click(screen.getByRole('button', { name: '加入历史候选：清爽短碎发' }))
     await fireEvent.click(screen.getByText('继续添加或更换候选'))
-    await fireEvent.click(screen.getByRole('button', { name: '加入候选：齐颌短鲍伯' }))
+    const firstCandidateAction = screen.getByRole('button', { name: '加入候选：齐颌短鲍伯' })
+    expect(firstCandidateAction.getAttribute('data-tactile')).toBe('true')
+    expect(screen.getByRole('button', { name: '保存计划' }).getAttribute('data-tactile')).toBe('true')
+    await fireEvent.click(firstCandidateAction)
     expect(screen.getByText('已选择 3 / 4')).toBeTruthy()
     await fireEvent.update(screen.getByLabelText('计划标题'), '三种来源计划')
     await fireEvent.click(screen.getByRole('button', { name: '保存计划' }))
@@ -845,9 +877,13 @@ describe('archive routes and forms', () => {
     await defaultArchiveRepository.savePlanWithCandidates(plan, candidates)
     const router = await renderAt(`/archive/plans/${plan.id}`)
 
-    expect(await screen.findByRole('link', { name: '创建沟通卡' })).toBeTruthy()
-    await fireEvent.click(screen.getByRole('link', { name: '选“纹理短碎发”为主方案' }))
+    expect((await screen.findByRole('link', { name: '创建沟通卡' })).getAttribute('data-tactile')).toBe('true')
+    const mainCandidateAction = screen.getByRole('link', { name: '选“纹理短碎发”为主方案' })
+    expect(mainCandidateAction.getAttribute('data-tactile')).toBe('true')
+    await fireEvent.click(mainCandidateAction)
     expect(await screen.findByRole('heading', { level: 1, name: '创建理发师沟通卡' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '保存沟通卡' }).getAttribute('data-tactile')).toBe('true')
+    expect(screen.getByRole('button', { name: '导出 PNG' }).getAttribute('data-tactile')).toBe('true')
     expect(screen.getByRole('link', { name: '返回计划' }).getAttribute('href')).toBe(`/archive/plans/${plan.id}`)
     expect(screen.queryByRole('navigation', { name: '主导航' })).toBeNull()
     expect((screen.getByLabelText('整体') as HTMLTextAreaElement).value).toMatch(/自然卷.*不要贴头皮/)
@@ -1533,7 +1569,7 @@ describe('archive routes and forms', () => {
     expect(await screen.findByRole('link', { name: /清爽短碎发/ })).toBeTruthy()
     expect(screen.getByRole('heading', { name: '标准发型' })).toBeTruthy()
     expect(screen.getAllByText('清爽短碎发').length).toBeGreaterThan(0)
-    expect(screen.getByText('还没有避雷规则。')).toBeTruthy()
+    expect(screen.queryByText('还没有避雷规则。')).toBeNull()
 
     await router.push('/')
     expect(await screen.findByText('上次发型 · 清爽短碎发')).toBeTruthy()
@@ -1550,7 +1586,9 @@ describe('archive routes and forms', () => {
     const confirmDelete = vi.spyOn(window, 'confirm').mockReturnValue(true)
     await fireEvent.click(await screen.findByRole('button', { name: '删除记录' }))
     expect(confirmDelete).toHaveBeenCalledWith(expect.stringMatching(/档案和计划会保留/))
-    expect(await screen.findByText('还没有剪后记录。记录至少一张照片和满意度，之后才能形成复刻或避雷提醒。')).toBeTruthy()
+    await screen.findByRole('heading', { level: 2, name: '阿青的发型档案' })
+    expect(screen.getByRole('heading', { name: '最近剪后记录' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '记录这次理发' })).toBeTruthy()
     expect(vi.mocked(URL.revokeObjectURL).mock.calls.length).toBeGreaterThan(revocationsAfterHome)
     expect(await defaultArchiveRepository.getProfile(existingProfile.id)).toBeDefined()
     expect(await defaultArchiveRepository.getPlan(plan.id)).toBeDefined()

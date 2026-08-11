@@ -256,6 +256,18 @@ describe('app shell', () => {
     expect(document.querySelector('#main-content')?.classList).toContain('app-main--without-nav')
   })
 
+  test.each([
+    '/archive/profile',
+    '/archive/plans/new',
+    '/archive/records/new',
+    '/archive/plans/missing/brief',
+  ])('keeps the immersive task at %s free of the fixed main navigation', async (path) => {
+    await renderAt(path)
+
+    expect(screen.queryByRole('navigation', { name: '主导航' })).toBeNull()
+    expect(document.querySelector('#main-content')?.classList).toContain('app-main--without-nav')
+  })
+
   test('shows a useful not-found page for an unknown deep link', async () => {
     await renderAt('/missing/deep-link')
 
