@@ -77,6 +77,9 @@ describe('app shell', () => {
   test('shows the decorative scissors beside the visible brand and one stateful main action', async () => {
     await renderAt('/')
 
+    expect(document.querySelector('.app-shell')?.getAttribute('data-visual-system'))
+      .toBe('apple-light')
+
     const lockup = screen.getByTestId('brand-lockup')
     const logo = lockup.querySelector<HTMLImageElement>('img[alt=""]')
     expect(logo?.getAttribute('src')).toBe('/brand/zajianfa-scissors-512.png')
@@ -124,6 +127,17 @@ describe('app shell', () => {
         .toBe('page')
     })
     expect(navigation.querySelectorAll('[aria-current="page"]')).toHaveLength(1)
+  })
+
+  test('presents my tools as colorful tactile actions instead of numbered rows', async () => {
+    await renderAt('/me')
+
+    const tools = screen.getByRole('navigation', { name: '我的工具' })
+    expect(tools.querySelectorAll('[data-tool-icon]')).toHaveLength(3)
+    expect(tools.querySelectorAll('[data-tactile]')).toHaveLength(3)
+    for (const index of ['01', '02', '03']) {
+      expect(within(tools).queryByText(index)).toBeNull()
+    }
   })
 
   test('places the desktop navigation before main content in DOM and keyboard order', async () => {

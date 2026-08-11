@@ -109,6 +109,9 @@ describe('hairstyle library routes', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: '找发型' })).toBeTruthy()
     expect(await screen.findAllByTestId('hairstyle-tile')).toHaveLength(6)
+    expect(document.querySelectorAll('[data-testid="hairstyle-tile"] [data-tactile]')).toHaveLength(12)
+    expect(document.querySelectorAll('[data-testid="hairstyle-tile"] [data-icon]')).toHaveLength(6)
+    expect(document.querySelectorAll('[data-drag-rail]')).toHaveLength(2)
     expect(screen.getAllByText(/项目内 AI 合成成年人物正面示例/).length).toBeGreaterThan(0)
 
     const filterToggle = screen.getByRole('button', { name: '筛选条件（0）' })

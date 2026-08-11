@@ -114,6 +114,8 @@ export const dragRailDirective: ObjectDirective<HTMLElement, boolean | undefined
   mounted(element, binding) {
     if (binding.value === false) return
 
+    element.dataset.dragRail = 'true'
+
     const state: DragRailState = {
       pointerId: null,
       startX: 0,
@@ -151,7 +153,6 @@ export const dragRailDirective: ObjectDirective<HTMLElement, boolean | undefined
       state.dragging = false
       state.cancelled = false
       state.samples = [{ x: event.clientX, time: performance.now() }]
-      element.setPointerCapture?.(event.pointerId)
     }
 
     const onPointerMove = (event: PointerEvent) => {
@@ -164,11 +165,11 @@ export const dragRailDirective: ObjectDirective<HTMLElement, boolean | undefined
         if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < INTENT_THRESHOLD) return
         if (Math.abs(deltaY) >= Math.abs(deltaX)) {
           state.cancelled = true
-          element.releasePointerCapture?.(event.pointerId)
           return
         }
         state.dragging = true
         element.dataset.dragging = 'true'
+        element.setPointerCapture?.(event.pointerId)
       }
 
       event.preventDefault()
@@ -215,6 +216,7 @@ export const dragRailDirective: ObjectDirective<HTMLElement, boolean | undefined
 
     cleanupByElement.set(element, () => {
       cancelMomentum()
+      delete element.dataset.dragRail
       resetPointer()
       element.style.removeProperty('translate')
       element.removeEventListener('pointerdown', onPointerDown)

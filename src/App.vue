@@ -43,6 +43,7 @@ watch(
   <div
     class="app-shell"
     :class="{ 'app-shell--wide': usesWideLayout }"
+    data-visual-system="apple-light"
   >
     <a
       class="skip-link"

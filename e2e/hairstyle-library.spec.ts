@@ -671,7 +671,7 @@ test('browses six styles and keeps a keyboard-created favorite folder after relo
   }))
   expect(reducedTransparency).toEqual({
     matches: true,
-    background: 'rgb(245, 240, 231)',
+    background: 'rgb(255, 255, 255)',
     backdropFilter: 'none',
   })
   await mediaClient.send('Emulation.setEmulatedMedia', { features: [] })

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { MAINTENANCE_LEVEL_LABELS } from '../curatedCatalog'
 import type { CuratedHairstyle } from '../types'
+import AppIcon from '../../../ui/AppIcon.vue'
+import { tactileDirective as vTactile } from '../../../ui/tactile'
 
 defineProps<{
   readonly style: CuratedHairstyle
@@ -19,6 +21,7 @@ defineEmits<{
     data-testid="hairstyle-tile"
   >
     <RouterLink
+      v-tactile
       class="hairstyle-tile__main"
       :to="`/styles/catalog/${style.id}`"
       :aria-label="`查看发型：${style.name}`"
@@ -39,6 +42,7 @@ defineEmits<{
     </RouterLink>
 
     <button
+      v-tactile
       class="hairstyle-tile__favorite"
       type="button"
       :aria-label="`收藏：${style.name}`"
@@ -46,7 +50,8 @@ defineEmits<{
       :disabled="busy"
       @click="$emit('toggleFavorite')"
     >
-      <span aria-hidden="true">{{ favorite ? '已藏' : '收藏' }}</span>
+      <AppIcon :name="favorite ? 'heart-filled' : 'heart'" />
+      <span class="sr-only">{{ favorite ? '已收藏' : '收藏' }}</span>
     </button>
   </article>
 </template>

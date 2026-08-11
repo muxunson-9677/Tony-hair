@@ -7,6 +7,9 @@ import {
   STYLE_GOAL_LABELS,
 } from '../curatedCatalog'
 import type { MaintenanceLevel, StyleGoal } from '../types'
+import AppIcon from '../../../ui/AppIcon.vue'
+import { dragRailDirective as vDragRail } from '../../../ui/dragRail'
+import { tactileDirective as vTactile } from '../../../ui/tactile'
 
 const props = defineProps<{
   readonly query: string
@@ -48,23 +51,27 @@ const toggleMaintenance = (level: MaintenanceLevel) => {
   <div class="style-filter-bar">
     <label class="style-filter-bar__search">
       <span>搜索发型</span>
-      <input
-        type="search"
-        :value="query"
-        placeholder="名称、别名或需求"
-        autocomplete="off"
-        @input="emit('update:query', ($event.target as HTMLInputElement).value)"
-      >
+      <div class="style-filter-bar__search-field">
+        <AppIcon name="search" />
+        <input
+          type="search"
+          :value="query"
+          placeholder="名称、别名或需求"
+          autocomplete="off"
+          @input="emit('update:query', ($event.target as HTMLInputElement).value)"
+        >
+      </div>
     </label>
 
     <button
+      v-tactile
       class="style-filter-bar__toggle"
       type="button"
       :aria-expanded="filtersExpanded"
       aria-controls="style-filter-options"
       @click="filtersExpanded = !filtersExpanded"
     >
-      <span>筛选条件（{{ activeFilterCount }}）</span>
+      <span><AppIcon name="filter" />筛选条件（{{ activeFilterCount }}）</span>
       <span aria-hidden="true">{{ filtersExpanded ? '收起' : '展开' }}</span>
     </button>
 
@@ -75,7 +82,10 @@ const toggleMaintenance = (level: MaintenanceLevel) => {
     >
       <fieldset>
         <legend>我更在意</legend>
-        <div class="style-filter-bar__chips">
+        <div
+          v-drag-rail
+          class="style-filter-bar__chips"
+        >
           <label
             v-for="goal in STYLE_GOALS"
             :key="goal"
@@ -93,7 +103,10 @@ const toggleMaintenance = (level: MaintenanceLevel) => {
 
       <fieldset>
         <legend>日常维护</legend>
-        <div class="style-filter-bar__chips">
+        <div
+          v-drag-rail
+          class="style-filter-bar__chips"
+        >
           <label
             v-for="level in maintenanceOptions"
             :key="level"
@@ -111,6 +124,7 @@ const toggleMaintenance = (level: MaintenanceLevel) => {
 
       <button
         v-if="query || goals.length || maintenanceLevels.length"
+        v-tactile
         class="style-filter-bar__reset"
         type="button"
         @click="emit('reset')"

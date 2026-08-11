@@ -59,6 +59,8 @@ export const tactileDirective: ObjectDirective<HTMLElement, boolean | undefined>
   mounted(element, binding) {
     if (binding.value === false) return
 
+    element.dataset.tactile = 'true'
+
     const target = element as TactileElement
     const state: TactileState = {
       activePointerId: null,
@@ -114,6 +116,7 @@ export const tactileDirective: ObjectDirective<HTMLElement, boolean | undefined>
 
     cleanupByElement.set(element, () => {
       state.releaseAnimation?.cancel()
+      delete element.dataset.tactile
       delete element.dataset.pressing
       element.removeEventListener('pointerdown', onPointerDown)
       element.removeEventListener('pointermove', onPointerMove)

@@ -8,6 +8,8 @@ import { useHairstyleLibraryStore } from '../features/hairstyle-library/libraryS
 import { resolveHomeAction } from '../features/home/resolveHomeAction'
 import { resolveHomeFavorite } from '../features/home/resolveHomeFavorite'
 import { useLocalDayClock } from '../features/home/useLocalDayClock'
+import AppIcon from '../ui/AppIcon.vue'
+import { tactileDirective as vTactile } from '../ui/tactile'
 
 const stageLabels: Record<HaircutPhoto['stage'], string> = {
   before: '剪前',
@@ -146,18 +148,20 @@ onBeforeUnmount(() => {
         >
           <p>{{ actionContext }}</p>
           <RouterLink
+            v-tactile
             class="home-primary-action"
             :to="homeAction.to"
             data-testid="home-primary-action"
           >
             <span>{{ homeAction.label }}</span>
-            <span aria-hidden="true">↗</span>
+            <AppIcon name="check" />
           </RouterLink>
         </div>
       </div>
 
       <RouterLink
         v-if="latestRecord"
+        v-tactile
         class="home-visual home-visual--history"
         :to="`/archive/records/${latestRecord.id}`"
         :aria-label="`查看上次发型：${latestRecord.styleName}`"
@@ -180,6 +184,7 @@ onBeforeUnmount(() => {
 
       <RouterLink
         v-else-if="homeVisualStyle"
+        v-tactile
         class="home-visual"
         :to="`/styles/catalog/${homeVisualStyle.id}`"
         :aria-label="favoriteStyle

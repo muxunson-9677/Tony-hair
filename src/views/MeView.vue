@@ -1,3 +1,14 @@
+<script setup lang="ts">
+import AppIcon from '../ui/AppIcon.vue'
+import { tactileDirective as vTactile } from '../ui/tactile'
+
+const tools = [
+  { to: '/archive/profile', icon: 'me', tone: 'coral', title: '头发档案', detail: '发质、发量、打理时间与明确偏好' },
+  { to: '/archive', icon: 'archive', tone: 'purple', title: '理发档案', detail: '计划、沟通卡、剪后记录与复刻依据' },
+  { to: '/privacy/mask', icon: 'eye', tone: 'blue', title: '照片遮罩', detail: '本机定位与手动确认，导出新的单层图片' },
+] as const
+</script>
+
 <template>
   <section
     class="me-view"
@@ -17,29 +28,25 @@
       class="me-action-list"
       aria-label="我的工具"
     >
-      <RouterLink to="/archive/profile">
-        <span class="me-action-list__index">01</span>
-        <span>
-          <strong>头发档案</strong>
-          <small>发质、发量、打理时间与明确偏好</small>
+      <RouterLink
+        v-for="tool in tools"
+        :key="tool.to"
+        v-tactile
+        :to="tool.to"
+        :data-tone="tool.tone"
+      >
+        <span
+          class="me-action-list__icon"
+          data-tool-icon
+          aria-hidden="true"
+        >
+          <AppIcon :name="tool.icon" />
         </span>
-        <b aria-hidden="true">↗</b>
-      </RouterLink>
-      <RouterLink to="/archive">
-        <span class="me-action-list__index">02</span>
         <span>
-          <strong>理发档案</strong>
-          <small>计划、沟通卡、剪后记录与复刻依据</small>
+          <strong>{{ tool.title }}</strong>
+          <small>{{ tool.detail }}</small>
         </span>
-        <b aria-hidden="true">↗</b>
-      </RouterLink>
-      <RouterLink to="/privacy/mask">
-        <span class="me-action-list__index">03</span>
-        <span>
-          <strong>照片遮罩</strong>
-          <small>本机定位与手动确认，导出新的单层图片</small>
-        </span>
-        <b aria-hidden="true">↗</b>
+        <b aria-hidden="true">›</b>
       </RouterLink>
     </nav>
 

@@ -2,6 +2,7 @@
 import { useRoute } from 'vue-router'
 
 import AppIcon from '../ui/AppIcon.vue'
+import { tactileDirective as vTactile } from '../ui/tactile'
 
 defineProps<{
   placement: 'desktop' | 'mobile'

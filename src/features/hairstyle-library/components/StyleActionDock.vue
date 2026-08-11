@@ -3,6 +3,8 @@ import { computed } from 'vue'
 
 import { buildArchivePlanReturnPath } from '../../archive/archiveReturnPath'
 import type { CuratedHairstyle } from '../types'
+import AppIcon from '../../../ui/AppIcon.vue'
+import { tactileDirective as vTactile } from '../../../ui/tactile'
 
 const props = defineProps<{
   readonly style: CuratedHairstyle
@@ -27,24 +29,36 @@ const addToPlanPath = computed(() => buildArchivePlanReturnPath({
   >
     <RouterLink
       v-if="addToPlanPath"
+      v-tactile
       class="style-action-dock__primary"
       :to="addToPlanPath"
     >
+      <AppIcon name="check" />
       加入计划
     </RouterLink>
-    <RouterLink :to="`/styles/catalog/${style.id}/show`">
+    <RouterLink
+      v-tactile
+      :to="`/styles/catalog/${style.id}/show`"
+    >
+      <AppIcon name="eye" />
       给理发师看
     </RouterLink>
     <button
+      v-tactile
       type="button"
       :aria-label="`收藏：${style.name}`"
       :aria-pressed="favorite"
       :disabled="busy"
       @click="$emit('toggleFavorite')"
     >
-      <span aria-hidden="true">{{ favorite ? '已收藏' : '收藏' }}</span>
+      <AppIcon :name="favorite ? 'heart-filled' : 'heart'" />
+      <span>{{ favorite ? '已收藏' : '收藏' }}</span>
     </button>
-    <RouterLink to="/styles">
+    <RouterLink
+      v-tactile
+      to="/styles"
+    >
+      <AppIcon name="back" />
       返回找发型
     </RouterLink>
   </div>

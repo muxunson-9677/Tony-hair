@@ -65,9 +65,11 @@ describe('drag rail physics', () => {
     const rail = createRail()
 
     rail.dispatchEvent(pointer('pointerdown', { clientX: 100, clientY: 20 }))
+    expect(rail.setPointerCapture).not.toHaveBeenCalled()
     const move = pointer('pointermove', { clientX: 70, clientY: 22 })
     rail.dispatchEvent(move)
 
+    expect(rail.setPointerCapture).toHaveBeenCalledWith(1)
     expect(rail.dataset.dragging).toBe('true')
     expect(rail.scrollLeft).toBe(130)
     expect(move.defaultPrevented).toBe(true)
