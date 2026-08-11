@@ -238,7 +238,7 @@ onBeforeUnmount(() => {
       </section>
 
       <section
-        v-if="!hasArchiveActivity"
+        v-if="store.plans.length === 0"
         class="archive-next-step"
         role="region"
         aria-label="下一步"
@@ -251,8 +251,8 @@ onBeforeUnmount(() => {
           <p class="section-index">
             02 / 下一步
           </p>
-          <h2>现在可以开始留下真正有用的内容</h2>
-          <p>不知道剪什么，先去看适合你的方向；刚剪完头发，就留下剪前或剪后照片。</p>
+          <h2>{{ hasArchiveActivity ? '把这次经验变成下一次计划' : '现在可以开始留下真正有用的内容' }}</h2>
+          <p>{{ hasArchiveActivity ? '从满意的真实记录复刻，或重新比较几个适合你的方向。' : '不知道剪什么，先去看适合你的方向；刚剪完头发，就留下剪前或剪后照片。' }}</p>
         </div>
         <div class="archive-next-step__actions">
           <RouterLink

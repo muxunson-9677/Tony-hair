@@ -36,6 +36,51 @@ export type HomeAction = {
   readonly to: string
 }
 
+export interface HomeEntranceInput {
+  readonly profile: HairProfile | null
+  readonly hasRepeatableStyle: boolean
+  readonly hasActivePlan: boolean
+}
+
+export interface HomeEntrance {
+  readonly kind: 'choose' | 'reference' | 'repeat'
+  readonly label: string
+  readonly hint: string
+  readonly to: string
+}
+
+export const resolveHomeEntrances = (input: HomeEntranceInput): readonly HomeEntrance[] => {
+  if (!input.profile || input.hasActivePlan) {
+    return []
+  }
+
+  const entrances: HomeEntrance[] = [
+    {
+      kind: 'choose',
+      label: '帮我选',
+      hint: '我还不知道剪什么',
+      to: '/archive/plans/new?intent=choose',
+    },
+    {
+      kind: 'reference',
+      label: '我有参考图',
+      hint: '从一张喜欢的图开始',
+      to: '/styles/references/new?intent=plan',
+    },
+  ]
+
+  if (input.hasRepeatableStyle) {
+    entrances.push({
+      kind: 'repeat',
+      label: '照上次剪',
+      hint: '沿用满意的版本',
+      to: '/archive/plans/new?intent=repeat',
+    })
+  }
+
+  return entrances
+}
+
 const DAY_MS = 86_400_000
 
 const localDayOrdinal = (date: Date) => (
@@ -65,7 +110,7 @@ export const resolveHomeAction = (input: HomeActionInput): HomeAction => {
   if (!input.profile) {
     return {
       kind: 'create_profile',
-      label: '建立我的头发档案',
+      label: '先认识一下我的头发',
       to: '/archive/profile',
     }
   }
@@ -146,14 +191,14 @@ export const resolveHomeAction = (input: HomeActionInput): HomeAction => {
   ))) {
     return {
       kind: 'repeat_standard',
-      label: '照上次再剪',
-      to: '/archive/plans/new',
+      label: '照上次剪',
+      to: '/archive/plans/new?intent=repeat',
     }
   }
 
   return {
     kind: 'discover_styles',
-    label: '准备下次理发',
-    to: '/styles',
+    label: '帮我选',
+    to: '/archive/plans/new?intent=choose',
   }
 }

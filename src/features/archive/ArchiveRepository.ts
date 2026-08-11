@@ -119,6 +119,7 @@ export class ZajianfaDb extends Dexie {
     this.briefs.hook('reading', (brief) => brief && ({
       ...brief,
       targetCandidateId: brief.targetCandidateId || undefined,
+      backupCandidateId: brief.backupCandidateId || undefined,
       createdAt: brief.createdAt ?? LEGACY_TIMESTAMP,
       updatedAt: brief.updatedAt ?? brief.createdAt ?? LEGACY_TIMESTAMP,
     }))
@@ -493,8 +494,8 @@ const validateRecord = (
   ) {
     throw new RangeError('satisfaction must be an integer from 1 to 5')
   }
-  if (record.outcome !== 'repeat' && record.outcome !== 'avoid') {
-    throw new Error('record outcome must be repeat or avoid')
+  if (!['repeat', 'adjust', 'avoid'].includes(record.outcome)) {
+    throw new Error('record outcome must be repeat, adjust, or avoid')
   }
   if (photos.length < 1) {
     throw new RangeError('A record must contain at least one photo')
@@ -508,6 +509,16 @@ const validateRecord = (
     )
   ) {
     throw new RangeError('An avoid outcome must contain between 1 and 3 non-empty rules')
+  }
+  if (
+    record.outcome === 'adjust'
+    && (
+      record.adjustmentNotes.length < 1
+      || record.adjustmentNotes.length > 3
+      || record.adjustmentNotes.some((item) => item.trim().length === 0)
+    )
+  ) {
+    throw new RangeError('An adjust outcome must contain between 1 and 3 non-empty notes')
   }
 
   const photoIds = new Set<string>()
@@ -670,6 +681,12 @@ export class ArchiveRepository {
         ) {
           throw new Error('Plan candidates must retain the brief target')
         }
+        if (
+          brief?.backupCandidateId
+          && !candidates.some(({ id }) => id === brief.backupCandidateId)
+        ) {
+          throw new Error('Plan candidates must retain the brief backup')
+        }
         await this.db.plans.put(plan)
         await this.db.candidates.where('planId').equals(plan.id).delete()
         await this.db.candidates.bulkAdd([...candidates])
@@ -730,6 +747,16 @@ export class ArchiveRepository {
         if (!target || target.planId !== brief.planId) {
           throw new Error('Target candidate must belong to the brief plan')
         }
+        if (brief.backupCandidateId) {
+          const backup = await this.db.candidates.get(brief.backupCandidateId)
+          if (
+            brief.backupCandidateId === brief.targetCandidateId
+            || !backup
+            || backup.planId !== brief.planId
+          ) {
+            throw new Error('Backup candidate must belong to the brief plan and differ from target')
+          }
+        }
         const existing = await this.db.briefs.where('planId').equals(brief.planId).first()
         if (existing && existing.id !== brief.id) {
           await this.db.briefs.delete(existing.id)
@@ -788,7 +815,7 @@ export class ArchiveRepository {
             createdAt: record.updatedAt,
             active: true,
           })
-        } else {
+        } else if (record.outcome === 'avoid') {
           await this.db.avoidRules.bulkAdd(record.avoidRules.map((text, index) => ({
             id: `avoid-rule:${record.id}:${index + 1}`,
             profileId: record.profileId,

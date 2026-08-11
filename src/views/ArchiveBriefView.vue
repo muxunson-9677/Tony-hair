@@ -14,6 +14,7 @@ const route = useRoute()
 const router = useRouter()
 const store = useArchiveStore()
 const planId = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
+const isBarberMode = computed(() => route.name === 'archive-plan-brief-show')
 const plan = computed(() => store.plans.find(({ id }) => id === planId.value))
 const candidates = computed(() => store.candidatesByPlanId[planId.value] ?? [])
 const savedBrief = computed(() => store.briefsByPlanId[planId.value])
@@ -23,6 +24,7 @@ const hasValidCandidateCount = computed(() => Boolean(
 ))
 
 const targetCandidateId = ref('')
+const backupCandidateId = ref('')
 const overall = ref('')
 const top = ref('')
 const fringe = ref('')
@@ -39,6 +41,9 @@ let viewActive = false
 
 const targetCandidate = computed(() => (
   candidates.value.find(({ id }) => id === targetCandidateId.value)
+))
+const backupCandidate = computed(() => (
+  candidates.value.find(({ id }) => id === backupCandidateId.value)
 ))
 const candidateImageSource = (candidate?: Candidate) => {
   if (!candidate) {
@@ -80,6 +85,10 @@ const hydrate = () => {
   const profileNote = store.profile?.preferenceNotes.trim() ?? ''
   const activeAvoids = store.avoidRules.filter(({ active }) => active).map(({ text }) => text)
   targetCandidateId.value = availableTarget?.id ?? ''
+  backupCandidateId.value = candidates.value.some(({ id }) => id === current?.backupCandidateId)
+    && current?.backupCandidateId !== availableTarget?.id
+    ? current?.backupCandidateId ?? ''
+    : ''
   overall.value = current?.overall ?? [guide?.overall, profileNote].filter(Boolean).join('；')
   top.value = current?.top ?? guide?.top ?? ''
   fringe.value = current?.fringe ?? guide?.fringe ?? ''
@@ -113,6 +122,7 @@ const save = async () => {
   messageTone.value = null
   const saved = await store.saveBrief(planId.value, {
     targetCandidateId: targetCandidateId.value,
+    backupCandidateId: backupCandidateId.value || undefined,
     overall: overall.value,
     top: top.value,
     fringe: fringe.value,
@@ -205,7 +215,9 @@ onMounted(async () => {
   hydrate()
   hydrated.value = true
   if (plan.value) {
-    document.title = `${savedBrief.value ? '编辑' : '创建'}理发师沟通卡｜咋剪发`
+    document.title = isBarberMode.value
+      ? '给理发师看｜咋剪发'
+      : `${savedBrief.value ? '编辑' : '创建'}理发师沟通卡｜咋剪发`
   }
 })
 onBeforeUnmount(() => {
@@ -216,10 +228,13 @@ onBeforeUnmount(() => {
 
 <template>
   <section
-    class="brief-view"
+    :class="['brief-view', { 'brief-view--barber': isBarberMode }]"
     :aria-labelledby="store.loading || !hydrated || (store.error && !message) ? 'brief-state-title' : plan ? 'brief-title' : 'brief-missing-title'"
   >
-    <div class="brief-screen-only">
+    <div
+      v-if="!isBarberMode"
+      class="brief-screen-only"
+    >
       <RouterLink
         v-tactile
         class="back-link"
@@ -285,9 +300,10 @@ onBeforeUnmount(() => {
             BARBER BRIEF · LOCAL
           </p>
           <h1 id="brief-title">
-            {{ savedBrief ? '编辑理发师沟通卡' : '创建理发师沟通卡' }}
+            <span class="visually-hidden">{{ savedBrief ? '编辑理发师沟通卡' : '创建理发师沟通卡' }}</span>
+            <span aria-hidden="true">给理发师看</span>
           </h1>
-          <p>{{ plan.title }} · 从候选图到六个部位，一次说清。</p>
+          <p>{{ plan.title }} · 主图、最在意和绝对不要，十秒说清。</p>
         </header>
 
         <aside
@@ -318,7 +334,7 @@ onBeforeUnmount(() => {
           @submit.prevent="save"
         >
           <fieldset class="brief-target-picker">
-            <legend>选择目标图</legend>
+            <legend>先定主方案</legend>
             <div>
               <label
                 v-for="candidate in candidates"
@@ -345,6 +361,23 @@ onBeforeUnmount(() => {
                 <b>{{ candidate.name }}</b>
               </label>
             </div>
+            <label class="brief-backup-picker">
+              <span>备选方案（可选）</span>
+              <select
+                v-model="backupCandidateId"
+                aria-label="备选方案"
+              >
+                <option value="">不设置备选</option>
+                <option
+                  v-for="candidate in candidates.filter(({ id }) => id !== targetCandidateId)"
+                  :key="candidate.id"
+                  :value="candidate.id"
+                >
+                  {{ candidate.name }}
+                </option>
+              </select>
+              <small>到店发现主方案不适合时，可以立刻切换，不必重新找图。</small>
+            </label>
           </fieldset>
 
           <details class="brief-edit-details">
@@ -475,13 +508,22 @@ onBeforeUnmount(() => {
             v-tactile
             class="submit-button"
             type="submit"
+            :aria-label="savedBrief ? '保存修改' : '保存沟通卡'"
             :disabled="store.saving"
           >
-            {{ savedBrief ? '保存修改' : '保存沟通卡' }}
+            {{ savedBrief ? '保存修改' : '准备好给理发师看' }}
           </button>
         </form>
 
         <div class="brief-output-actions">
+          <RouterLink
+            v-if="savedBrief"
+            v-tactile
+            class="brief-barber-mode-link"
+            :to="`/archive/plans/${planId}/brief/show`"
+          >
+            到店打开
+          </RouterLink>
           <button
             v-tactile
             type="button"
@@ -512,8 +554,29 @@ onBeforeUnmount(() => {
       </template>
     </div>
 
+    <nav
+      v-if="isBarberMode && savedBrief"
+      class="brief-barber-toolbar brief-screen-only"
+      aria-label="理发现场操作"
+    >
+      <RouterLink
+        v-tactile
+        :to="`/archive/plans/${planId}/brief`"
+      >
+        完成
+      </RouterLink>
+      <button
+        v-tactile
+        type="button"
+        :disabled="exporting || !targetImageSource"
+        @click="exportPng"
+      >
+        {{ exporting ? '保存中…' : '保存图片备用' }}
+      </button>
+    </nav>
+
     <article
-      v-if="plan && hasValidCandidateCount"
+      v-if="plan && hasValidCandidateCount && (!isBarberMode || savedBrief)"
       class="brief-preview"
       role="region"
       aria-label="理发师沟通卡预览"
@@ -522,6 +585,7 @@ onBeforeUnmount(() => {
         <p>咋剪发 · BARBER BRIEF</p>
         <h2>{{ plan.title }}</h2>
         <span>目标方案 · {{ targetCandidate?.name ?? '请选择' }}</span>
+        <span v-if="backupCandidate">备选 · {{ backupCandidate.name }}</span>
       </header>
       <img
         v-if="targetImageSource"

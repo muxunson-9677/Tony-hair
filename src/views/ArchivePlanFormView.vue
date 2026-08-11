@@ -47,6 +47,13 @@ const router = useRouter()
 const store = useArchiveStore()
 const libraryStore = useHairstyleLibraryStore()
 const isEditing = computed(() => route.name === 'archive-plan-edit')
+const isGuidedChoice = computed(() => !isEditing.value && route.query.intent === 'choose')
+const isRepeatIntent = computed(() => !isEditing.value && route.query.intent === 'repeat')
+const hasRecognizedIntent = computed(() => (
+  (isGuidedChoice.value || isRepeatIntent.value)
+  && Object.keys(route.query).length === 1
+))
+const guidedGoal = ref('')
 const routePlanId = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
 const planMissing = ref(false)
 const initializing = ref(true)
@@ -64,7 +71,7 @@ let viewActive = false
 let initializedOnce = false
 
 const form = reactive({
-  title: '',
+  title: '这次怎么剪',
   date: new Date().toISOString().slice(0, 10),
   mode: 'exploration' as HaircutPlan['mode'],
   status: 'draft' as 'draft' | 'ready',
@@ -223,6 +230,13 @@ const setPlanMode = (mode: HaircutPlan['mode']) => {
   selectedCandidates.value = []
   referenceError.value = null
   rebuildPreviewUrls()
+}
+
+const chooseGuidedGoal = (goal: string, title: string) => {
+  guidedGoal.value = goal
+  if (!form.title.trim() || form.title === '这次怎么剪') {
+    form.title = title
+  }
 }
 
 const closeCandidateSources = async () => {
@@ -421,7 +435,7 @@ const initializeForRoute = async () => {
     initializing.value = false
     return
   }
-  if (!isEditing.value && hasQuery && !returnTarget) {
+  if (!isEditing.value && hasQuery && !returnTarget && !hasRecognizedIntent.value) {
     addNotice.value = '这个加入计划入口无效或已过期，未加入任何候选。'
     initializing.value = false
     await router.replace('/archive/plans/new')
@@ -462,6 +476,9 @@ const initializeForRoute = async () => {
   if (isEditing.value) {
     hydrateEditingPlan()
   } else {
+    if (isRepeatIntent.value) {
+      form.mode = 'repeat'
+    }
     rebuildPreviewUrls()
   }
   initializing.value = false
@@ -596,62 +613,97 @@ onBeforeUnmount(() => {
         {{ store.error }}
       </p>
 
-      <label>
-        <span>计划标题</span>
-        <input
-          v-model="form.title"
-          name="title"
-          maxlength="80"
-          required
-          placeholder="例如：夏末短发计划"
+      <fieldset
+        v-if="isGuidedChoice"
+        class="guided-goal-picker"
+      >
+        <legend>这次你最想解决什么？</legend>
+        <button
+          v-for="choice in [
+            ['easy', '每天少打理', '少打理的下次剪法'],
+            ['length', '两侧别太短', '保留两侧长度的下次剪法'],
+            ['change', '想明显换个感觉', '换个感觉的下次剪法'],
+          ]"
+          :key="choice[0]"
+          v-tactile
+          type="button"
+          :aria-pressed="guidedGoal === choice[0]"
+          @click="chooseGuidedGoal(choice[0] ?? '', choice[2] ?? '')"
         >
-      </label>
-
-      <div class="form-grid">
-        <label>
-          <span>计划日期</span>
-          <input
-            v-model="form.date"
-            name="date"
-            type="date"
-            required
-          >
-        </label>
-        <label>
-          <span>计划状态</span>
-          <select
-            v-model="form.status"
-            name="status"
-          >
-            <option value="draft">草稿</option>
-            <option value="ready">可带去沟通</option>
-          </select>
-        </label>
-      </div>
-
-      <fieldset class="plan-mode-picker">
-        <legend>计划方式</legend>
-        <label>
-          <input
-            type="radio"
-            name="planMode"
-            value="exploration"
-            :checked="form.mode === 'exploration'"
-            @change="setPlanMode('exploration')"
-          >
-          <span><b>探索计划</b><small>比较 2—4 个不同方向</small></span>
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="planMode"
-            value="repeat"
-            :checked="form.mode === 'repeat'"
-            @change="setPlanMode('repeat')"
-          >
-          <span><b>复刻标准发型</b><small>只带 1 个真实剪后快照</small></span>
-        </label>
+          {{ choice[1] }}
+        </button>
+        <p>先选最重要的一件事；之后只比较 2—4 个方向。</p>
       </fieldset>
+
+      <details class="plan-setup-details">
+        <summary v-tactile>
+          <span>日期和名称</span>
+          <small>已经给出安全默认值，需要时再改</small>
+        </summary>
+        <div class="plan-setup-details__body">
+          <label>
+            <span>这次怎么剪</span>
+            <input
+              v-model="form.title"
+              aria-label="计划标题"
+              name="title"
+              maxlength="80"
+              required
+              placeholder="例如：夏末短发"
+            >
+          </label>
+
+          <div class="form-grid">
+            <label>
+              <span>预计日期</span>
+              <input
+                v-model="form.date"
+                aria-label="计划日期"
+                name="date"
+                type="date"
+                required
+              >
+            </label>
+            <label>
+              <span>准备状态</span>
+              <select
+                v-model="form.status"
+                aria-label="计划状态"
+                name="status"
+              >
+                <option value="draft">草稿</option>
+                <option value="ready">可带去沟通</option>
+              </select>
+            </label>
+          </div>
+
+          <fieldset class="plan-mode-picker">
+            <legend>怎么开始</legend>
+            <label>
+              <input
+                type="radio"
+                name="planMode"
+                value="exploration"
+                aria-label="探索计划"
+                :checked="form.mode === 'exploration'"
+                @change="setPlanMode('exploration')"
+              >
+              <span><b>比较几个方向</b><small>适合还没决定，选择 2—4 个</small></span>
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="planMode"
+                value="repeat"
+                aria-label="复刻标准发型"
+                :checked="form.mode === 'repeat'"
+                @change="setPlanMode('repeat')"
+              >
+              <span><b>照上次剪</b><small>只带 1 个满意的真实剪后版本</small></span>
+            </label>
+          </fieldset>
+        </div>
+      </details>
 
       <section
         v-if="selectedCandidates.length > 0"

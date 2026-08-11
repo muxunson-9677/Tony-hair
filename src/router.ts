@@ -119,6 +119,12 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         meta: { title: '理发师沟通卡｜咋剪发', hideBottomNav: true },
       },
       {
+        path: '/archive/plans/:id/brief/show',
+        name: 'archive-plan-brief-show',
+        component: ArchiveBriefView,
+        meta: { title: '给理发师看｜咋剪发', hideBottomNav: true, wideLayout: true },
+      },
+      {
         path: '/archive/plans/:id',
         name: 'archive-plan-detail',
         component: ArchivePlanDetailView,

@@ -77,8 +77,9 @@ const form = reactive({
   durationMinutes: '',
   notes: '',
   satisfaction: decisionDefaults.satisfaction as '' | '1' | '2' | '3' | '4' | '5',
-  outcome: decisionDefaults.outcome as '' | 'repeat' | 'avoid',
+  outcome: decisionDefaults.outcome as '' | 'repeat' | 'adjust' | 'avoid',
   avoidRules: ['', '', ''],
+  adjustmentNotes: ['', '', ''],
 })
 
 const parseYuan = (value: string): number | undefined | null => {
@@ -230,6 +231,11 @@ const submit = async () => {
     localError.value = '选择避雷时，请填写 1 到 3 条非空规则。'
     return
   }
+  const adjustmentNotes = form.adjustmentNotes.map((rule) => rule.trim()).filter(Boolean)
+  if (form.outcome === 'adjust' && (adjustmentNotes.length < 1 || adjustmentNotes.length > 3)) {
+    localError.value = '请写下 1 到 3 条下次想调整的地方。'
+    return
+  }
 
   const saved = await store.saveRecord({
     id: isEditing.value ? recordId.value : undefined,
@@ -244,8 +250,9 @@ const submit = async () => {
     durationMinutes: durationText ? Number(durationText) : undefined,
     notes: form.notes,
     satisfaction: Number(form.satisfaction),
-    outcome: form.outcome as 'repeat' | 'avoid',
+    outcome: form.outcome as 'repeat' | 'adjust' | 'avoid',
     avoidRules,
+    adjustmentNotes,
     photos,
   })
   if (saved) {
@@ -288,6 +295,11 @@ onMounted(async () => {
   if (record.outcome === 'avoid') {
     record.avoidRules.slice(0, 3).forEach((rule, index) => {
       form.avoidRules[index] = rule
+    })
+  }
+  if (record.outcome === 'adjust') {
+    record.adjustmentNotes.slice(0, 3).forEach((rule, index) => {
+      form.adjustmentNotes[index] = rule
     })
   }
   existingPhotos.value = [...store.photosByRecordId[record.id] ?? []]
@@ -455,14 +467,22 @@ onBeforeUnmount(() => {
       </div>
 
       <fieldset class="record-outcome">
-        <legend>以后还想这样剪吗？</legend>
+        <legend>下次还这么剪吗？</legend>
         <label>
           <input
             v-model="form.outcome"
             type="radio"
             value="repeat"
           >
-          值得复刻
+          就这样
+        </label>
+        <label>
+          <input
+            v-model="form.outcome"
+            type="radio"
+            value="adjust"
+          >
+          有一点要改
         </label>
         <label>
           <input
@@ -470,9 +490,28 @@ onBeforeUnmount(() => {
             type="radio"
             value="avoid"
           >
-          有些地方要调整
+          别再这样
         </label>
       </fieldset>
+
+      <div
+        v-if="form.outcome === 'adjust'"
+        class="avoid-rule-fields"
+      >
+        <label
+          v-for="index in 3"
+          :key="index"
+        >
+          <span>下次调整 {{ index }}</span>
+          <input
+            v-model="form.adjustmentNotes[index - 1]"
+            :name="`adjustmentNote${index}`"
+            maxlength="160"
+            :required="index === 1"
+            placeholder="例如：两侧留长一点"
+          >
+        </label>
+      </div>
 
       <div
         v-if="form.outcome === 'avoid'"

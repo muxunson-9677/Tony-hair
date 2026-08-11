@@ -347,12 +347,23 @@ const cleanupDatabase = async (
 
 const fillProfile = async (page: Page, name: string) => {
   await page.getByLabel('称呼').fill(name)
+  const details = page.locator('.profile-setup-step').nth(2)
+  if (await details.getAttribute('open') === null) {
+    await details.locator('summary').click()
+  }
   await page.getByLabel('发质').selectOption('wavy')
   await page.getByLabel('发丝粗细').selectOption('fine')
   await page.getByLabel('发量').selectOption('medium')
   await page.getByLabel('日常打理分钟').fill('8')
   await page.getByLabel('洗发频率').selectOption('every_other_day')
   await page.getByRole('button', { name: '保存档案' }).click()
+}
+
+const openPlanDetails = async (page: Page) => {
+  const details = page.locator('.plan-setup-details')
+  if (await details.getAttribute('open') === null) {
+    await details.locator('summary').click()
+  }
 }
 
 const fillBrief = async (page: Page, targetName: string) => {
@@ -906,6 +917,7 @@ test('keeps a processed private reference local while its mixed-plan snapshot su
   await expect(page.getByText('已把“耳侧长度参考”加入探索计划；再选 1—3 个方向即可保存。')).toBeVisible()
   await page.getByText('继续添加或更换候选').click()
   await page.getByRole('button', { name: '加入候选：齐颌短鲍伯' }).click()
+  await openPlanDetails(page)
   await page.getByLabel('计划标题').fill('耳侧与鲍伯探索')
   await page.getByLabel('计划日期').fill('2026-08-28')
   await page.getByLabel('计划状态').selectOption('ready')
@@ -974,12 +986,13 @@ test('creates a one-snapshot repeat plan and its communication card from an acti
   await page.getByLabel('发型名').fill('上次满意短发')
   await page.getByLabel('满意度').selectOption('5')
   await page.getByLabel('剪后照片').setInputFiles('public/demo/persona-ran-sidepart.webp')
-  await page.getByLabel('值得复刻').check()
+  await page.getByLabel('就这样').check()
   await page.getByRole('button', { name: '保存剪后记录' }).click()
   await expect(page.getByText('已存为标准发型')).toBeVisible()
 
   await page.getByRole('link', { name: '返回档案' }).click()
   await page.getByRole('link', { name: '新建发型计划' }).click()
+  await openPlanDetails(page)
   await page.getByLabel('复刻标准发型').check()
   await page.getByRole('button', { name: '选择标准发型：上次满意短发' }).click()
   await expect(page.getByText('已选择 1 / 1')).toBeVisible()

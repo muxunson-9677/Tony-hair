@@ -77,7 +77,7 @@ async function renderAt(path: string) {
 
 async function chooseRepeatDecision() {
   await fireEvent.update(screen.getByLabelText('满意度'), '5')
-  await fireEvent.click(screen.getByLabelText('值得复刻'))
+  await fireEvent.click(screen.getByLabelText('就这样'))
 }
 
 describe('archive routes and forms', () => {
@@ -144,6 +144,9 @@ describe('archive routes and forms', () => {
     expect(screen.getByText('先放一张现在的头发照片')).toBeTruthy()
     expect(screen.getByText('再告诉我你想呈现的感觉')).toBeTruthy()
     expect(screen.getByText('最后补充你确定的头发条件')).toBeTruthy()
+    const firstStep = steps[0]
+    expect(firstStep && within(firstStep).getByText('先保存，其他以后再补').closest('button')).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: '保存档案' })).toHaveLength(1)
   })
 
   test('does not stack empty database sections after the first profile is created', async () => {
@@ -892,6 +895,7 @@ describe('archive routes and forms', () => {
 
     const targetRadio = screen.getByLabelText('目标候选：纹理短碎发') as HTMLInputElement
     expect(targetRadio.checked).toBe(true)
+    await fireEvent.update(screen.getByLabelText('备选方案'), 'brief-candidate-1')
     const plainText = '<img src=x onerror=alert(1)>整体保持轻盈'
     await fireEvent.update(screen.getByLabelText('整体'), plainText)
     await fireEvent.update(screen.getByLabelText('顶部'), '顶部保留自然支撑')
@@ -912,11 +916,21 @@ describe('archive routes and forms', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: '编辑理发师沟通卡' })).toBeTruthy()
     expect((await defaultArchiveRepository.getBrief(plan.id))?.targetCandidateId).toBe('brief-candidate-2')
+    expect((await defaultArchiveRepository.getBrief(plan.id))?.backupCandidateId).toBe('brief-candidate-1')
     const preview = screen.getByRole('region', { name: '理发师沟通卡预览' })
     expect(within(preview).getByText(plainText)).toBeTruthy()
     expect(await within(preview).findByRole('img', { name: /纹理短碎发/ })).toBeTruthy()
+    expect(within(preview).getByText('备选 · 齐颌短鲍伯')).toBeTruthy()
     expect(preview.querySelector('img[src="x"]')).toBeNull()
     expect(preview.querySelector('[onerror]')).toBeNull()
+
+    await fireEvent.click(screen.getByRole('link', { name: '到店打开' }))
+    expect(await screen.findByRole('navigation', { name: '理发现场操作' })).toBeTruthy()
+    expect(screen.queryByRole('navigation', { name: '主导航' })).toBeNull()
+    expect(screen.queryByRole('heading', { level: 1, name: '编辑理发师沟通卡' })).toBeNull()
+    expect(screen.getByRole('region', { name: '理发师沟通卡预览' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '保存图片备用' })).toBeTruthy()
+    await router.push(`/archive/plans/${plan.id}/brief`)
 
     await router.push('/archive')
     expect(await screen.findByRole('heading', { name: '已保存 1 张沟通卡' })).toBeTruthy()
@@ -1246,12 +1260,12 @@ describe('archive routes and forms', () => {
     const previewUrl = vi.mocked(URL.createObjectURL).mock.results[previewCallIndex]?.value
     expect(preview.getAttribute('src')).toBe(previewUrl)
     expect(previewUrl).toBeTruthy()
-    await fireEvent.click(screen.getByLabelText('有些地方要调整'))
+    await fireEvent.click(screen.getByLabelText('别再这样'))
     await fireEvent.update(screen.getByLabelText('避雷规则 1'), '   ')
     await fireEvent.click(screen.getByRole('button', { name: '保存剪后记录' }))
     expect((await screen.findByRole('alert')).textContent).toMatch(/1 到 3 条非空规则/)
     expect(await defaultArchiveRepository.listRecords(existingProfile.id)).toEqual([])
-    await fireEvent.click(screen.getByLabelText('值得复刻'))
+    await fireEvent.click(screen.getByLabelText('就这样'))
     await fireEvent.click(screen.getByRole('button', { name: '保存剪后记录' }))
 
     await waitFor(() => expect(router.currentRoute.value.path).not.toBe('/archive/records/new'))
@@ -1290,7 +1304,7 @@ describe('archive routes and forms', () => {
     await fireEvent.click(screen.getByRole('link', { name: '编辑记录' }))
     expect(await screen.findByText('已保留：剪后照片')).toBeTruthy()
     await fireEvent.update(screen.getByLabelText('满意度'), '2')
-    await fireEvent.click(screen.getByLabelText('有些地方要调整'))
+    await fireEvent.click(screen.getByLabelText('别再这样'))
     await fireEvent.update(screen.getByLabelText('避雷规则 1'), '两侧不要推白')
     await fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
 
@@ -1372,6 +1386,38 @@ describe('archive routes and forms', () => {
     expect(details?.contains(screen.getByLabelText('店铺', { exact: true }))).toBe(true)
     expect(screen.getByText('选择剪前照片')).toBeTruthy()
     expect(screen.getByText('选择剪后照片')).toBeTruthy()
+    expect(screen.getByRole('radio', { name: '就这样' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: '有一点要改' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: '别再这样' })).toBeTruthy()
+    await fireEvent.click(screen.getByRole('radio', { name: '有一点要改' }))
+    expect(screen.getByLabelText('下次调整 1')).toBeTruthy()
+  })
+
+  test('starts help-me-choose with one plain-language goal and delays plan settings', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const router = await renderAt('/archive/plans/new?intent=choose')
+
+    const goals = await screen.findByRole('group', { name: '这次你最想解决什么？' })
+    expect(router.currentRoute.value.query.intent).toBe('choose')
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(within(goals).getByRole('button', { name: '每天少打理' })).toBeTruthy()
+    expect(within(goals).getByRole('button', { name: '两侧别太短' })).toBeTruthy()
+    expect(within(goals).getByRole('button', { name: '想明显换个感觉' })).toBeTruthy()
+    const settings = screen.getByText('日期和名称').closest('details')
+    expect(settings?.open).toBe(false)
+    await fireEvent.click(within(goals).getByRole('button', { name: '每天少打理' }))
+    expect((screen.getByLabelText('计划标题') as HTMLInputElement).value).toBe('少打理的下次剪法')
+  })
+
+  test('opens the repeat entry as a repeat plan without treating its intent as an add-source error', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const router = await renderAt('/archive/plans/new?intent=repeat')
+
+    const repeatMode = await screen.findByLabelText('复刻标准发型') as HTMLInputElement
+    expect(router.currentRoute.value.query.intent).toBe('repeat')
+    expect(repeatMode.checked).toBe(true)
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByText('从标准发型中选 1 个')).toBeTruthy()
   })
 
   test('waits for local image preparation before enabling save', async () => {

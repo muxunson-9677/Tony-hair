@@ -15,6 +15,13 @@ const openProfileStep = async (page: Page, index: number) => {
   }
 }
 
+const openPlanDetails = async (page: Page) => {
+  const details = page.locator('.plan-setup-details')
+  if (await details.getAttribute('open') === null) {
+    await details.locator('summary').click()
+  }
+}
+
 const createOrientationSixJpeg = async (page: Page) => {
   const jpegBytes = await page.evaluate(async () => {
     const canvas = document.createElement('canvas')
@@ -124,6 +131,7 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
   await expect(page.getByRole('heading', { level: 2, name: '小林的发型档案' })).toBeVisible()
   await page.getByRole('link', { name: '新建发型计划' }).click()
 
+  await openPlanDetails(page)
   await page.getByLabel('计划标题').fill('夏末短发计划')
   await page.getByLabel('计划日期').fill('2026-08-22')
   await page.getByLabel('计划状态').selectOption('ready')
@@ -156,7 +164,7 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
   await page.getByLabel('备注').fill('顶部保留自然纹理')
   await page.getByLabel('满意度').selectOption('5')
   await page.getByLabel('剪后照片').setInputFiles(path.resolve('public/demo/persona-ran-sidepart.webp'))
-  await page.getByLabel('值得复刻').check()
+  await page.getByLabel('就这样').check()
   await page.getByRole('button', { name: '保存剪后记录' }).click()
 
   await expect(page.getByRole('heading', { level: 1, name: '纹理短碎发' })).toBeVisible()
@@ -186,7 +194,7 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
   await page.getByRole('link', { name: '编辑记录' }).click()
   await expect(page.getByText('已保留：剪后照片')).toBeVisible()
   await page.getByLabel('满意度').selectOption('2')
-  await page.getByLabel('有些地方要调整').check()
+  await page.getByLabel('别再这样').check()
   await page.getByLabel('避雷规则 1').fill('两侧不要推白')
   await page.getByRole('button', { name: '保存修改' }).click()
 
@@ -262,6 +270,7 @@ test('mixes prepared, past-record, and demo candidates without sending private b
 
   await page.goto('/archive/profile')
   await page.getByLabel('称呼').fill('阿青')
+  await openProfileStep(page, 2)
   await page.getByLabel('发质').selectOption('wavy')
   await page.getByLabel('发丝粗细').selectOption('fine')
   await page.getByLabel('发量').selectOption('medium')
@@ -278,7 +287,7 @@ test('mixes prepared, past-record, and demo candidates without sending private b
     mimeType: 'image/jpeg',
     buffer: sourceJpeg,
   })
-  await page.getByLabel('值得复刻').check()
+  await page.getByLabel('就这样').check()
   await page.getByRole('button', { name: '保存剪后记录' }).click()
 
   await page.getByRole('link', { name: '返回档案' }).click()
@@ -293,6 +302,7 @@ test('mixes prepared, past-record, and demo candidates without sending private b
   await page.getByRole('button', { name: '加入历史候选：清爽短碎发' }).click()
   await page.getByText('继续添加或更换候选').click()
   await page.getByRole('button', { name: '加入候选：齐颌短鲍伯' }).click()
+  await openPlanDetails(page)
   await page.getByLabel('计划标题').fill('三路真实候选')
   await page.screenshot({ path: testInfo.outputPath('mixed-source-form-390x844.png'), fullPage: true })
   await page.getByRole('button', { name: '保存计划' }).click()
@@ -472,7 +482,7 @@ test('prepares an orientation-6 JPEG locally before saving and never sends sourc
   await page.emulateMedia({ reducedMotion: 'no-preference' })
 
   await page.getByLabel('满意度').selectOption('5')
-  await page.getByLabel('值得复刻').check()
+  await page.getByLabel('就这样').check()
   await page.getByRole('button', { name: '保存剪后记录' }).click()
   await expect(page.getByRole('heading', { level: 1, name: '方向纠正测试' })).toBeVisible()
 
@@ -604,8 +614,9 @@ test('builds a personal photo passport and keeps the haircut record mobile-first
   await page.getByText('补充本次信息', { exact: true }).click()
   await expect(page.getByLabel('店铺位置（可选）')).toBeVisible()
   await expect(page.getByLabel('满意度')).toHaveValue('')
-  await expect(page.getByLabel('值得复刻')).not.toBeChecked()
-  await expect(page.getByLabel('有些地方要调整')).not.toBeChecked()
+  await expect(page.getByLabel('就这样')).not.toBeChecked()
+  await expect(page.getByLabel('有一点要改')).not.toBeChecked()
+  await expect(page.getByLabel('别再这样')).not.toBeChecked()
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('record-before-after-390x844.png'), fullPage: true })
 })

@@ -222,10 +222,13 @@ onBeforeUnmount(() => {
       <p class="eyebrow">
         PROFILE · LOCAL ONLY
       </p>
-      <h1 id="profile-form-title">
-        {{ store.profile ? '编辑发型档案' : '建立发型档案' }}
+      <h1
+        id="profile-form-title"
+        :aria-label="store.profile ? '编辑发型档案' : '建立发型档案'"
+      >
+        {{ store.profile ? '我的头发' : '先认识一下我的头发' }}
       </h1>
-      <p>只记下剪发决策需要的信息，不创建账号。</p>
+      <p>一张正面照，加上你确定的几件事就够了。</p>
     </header>
 
     <p
@@ -335,6 +338,23 @@ onBeforeUnmount(() => {
               {{ profilePhotoError }}
             </p>
           </fieldset>
+
+          <button
+            v-if="!store.profile"
+            v-tactile
+            class="submit-button profile-minimum-submit"
+            type="submit"
+            aria-label="保存档案"
+            :disabled="store.saving || Boolean(processingPhotoAngle)"
+          >
+            {{ store.saving ? '正在保存…' : '先保存，其他以后再补' }}
+          </button>
+          <p
+            v-if="!store.profile"
+            class="profile-minimum-hint"
+          >
+            下面都可以跳过。保存后就能开始选发型。
+          </p>
         </div>
       </details>
 
@@ -474,12 +494,13 @@ onBeforeUnmount(() => {
       </aside>
 
       <button
+        v-if="store.profile"
         v-tactile
         class="submit-button"
         type="submit"
         :disabled="store.saving"
       >
-        {{ store.saving ? '正在保存…' : store.profile ? '保存修改' : '保存档案' }}
+        {{ store.saving ? '正在保存…' : '保存修改' }}
       </button>
 
       <button

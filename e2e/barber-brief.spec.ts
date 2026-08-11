@@ -4,6 +4,20 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 
 const TEST_DB_SESSION_KEY = '__zajianfa_e2e_archive_db__'
 
+const openProfileDetails = async (page: Page) => {
+  const details = page.locator('.profile-setup-step').nth(2)
+  if (await details.getAttribute('open') === null) {
+    await details.locator('summary').click()
+  }
+}
+
+const openPlanDetails = async (page: Page) => {
+  const details = page.locator('.plan-setup-details')
+  if (await details.getAttribute('open') === null) {
+    await details.locator('summary').click()
+  }
+}
+
 const cleanupDatabase = async (
   context: BrowserContext,
   page: Page,
@@ -57,6 +71,7 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
     await page.goto('/archive')
     await page.getByRole('link', { name: '建立档案' }).click()
     await page.getByLabel('称呼').fill('小林')
+    await openProfileDetails(page)
     await page.getByLabel('发质').selectOption('wavy')
     await page.getByLabel('发丝粗细').selectOption('fine')
     await page.getByLabel('发量').selectOption('medium')
@@ -65,6 +80,7 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
     await page.getByRole('button', { name: '保存档案' }).click()
 
     await page.getByRole('link', { name: '新建发型计划' }).click()
+    await openPlanDetails(page)
     await page.getByLabel('计划标题').fill('夏末短发计划')
     await page.getByLabel('计划日期').fill('2026-08-22')
     await page.getByLabel('计划状态').selectOption('ready')
@@ -144,22 +160,28 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
             documentElement: { scrollWidth: number }
             querySelectorAll(selector: string): Iterable<{
               getBoundingClientRect(): { height: number, width: number }
+              className: string
+              textContent: string | null
             }>
           }
           innerWidth: number
         }
         return {
           hasHorizontalOverflow: browser.document.documentElement.scrollWidth > browser.innerWidth,
-          minimumTargetHeight: Math.min(
-            ...[...browser.document.querySelectorAll('a, button')]
-            .map((target) => target.getBoundingClientRect())
+          minimumTarget: [...browser.document.querySelectorAll('a, button')]
+            .map((target) => ({
+              height: (target as HTMLElement).offsetHeight,
+              width: target.getBoundingClientRect().width,
+              label: target.textContent?.trim() ?? '',
+              className: target.className,
+            }))
             .filter(({ height, width }) => height > 0 && width > 0)
-            .map(({ height }) => height),
-          ),
+            .sort((left, right) => left.height - right.height)[0],
         }
       })
       expect(layout.hasHorizontalOverflow).toBe(false)
-      expect(layout.minimumTargetHeight).toBeGreaterThanOrEqual(45)
+      expect(layout.minimumTarget.height, `${layout.minimumTarget.label} (${layout.minimumTarget.className})`)
+        .toBeGreaterThanOrEqual(45)
     }
 
     page.once('dialog', (dialog) => dialog.accept())

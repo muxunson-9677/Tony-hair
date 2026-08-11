@@ -727,6 +727,23 @@ describe('ArchiveRepository', () => {
     expect(await repository.getBrief('plan-1')).toEqual(saved)
   })
 
+  test('stores one distinct backup from the same plan and rejects an invalid backup atomically', async () => {
+    await seedPlan()
+    const saved = brief({ backupCandidateId: 'candidate-2' })
+    await repository.saveBrief(saved)
+    expect(await repository.getBrief('plan-1')).toEqual(saved)
+
+    await expect(repository.saveBrief(brief({
+      backupCandidateId: 'candidate-1',
+      overall: '不应覆盖',
+    }))).rejects.toThrow('Backup candidate')
+    await expect(repository.saveBrief(brief({
+      backupCandidateId: 'missing-candidate',
+      overall: '也不应覆盖',
+    }))).rejects.toThrow('Backup candidate')
+    expect(await repository.getBrief('plan-1')).toEqual(saved)
+  })
+
   test('rejects a plan edit that would orphan the saved brief target', async () => {
     await seedPlan()
     const savedPlan = plan()
@@ -1010,6 +1027,20 @@ describe('ArchiveRepository', () => {
       repository.saveRecordWithPhotos(repeatRecord(), []),
     ).rejects.toThrow('at least one photo')
     expect(await repository.getRecord('record-1')).toBeUndefined()
+  })
+
+  test('persists a concrete next-time adjustment without turning it into an avoid rule', async () => {
+    await seedPlan()
+    const source = repeatRecord() as Extract<HaircutRecord, { outcome: 'repeat' }>
+    const adjusted: HaircutRecord = {
+      ...source,
+      outcome: 'adjust',
+      adjustmentNotes: ['两侧留长一点'],
+    } as HaircutRecord
+    await repository.saveRecordWithPhotos(adjusted, [photo()])
+    expect(await repository.getRecord(adjusted.id)).toEqual(adjusted)
+    expect(await repository.listAvoidRules('profile-1')).toEqual([])
+    expect(await repository.listStandardStyles('profile-1')).toEqual([])
   })
 
   test('atomically updates record photos and outcome-derived data', async () => {

@@ -206,6 +206,24 @@ onBeforeUnmount(revokePhotoUrls)
       </section>
 
       <section
+        v-else-if="record.outcome === 'adjust'"
+        class="record-outcome-summary record-outcome-summary--adjust"
+      >
+        <p class="section-index">
+          NEXT TIME
+        </p>
+        <h2>下次我会记得这些调整</h2>
+        <ul>
+          <li
+            v-for="item in record.adjustmentNotes"
+            :key="item"
+          >
+            {{ item }}
+          </li>
+        </ul>
+      </section>
+
+      <section
         v-else
         class="record-outcome-summary record-outcome-summary--avoid"
       >

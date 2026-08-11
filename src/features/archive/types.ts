@@ -79,6 +79,7 @@ export interface BarberBrief {
   readonly profileId: string
   readonly planId: string
   readonly targetCandidateId?: string
+  readonly backupCandidateId?: string
   readonly overall: string
   readonly top: string
   readonly fringe: string
@@ -124,7 +125,13 @@ interface AvoidHaircutRecord extends HaircutRecordBase {
   readonly avoidRules: readonly string[]
 }
 
-export type HaircutRecord = RepeatHaircutRecord | AvoidHaircutRecord
+interface AdjustHaircutRecord extends HaircutRecordBase {
+  readonly outcome: 'adjust'
+  readonly adjustmentNotes: readonly string[]
+  readonly avoidRules?: never
+}
+
+export type HaircutRecord = RepeatHaircutRecord | AdjustHaircutRecord | AvoidHaircutRecord
 
 export interface HaircutPhoto {
   readonly id: string

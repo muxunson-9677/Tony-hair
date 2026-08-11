@@ -8,6 +8,7 @@ import {
   resolveCandidateImageBlob,
 } from '../features/archive/candidateSources'
 import { archiveDemoCandidates } from '../features/archive/demoCandidates'
+import { resolveCandidateDecisionSummary } from '../features/archive/candidateDecisionSummary'
 import { isValidPlanCandidateCount } from '../features/archive/types'
 import type { Candidate } from '../features/archive/types'
 import { shouldDiscardPollDraftOnArchiveDeletion } from '../features/polls/archivePollDeletion'
@@ -198,8 +199,9 @@ onBeforeUnmount(() => {
             v-tactile
             class="text-link"
             :to="`/archive/plans/${plan.id}/brief`"
+            :aria-label="brief ? '查看沟通卡' : '创建沟通卡'"
           >
-            {{ brief ? '查看沟通卡' : '创建沟通卡' }}
+            {{ brief ? '给理发师看' : '准备给理发师看' }}
           </RouterLink>
           <RouterLink
             v-if="canEdit"
@@ -262,6 +264,14 @@ onBeforeUnmount(() => {
               <span>0{{ candidate.order }} · {{ candidateSourceLabel(candidate) }}</span>
               <h2>{{ candidate.name }}</h2>
               <p>{{ candidate.notes }}</p>
+              <dl class="candidate-decision-summary">
+                <div><dt>现在能不能剪</dt><dd>{{ resolveCandidateDecisionSummary(candidate).feasibility }}</dd></div>
+                <div><dt>每天打理</dt><dd>{{ resolveCandidateDecisionSummary(candidate).maintenance }}</dd></div>
+                <div><dt>变化程度</dt><dd>{{ resolveCandidateDecisionSummary(candidate).change }}</dd></div>
+                <div class="candidate-decision-summary__risk">
+                  <dt>最大风险</dt><dd>{{ resolveCandidateDecisionSummary(candidate).risk }}</dd>
+                </div>
+              </dl>
               <span
                 v-if="brief?.targetCandidateId === candidate.id"
                 class="candidate-main-badge"

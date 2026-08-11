@@ -70,9 +70,10 @@ export interface HaircutPlanDraft {
 
 export type BarberBriefDraft = Omit<
   BarberBrief,
-  'id' | 'profileId' | 'planId' | 'targetCandidateId' | 'createdAt' | 'updatedAt'
+  'id' | 'profileId' | 'planId' | 'targetCandidateId' | 'backupCandidateId' | 'createdAt' | 'updatedAt'
 > & {
   readonly targetCandidateId: string
+  readonly backupCandidateId?: string
 }
 
 export type HaircutPhotoDraft = Pick<HaircutPhoto, 'stage' | 'image'> & Partial<Pick<
@@ -93,8 +94,9 @@ export interface HaircutRecordDraft {
   readonly durationMinutes?: number
   readonly notes?: string
   readonly satisfaction: number
-  readonly outcome: 'repeat' | 'avoid'
+  readonly outcome: 'repeat' | 'adjust' | 'avoid'
   readonly avoidRules: readonly string[]
+  readonly adjustmentNotes?: readonly string[]
   readonly photos: readonly HaircutPhotoDraft[]
 }
 
@@ -466,6 +468,16 @@ export const createArchiveStore = (
       error.value = '请选择属于当前计划的目标候选。'
       return null
     }
+    if (
+      draft.backupCandidateId
+      && (
+        draft.backupCandidateId === draft.targetCandidateId
+        || !candidates.some(({ id }) => id === draft.backupCandidateId)
+      )
+    ) {
+      error.value = '备选方案必须属于当前计划，并且不能和主方案相同。'
+      return null
+    }
     const sections = [
       draft.overall,
       draft.top,
@@ -504,6 +516,7 @@ export const createArchiveStore = (
         profileId: currentProfile.id,
         planId,
         targetCandidateId: draft.targetCandidateId,
+        backupCandidateId: draft.backupCandidateId || undefined,
         overall: draft.overall.trim(),
         top: draft.top.trim(),
         fringe: draft.fringe.trim(),
@@ -593,6 +606,16 @@ export const createArchiveStore = (
       error.value = '选择避雷时，请填写 1 到 3 条非空规则。'
       return null
     }
+    const normalizedAdjustments = (draft.adjustmentNotes ?? [])
+      .map((rule) => rule.trim())
+      .filter(Boolean)
+    if (
+      draft.outcome === 'adjust'
+      && (normalizedAdjustments.length < 1 || normalizedAdjustments.length > 3)
+    ) {
+      error.value = '选择“有一点要改”时，请写下 1 到 3 条下次调整。'
+      return null
+    }
     if (saving.value) {
       return null
     }
@@ -629,7 +652,9 @@ export const createArchiveStore = (
       }
       const record: HaircutRecord = draft.outcome === 'repeat'
         ? { ...base, outcome: 'repeat' }
-        : { ...base, outcome: 'avoid', avoidRules: normalizedAvoidRules }
+        : draft.outcome === 'adjust'
+          ? { ...base, outcome: 'adjust', adjustmentNotes: normalizedAdjustments }
+          : { ...base, outcome: 'avoid', avoidRules: normalizedAvoidRules }
       const photos = draft.photos.map((photo): HaircutPhoto => ({
         ...photo,
         id: photo.id ?? createId(),
@@ -659,7 +684,7 @@ export const createArchiveStore = (
           createdAt: record.updatedAt,
           active: true,
         }])
-      } else {
+      } else if (record.outcome === 'avoid') {
         avoidRules.value = sortCreated([
           ...avoidRules.value,
           ...record.avoidRules.map((text, index) => ({

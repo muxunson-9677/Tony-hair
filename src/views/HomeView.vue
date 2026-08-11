@@ -5,7 +5,7 @@ import { useArchiveStore } from '../features/archive/archiveStore'
 import type { HaircutPhoto } from '../features/archive/types'
 import { curatedHairstyles } from '../features/hairstyle-library/curatedCatalog'
 import { useHairstyleLibraryStore } from '../features/hairstyle-library/libraryStore'
-import { resolveHomeAction } from '../features/home/resolveHomeAction'
+import { resolveHomeAction, resolveHomeEntrances } from '../features/home/resolveHomeAction'
 import { resolveHomeFavorite } from '../features/home/resolveHomeFavorite'
 import { useLocalDayClock } from '../features/home/useLocalDayClock'
 import AppIcon from '../ui/AppIcon.vue'
@@ -51,6 +51,20 @@ const homeAction = computed(() => resolveHomeAction({
   photosByRecordId: store.photosByRecordId,
   standardStyles: store.standardStyles,
 }))
+const hasActivePlan = computed(() => store.plans.some(({ profileId, status }) => (
+  profileId === store.profile?.id && (status === 'draft' || status === 'ready')
+)))
+const hasRepeatableStyle = computed(() => store.standardStyles.some(({ profileId, active }) => (
+  profileId === store.profile?.id && active
+)))
+const homeEntrances = computed(() => resolveHomeEntrances({
+  profile: store.profile,
+  hasActivePlan: hasActivePlan.value,
+  hasRepeatableStyle: hasRepeatableStyle.value,
+}))
+const secondaryEntrances = computed(() => homeEntrances.value.filter(({ to }) => (
+  to !== homeAction.value.to
+)))
 
 const actionContext = computed(() => {
   switch (homeAction.value.kind) {
@@ -70,7 +84,7 @@ const actionContext = computed(() => {
     case 'continue_plan':
       return '这个计划还需要补齐信息。'
     case 'create_profile':
-      return '先记下发质与偏好，之后的选择才更贴近真实条件。'
+      return '一张正面照，加上你确定的几件事就够了。'
     default:
       return ''
   }
@@ -123,7 +137,7 @@ onBeforeUnmount(() => {
           剪前看看，剪时说清，剪后记住
         </p>
         <p class="home-hero__intro">
-          不是替你追热点，而是把发质、维护和理发要求放到同一页里。
+          {{ store.profile ? '这次想怎么剪？我会带着你的真实情况继续。' : '先让我认识你的头发，之后每次会越来越省事。' }}
         </p>
 
         <p
@@ -155,6 +169,31 @@ onBeforeUnmount(() => {
             <span>{{ homeAction.label }}</span>
             <AppIcon name="check" />
           </RouterLink>
+          <nav
+            v-if="secondaryEntrances.length"
+            class="home-entrances"
+            aria-label="这次想怎么开始"
+          >
+            <RouterLink
+              v-for="entrance in secondaryEntrances"
+              :key="entrance.kind"
+              v-tactile
+              class="home-entrance"
+              :to="entrance.to"
+            >
+              <span
+                class="home-entrance__icon"
+                :data-kind="entrance.kind"
+              >
+                <AppIcon :name="entrance.kind === 'reference' ? 'photo' : 'scissors'" />
+              </span>
+              <span>
+                <strong>{{ entrance.label }}</strong>
+                <small>{{ entrance.hint }}</small>
+              </span>
+              <b aria-hidden="true">›</b>
+            </RouterLink>
+          </nav>
         </div>
       </div>
 
@@ -182,7 +221,7 @@ onBeforeUnmount(() => {
       </RouterLink>
 
       <RouterLink
-        v-else-if="homeVisualStyle"
+        v-else-if="homeVisualStyle && (store.profile || favoriteStyle)"
         v-tactile
         class="home-visual"
         :to="`/styles/catalog/${homeVisualStyle.id}`"

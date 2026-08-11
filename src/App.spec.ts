@@ -85,19 +85,20 @@ describe('app shell', () => {
     expect(logo?.getAttribute('src')).toBe('/brand/zajianfa-scissors-512.png')
     expect(screen.getByRole('heading', { level: 1, name: '咋剪发' })).toBeTruthy()
     expect(screen.getByText('剪前看看，剪时说清，剪后记住')).toBeTruthy()
-    expect((await screen.findByRole('link', { name: '建立我的头发档案' })).getAttribute('href'))
+    expect((await screen.findByRole('link', { name: '先认识一下我的头发' })).getAttribute('href'))
       .toBe('/archive/profile')
     expect(screen.getAllByTestId('home-primary-action')).toHaveLength(1)
+    expect(screen.getByText('一张正面照，加上你确定的几件事就够了。')).toBeTruthy()
+    expect(screen.queryByText('不是替你追热点，而是把发质、维护和理发要求放到同一页里。'))
+      .toBeNull()
     expect(screen.getByText('照片和记录仅保存在当前设备，不会上传或同步。')).toBeTruthy()
     expect(
       screen.getByText('清理浏览器数据、使用无痕模式或更换设备，都可能让记录丢失。'),
     ).toBeTruthy()
 
-    const visualLink = await screen.findByRole('link', { name: '查看发型：柔和侧分' })
-    expect(visualLink.getAttribute('href')).toBe('/styles/catalog/ran-sidepart')
-    expect(
-      within(visualLink).getByRole('img', { name: /AI 生成的虚构成年人物短发造型示例/ }),
-    ).toBeTruthy()
+    expect(screen.queryByRole('link', { name: '查看发型：柔和侧分' })).toBeNull()
+    expect(screen.queryByRole('img', { name: /AI 生成的虚构成年人物短发造型示例/ }))
+      .toBeNull()
   })
 
   test('keeps the four destinations visible and exposes the current route', async () => {

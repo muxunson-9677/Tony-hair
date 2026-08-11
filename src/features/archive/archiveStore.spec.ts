@@ -271,7 +271,7 @@ class MemoryRepository implements ArchiveRepositoryPort {
         createdAt: record.updatedAt,
         active: true,
       })
-    } else {
+    } else if (record.outcome === 'avoid') {
       this.avoidRules.push(...record.avoidRules.map((text, index) => ({
         id: `avoid-rule:${record.id}:${index + 1}`,
         profileId: record.profileId,

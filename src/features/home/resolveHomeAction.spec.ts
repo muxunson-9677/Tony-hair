@@ -9,7 +9,7 @@ import type {
   HaircutRecord,
   StandardStyle,
 } from '../archive/types'
-import { resolveHomeAction } from './resolveHomeAction'
+import { resolveHomeAction, resolveHomeEntrances } from './resolveHomeAction'
 
 const now = new Date(2026, 7, 10, 12, 0, 0)
 
@@ -115,7 +115,7 @@ describe('resolveHomeAction', () => {
   test('starts with the device hair profile when none exists', () => {
     expect(resolve({ profile: null })).toEqual({
       kind: 'create_profile',
-      label: '建立我的头发档案',
+      label: '先认识一下我的头发',
       to: '/archive/profile',
     })
   })
@@ -123,16 +123,16 @@ describe('resolveHomeAction', () => {
   test('sends a profiled user without a plan to discovery', () => {
     expect(resolve()).toEqual({
       kind: 'discover_styles',
-      label: '准备下次理发',
-      to: '/styles',
+      label: '帮我选',
+      to: '/archive/plans/new?intent=choose',
     })
   })
 
   test('prioritizes an active standard style when there is no active plan', () => {
     expect(resolve({ standardStyles: [standardStyle] })).toEqual({
       kind: 'repeat_standard',
-      label: '照上次再剪',
-      to: '/archive/plans/new',
+      label: '照上次剪',
+      to: '/archive/plans/new?intent=repeat',
     })
   })
 
@@ -274,5 +274,26 @@ describe('resolveHomeAction', () => {
       records: [record({ date: '2026-07-27' })],
       photosByRecordId: { 'record-1': [photo('day_7')] },
     })).toMatchObject({ kind: 'discover_styles' })
+  })
+
+  test('offers plain-language starting points only when no active task needs attention', () => {
+    expect(resolveHomeEntrances({ profile: null, hasRepeatableStyle: false, hasActivePlan: false }))
+      .toEqual([])
+
+    expect(resolveHomeEntrances({ profile, hasRepeatableStyle: false, hasActivePlan: false }))
+      .toEqual([
+        { kind: 'choose', label: '帮我选', hint: '我还不知道剪什么', to: '/archive/plans/new?intent=choose' },
+        { kind: 'reference', label: '我有参考图', hint: '从一张喜欢的图开始', to: '/styles/references/new?intent=plan' },
+      ])
+
+    expect(resolveHomeEntrances({ profile, hasRepeatableStyle: true, hasActivePlan: false }))
+      .toEqual([
+        { kind: 'choose', label: '帮我选', hint: '我还不知道剪什么', to: '/archive/plans/new?intent=choose' },
+        { kind: 'reference', label: '我有参考图', hint: '从一张喜欢的图开始', to: '/styles/references/new?intent=plan' },
+        { kind: 'repeat', label: '照上次剪', hint: '沿用满意的版本', to: '/archive/plans/new?intent=repeat' },
+      ])
+
+    expect(resolveHomeEntrances({ profile, hasRepeatableStyle: true, hasActivePlan: true }))
+      .toEqual([])
   })
 })
