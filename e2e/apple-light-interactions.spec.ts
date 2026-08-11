@@ -7,12 +7,8 @@ test('uses the confirmed light mobile system and gives controls physical feedbac
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(246, 247, 249)')
 
   const favorite = page.getByRole('button', { name: '收藏：齐颌短鲍伯' })
-  const favoriteBox = await favorite.boundingBox()
-  expect(favoriteBox).not.toBeNull()
-  await page.mouse.move(
-    favoriteBox!.x + favoriteBox!.width / 2,
-    favoriteBox!.y + favoriteBox!.height / 2,
-  )
+  await expect(page.locator('.route-enter-active')).toHaveCount(0)
+  await favorite.hover()
   await page.mouse.down()
   await expect(favorite).toHaveAttribute('data-pressing', 'true')
   await page.mouse.up()

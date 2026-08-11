@@ -6,6 +6,22 @@ import type {
   PrivateHairstyleReference,
 } from './types'
 
+const REGION_LABELS = {
+  fringe: '刘海',
+  top: '顶部',
+  sides: '两侧',
+  back: '后脑',
+} as const
+
+export const formatPrivateReferenceNotes = (
+  reference: PrivateHairstyleReference,
+) => [
+  reference.notes.trim(),
+  ...(reference.focusAreas ?? []).map((area) => (
+    `${REGION_LABELS[area.region]}${area.intent === 'keep' ? '想保留' : '不要照搬'}：${area.note}`
+  )),
+].filter(Boolean).join('\n')
+
 export interface PrivateReferenceLookup {
   getPrivateReference(id: string): Promise<PrivateHairstyleReference | undefined>
 }
@@ -36,7 +52,7 @@ export const privateReferenceToCandidateDraft = (
   reference: PrivateHairstyleReference,
 ): CandidateDraft => ({
   name: reference.name,
-  notes: reference.notes,
+  notes: formatPrivateReferenceNotes(reference),
   source: 'user_reference',
   referenceId: reference.id,
   referenceImage: reference.image,

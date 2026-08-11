@@ -4491,6 +4491,223 @@ a:focus-visible {
   cursor: pointer;
 }
 
+.reference-region-editor {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid rgba(124, 136, 154, 0.18);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(34, 50, 78, 0.09), 0 2px 5px rgba(34, 50, 78, 0.05);
+}
+
+.reference-region-editor header h2 {
+  margin: 5px 0 8px;
+  font-size: clamp(1.5rem, 7vw, 2.25rem);
+  letter-spacing: -0.045em;
+  line-height: 1.04;
+}
+
+.reference-region-editor header > p:last-child {
+  margin: 0;
+  color: #68717e;
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+.style-reference-form .reference-region-editor fieldset {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+}
+
+.style-reference-form .reference-region-editor legend {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0 0 5px;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  font-size: 0.82rem;
+  font-weight: 780;
+}
+
+.reference-region-buttons {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.reference-region-button {
+  display: grid;
+  min-height: 62px;
+  place-items: center;
+  gap: 5px;
+  padding: 8px 4px;
+  border: 1px solid rgba(89, 103, 126, 0.14);
+  border-radius: 17px;
+  color: #3f4a59;
+  background: linear-gradient(180deg, #fff 0%, #f5f7fa 100%);
+  box-shadow: 0 7px 16px rgba(34, 50, 78, 0.07), inset 0 1px 0 #fff;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 720;
+}
+
+.reference-region-button > span {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  place-items: center;
+  border-radius: 10px;
+  color: #2467bf;
+  background: #e8f2ff;
+  font-size: 0.72rem;
+}
+
+.reference-region-button--top > span {
+  color: #7250b5;
+  background: #f0eaff;
+}
+
+.reference-region-button--sides > span {
+  color: #30785d;
+  background: #e6f6ef;
+}
+
+.reference-region-button--back > span {
+  color: #a45c18;
+  background: #fff0d8;
+}
+
+.reference-region-button[aria-pressed="true"] {
+  border-color: rgba(52, 120, 246, 0.42);
+  color: #185fcf;
+  background: #eef5ff;
+  box-shadow: 0 9px 20px rgba(52, 120, 246, 0.15), inset 0 0 0 1px rgba(52, 120, 246, 0.12);
+}
+
+.reference-region-summaries {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reference-region-summaries button {
+  display: flex;
+  width: 100%;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(124, 136, 154, 0.16);
+  border-radius: 15px;
+  color: #263141;
+  background: #f7f9fc;
+  font: inherit;
+  text-align: left;
+}
+
+.reference-region-summaries button > span:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.reference-region-summaries small {
+  color: #68717e;
+  font-size: 0.72rem;
+}
+
+.reference-region-summaries button > span:last-child {
+  color: #3478f6;
+  font-size: 0.7rem;
+  font-weight: 720;
+}
+
+.style-reference-form .reference-region-detail {
+  padding: 15px;
+  border: 1px solid rgba(52, 120, 246, 0.2);
+  border-radius: 18px;
+  background: #f7faff;
+}
+
+.reference-region-intent {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.reference-region-intent label {
+  position: relative;
+}
+
+.reference-region-intent input {
+  position: absolute;
+  opacity: 0;
+}
+
+.reference-region-intent span {
+  display: grid;
+  min-height: 45px;
+  place-items: center;
+  border: 1px solid rgba(89, 103, 126, 0.18);
+  border-radius: 13px;
+  background: #fff;
+  font-size: 0.76rem;
+  font-weight: 720;
+}
+
+.reference-region-intent input:checked + span {
+  border-color: #3478f6;
+  color: #185fcf;
+  background: #eaf2ff;
+}
+
+.reference-region-detail > label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 760;
+}
+
+.reference-region-detail textarea {
+  min-height: 88px;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.reference-region-error {
+  margin: 0;
+  color: #8b432c;
+  font-size: 0.74rem;
+}
+
+.reference-region-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reference-region-actions button {
+  min-height: 45px;
+  padding: 0 13px;
+  border: 1px solid rgba(89, 103, 126, 0.18);
+  border-radius: 13px;
+  color: #263141;
+  background: #fff;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 720;
+}
+
+.reference-region-actions button:first-child {
+  border-color: #3478f6;
+  color: #fff;
+  background: #3478f6;
+}
+
 .reference-form-state,
 .reference-form-error {
   margin-top: 20px;
@@ -5775,6 +5992,34 @@ a:focus-visible {
   margin: 2px 0 0;
   color: #68717e;
   font-size: 0.82rem;
+}
+
+.reference-focus-list {
+  display: grid;
+  gap: 9px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reference-focus-list li {
+  display: grid;
+  gap: 4px;
+  padding: 13px 14px;
+  border-left: 4px solid #4c9a77;
+  border-radius: 0 14px 14px 0;
+  background: #edf8f2;
+}
+
+.reference-focus-list .reference-focus-list__item--avoid {
+  border-left-color: #d18436;
+  background: #fff5e6;
+}
+
+.reference-focus-list span {
+  color: #5e6876;
+  font-size: 0.78rem;
+  line-height: 1.5;
 }
 
 .guided-direction-picker {

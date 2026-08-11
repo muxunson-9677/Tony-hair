@@ -31,6 +31,7 @@ const referenceWrite = (overrides: Record<string, unknown> = {}) => ({
   name: '齐颌短发参考',
   notes: '两侧保留重量，不要推白。',
   tags: ['低维护', '戴眼镜'],
+  focusAreas: [],
   ...preparedImage(),
   ...overrides,
 })
@@ -197,8 +198,57 @@ describe('HairstyleLibraryRepository', () => {
     expect(saved.tags).toEqual(['A', 'b'])
   })
 
-  test('updates reference text without changing any image field or byte', async () => {
+  test('persists unique user-stated focus areas and restores legacy references as empty', async () => {
+    const saved = await repository.savePrivateReference(referenceWrite({
+      focusAreas: [
+        { region: 'fringe', intent: 'keep', note: '  保留自然碎刘海  ' },
+        { region: 'sides', intent: 'avoid', note: '不要推得太高' },
+      ],
+    }))
+
+    expect(saved.focusAreas).toEqual([
+      { region: 'fringe', intent: 'keep', note: '保留自然碎刘海' },
+      { region: 'sides', intent: 'avoid', note: '不要推得太高' },
+    ])
+
+    const legacy = { ...saved } as Record<string, unknown>
+    delete legacy.focusAreas
+    await db.privateReferences.put(legacy as never)
+    expect((await repository.getPrivateReference(saved.id))?.focusAreas).toEqual([])
+  })
+
+  test.each([
+    ['duplicate region', [
+      { region: 'top', intent: 'keep', note: '保留蓬松感' },
+      { region: 'top', intent: 'avoid', note: '不要打薄' },
+    ]],
+    ['unknown region', [{ region: 'temple', intent: 'keep', note: '保留' }]],
+    ['unknown intent', [{ region: 'back', intent: 'copy', note: '照搬' }]],
+    ['empty note', [{ region: 'fringe', intent: 'keep', note: '  ' }]],
+    ['note over 80 characters', [{ region: 'sides', intent: 'avoid', note: '长'.repeat(81) }]],
+  ])('rejects invalid focus areas atomically: %s', async (_label, focusAreas) => {
     const saved = await repository.savePrivateReference(referenceWrite())
+
+    await expect(repository.updatePrivateReference(saved.id, {
+      name: '不应写入的名称',
+      notes: saved.notes,
+      tags: saved.tags,
+      focusAreas,
+    } as never)).rejects.toBeInstanceOf(RangeError)
+
+    expect(await repository.getPrivateReference(saved.id)).toMatchObject({
+      name: saved.name,
+      focusAreas: [],
+      updatedAt: saved.updatedAt,
+    })
+  })
+
+  test('updates reference text without changing any image field or byte', async () => {
+    const saved = await repository.savePrivateReference(referenceWrite({
+      focusAreas: [
+        { region: 'top', intent: 'keep', note: '保留顶部蓬松感' },
+      ],
+    }))
     const updated = await repository.updatePrivateReference(saved.id, {
       name: '  新名称 ',
       notes: '新备注',
@@ -215,6 +265,9 @@ describe('HairstyleLibraryRepository', () => {
       height: saved.height,
       bytes: saved.bytes,
       processedAt: saved.processedAt,
+      focusAreas: [
+        { region: 'top', intent: 'keep', note: '保留顶部蓬松感' },
+      ],
       createdAt: saved.createdAt,
       updatedAt: NOW,
     })

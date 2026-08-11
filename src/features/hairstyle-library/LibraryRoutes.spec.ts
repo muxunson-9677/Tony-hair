@@ -369,6 +369,11 @@ describe('hairstyle library routes', () => {
     )
     expect(URL.createObjectURL).not.toHaveBeenCalledWith(original)
 
+    await fireEvent.click(screen.getByRole('button', { name: '刘海' }))
+    await fireEvent.click(screen.getByRole('radio', { name: '喜欢这里' }))
+    await fireEvent.update(screen.getByLabelText('刘海说明'), '保留自然碎刘海')
+    await fireEvent.click(screen.getByRole('button', { name: '记下刘海' }))
+
     await fireEvent.update(screen.getByLabelText('参考名称'), '  通勤短发  ')
     await fireEvent.update(screen.getByLabelText('我的备注'), '保留耳侧长度')
     await fireEvent.update(screen.getByLabelText('标签'), ' 通勤，短发,通勤 ')
@@ -380,6 +385,9 @@ describe('hairstyle library routes', () => {
       name: '通勤短发',
       notes: '保留耳侧长度',
       tags: ['通勤', '短发'],
+      focusAreas: [
+        { region: 'fringe', intent: 'keep', note: '保留自然碎刘海' },
+      ],
       width: 900,
       height: 1200,
       bytes: preparedBlob.size,
@@ -389,6 +397,8 @@ describe('hairstyle library routes', () => {
     expect('name' in (stored?.image ?? {})).toBe(false)
     expect(await defaultArchiveDb.profiles.count()).toBe(0)
     expect(await screen.findByRole('heading', { level: 1, name: '通勤短发' })).toBeTruthy()
+    expect(screen.getByText('刘海想保留')).toBeTruthy()
+    expect(screen.getByText('保留自然碎刘海')).toBeTruthy()
   })
 
   test('blocks a new-reference form behind a retryable initial storage failure', async () => {
@@ -664,6 +674,9 @@ describe('hairstyle library routes', () => {
       name: '原名称',
       notes: '原备注',
       tags: ['原标签'],
+      focusAreas: [
+        { region: 'sides', intent: 'avoid', note: '不要推得太高' },
+      ],
       image: originalBlob,
       width: 900,
       height: 1200,
@@ -682,6 +695,8 @@ describe('hairstyle library routes', () => {
     })
     const first = await renderAt(`/styles/references/${original.id}/edit`)
 
+    expect(await screen.findByText('两侧不要照搬')).toBeTruthy()
+    expect(screen.getByText('不要推得太高')).toBeTruthy()
     await fireEvent.update(await screen.findByLabelText('参考名称'), '只改文字')
     await fireEvent.update(screen.getByLabelText('标签'), '一,二,三,四,五,六,七,八')
     await fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
@@ -694,6 +709,9 @@ describe('hairstyle library routes', () => {
       height: original.height,
       processedAt: original.processedAt,
       tags: ['一', '二', '三', '四', '五', '六', '七', '八'],
+      focusAreas: [
+        { region: 'sides', intent: 'avoid', note: '不要推得太高' },
+      ],
     })
     expect(await textOnly?.image.text()).toBe('original-reference')
     first.unmount()
@@ -725,6 +743,9 @@ describe('hairstyle library routes', () => {
       fingerprint: original.fingerprint,
       bytes: original.bytes,
       processedAt: original.processedAt,
+      focusAreas: [
+        { region: 'sides', intent: 'avoid', note: '不要推得太高' },
+      ],
     })
     expect(await unchanged?.image.text()).toBe('original-reference')
   })

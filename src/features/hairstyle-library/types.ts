@@ -61,6 +61,7 @@ export interface PrivateHairstyleReference {
   readonly name: string
   readonly notes: string
   readonly tags: readonly string[]
+  readonly focusAreas?: readonly PrivateReferenceFocusArea[]
   readonly image: Blob
   readonly width: number
   readonly height: number
@@ -68,6 +69,15 @@ export interface PrivateHairstyleReference {
   readonly processedAt: string
   readonly createdAt: string
   readonly updatedAt: string
+}
+
+export type PrivateReferenceRegion = 'fringe' | 'top' | 'sides' | 'back'
+export type PrivateReferenceIntent = 'keep' | 'avoid'
+
+export interface PrivateReferenceFocusArea {
+  readonly region: PrivateReferenceRegion
+  readonly intent: PrivateReferenceIntent
+  readonly note: string
 }
 
 export type PrivateHairstyleReferenceWrite = Omit<
@@ -78,7 +88,9 @@ export type PrivateHairstyleReferenceWrite = Omit<
 export type PrivateHairstyleReferenceDetailsWrite = Pick<
   PrivateHairstyleReference,
   'name' | 'notes' | 'tags'
->
+> & {
+  readonly focusAreas?: readonly PrivateReferenceFocusArea[]
+}
 
 export type PrivateHairstyleReferenceImageWrite = Pick<
   PrivateHairstyleReference,

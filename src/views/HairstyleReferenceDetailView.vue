@@ -20,6 +20,12 @@ const addToPlanPath = computed(() => reference.value
   ? buildArchivePlanReturnPath({ kind: 'private_reference', id: reference.value.id })
   : null)
 const libraryBusy = computed(() => !store.initialized || store.loading || store.saving)
+const regionLabels = {
+  fringe: '刘海',
+  top: '顶部',
+  sides: '两侧',
+  back: '后脑',
+} as const
 
 const releaseImage = () => {
   if (imageUrl.value) {
@@ -139,6 +145,28 @@ onBeforeUnmount(releaseImage)
         <p v-else>
           还没有添加标签。
         </p>
+      </section>
+
+      <section
+        v-if="reference.focusAreas?.length"
+        aria-labelledby="reference-focus-title"
+      >
+        <p class="style-detail-section-index">
+          03
+        </p>
+        <h2 id="reference-focus-title">
+          只参考这些部分
+        </h2>
+        <ul class="reference-focus-list">
+          <li
+            v-for="area in reference.focusAreas"
+            :key="area.region"
+            :class="`reference-focus-list__item--${area.intent}`"
+          >
+            <b>{{ regionLabels[area.region] }}{{ area.intent === 'keep' ? '想保留' : '不要照搬' }}</b>
+            <span>{{ area.note }}</span>
+          </li>
+        </ul>
       </section>
 
       <div

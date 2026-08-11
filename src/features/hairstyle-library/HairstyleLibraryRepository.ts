@@ -7,6 +7,7 @@ import type {
   HairstyleFavoriteTarget,
   PrivateHairstyleReference,
   PrivateHairstyleReferenceDetailsWrite,
+  PrivateReferenceFocusArea,
   PrivateHairstyleReferenceImageWrite,
   PrivateHairstyleReferenceWrite,
 } from './types'
@@ -17,10 +18,13 @@ const MAX_NAME_CHARACTERS = 40
 const MAX_NOTES_CHARACTERS = 300
 const MAX_TAGS = 8
 const MAX_TAG_CHARACTERS = 12
+const MAX_FOCUS_AREA_NOTE_CHARACTERS = 80
 const MAX_FOLDER_NAME_CHARACTERS = 24
 const MAX_ITEM_ID_CHARACTERS = 128
 const SUPPORTED_IMAGE_TYPES = new Set(['image/webp', 'image/jpeg'])
 const FAVORITE_ITEM_TYPES = new Set(['curated_style', 'private_reference'])
+const FOCUS_REGIONS = new Set(['fringe', 'top', 'sides', 'back'])
+const FOCUS_INTENTS = new Set(['keep', 'avoid'])
 
 export interface HairstyleLibraryRepositoryOptions {
   readonly now?: () => Date
@@ -83,6 +87,43 @@ const normalizeTags = (value: unknown): string[] => {
     throw new RangeError(`tags must contain at most ${MAX_TAGS} items`)
   }
   return tags
+}
+
+const normalizeFocusAreas = (value: unknown): PrivateReferenceFocusArea[] => {
+  if (value === undefined) {
+    return []
+  }
+  if (!Array.isArray(value)) {
+    throw new RangeError('focusAreas must be an array')
+  }
+  const areas: PrivateReferenceFocusArea[] = []
+  const seen = new Set<string>()
+  for (const area of value) {
+    if (
+      !isRecord(area)
+      || typeof area.region !== 'string'
+      || !FOCUS_REGIONS.has(area.region)
+      || typeof area.intent !== 'string'
+      || !FOCUS_INTENTS.has(area.intent)
+    ) {
+      throw new RangeError('focus area region or intent is invalid')
+    }
+    if (seen.has(area.region)) {
+      throw new RangeError(`focus area region is duplicated: ${area.region}`)
+    }
+    seen.add(area.region)
+    areas.push({
+      region: area.region as PrivateReferenceFocusArea['region'],
+      intent: area.intent as PrivateReferenceFocusArea['intent'],
+      note: normalizeBoundedText(
+        area.note,
+        'focus area note',
+        1,
+        MAX_FOCUS_AREA_NOTE_CHARACTERS,
+      ),
+    })
+  }
+  return areas
 }
 
 const assertNoRepositoryFields = (value: unknown) => {
@@ -159,8 +200,18 @@ const normalizeReferenceDetails = (
     name: normalizeBoundedText(value.name, 'name', 1, MAX_NAME_CHARACTERS),
     notes: normalizeNotes(value.notes),
     tags: normalizeTags(value.tags),
+    ...(value.focusAreas === undefined
+      ? {}
+      : { focusAreas: normalizeFocusAreas(value.focusAreas) }),
   }
 }
+
+const normalizeStoredReference = (
+  reference: PrivateHairstyleReference,
+): PrivateHairstyleReference => ({
+  ...reference,
+  focusAreas: normalizeFocusAreas(reference.focusAreas),
+})
 
 const normalizeFolderWrite = (value: FavoriteFolderWrite): FavoriteFolderWrite => {
   if (!isRecord(value)) {
@@ -273,11 +324,16 @@ export class HairstyleLibraryRepository {
   }
 
   listPrivateReferences(): Promise<PrivateHairstyleReference[]> {
-    return this.run(() => this.db.privateReferences.toArray())
+    return this.run(async () => (
+      (await this.db.privateReferences.toArray()).map(normalizeStoredReference)
+    ))
   }
 
   getPrivateReference(id: string): Promise<PrivateHairstyleReference | undefined> {
-    return this.run(() => this.db.privateReferences.get(id))
+    return this.run(async () => {
+      const reference = await this.db.privateReferences.get(id)
+      return reference ? normalizeStoredReference(reference) : undefined
+    })
   }
 
   async savePrivateReference(
@@ -291,6 +347,7 @@ export class HairstyleLibraryRepository {
       id: this.nextId(),
       fingerprint,
       ...details,
+      focusAreas: details.focusAreas ?? [],
       ...image,
       createdAt: timestamp,
       updatedAt: timestamp,

@@ -19,6 +19,7 @@ const privateReference = (
   name: '我的私人参考',
   notes: '只参考轮廓，不要推太短',
   tags: ['通勤'],
+  focusAreas: [],
   image: referenceImage,
   width: 900,
   height: 1200,
@@ -57,6 +58,22 @@ describe('hairstyle library candidate adapters', () => {
       referenceImageProcessedAt: source.processedAt,
     })
     expect(draft.referenceImage).toBe(source.image)
+  })
+
+  test('translates explicit private-reference regions into the candidate snapshot notes', () => {
+    const source = privateReference({
+      notes: '整体保持轻盈。',
+      focusAreas: [
+        { region: 'fringe', intent: 'keep', note: '保留自然碎刘海' },
+        { region: 'sides', intent: 'avoid', note: '不要推得太高' },
+      ],
+    })
+
+    const draft = privateReferenceToCandidateDraft(source)
+
+    expect(draft.notes).toContain('整体保持轻盈。')
+    expect(draft.notes).toContain('刘海想保留：保留自然碎刘海')
+    expect(draft.notes).toContain('两侧不要照搬：不要推得太高')
   })
 
   test('resolves only canonical active catalog IDs before constructing a candidate', () => {

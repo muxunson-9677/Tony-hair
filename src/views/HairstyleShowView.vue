@@ -16,6 +16,12 @@ const privateReference = computed(() => isPrivate.value ? store.getReference(id.
 const privateImageUrl = ref<string | null>(null)
 const imageExpanded = ref(false)
 const wakeLockActive = ref(false)
+const regionLabels = {
+  fringe: '刘海',
+  top: '顶部',
+  sides: '两侧',
+  back: '后脑',
+} as const
 let wakeLockSentinel: { release: () => Promise<void> } | null = null
 const activeImageSource = computed(() => curatedStyle.value?.coverImage ?? privateImageUrl.value ?? '')
 const activeImageAlt = computed(() => curatedStyle.value?.imageAlt ?? (
@@ -233,6 +239,25 @@ onBeforeUnmount(() => {
       <p class="private-show-notes">
         {{ privateReference.notes || '未填写备注。' }}
       </p>
+      <section
+        v-if="privateReference.focusAreas?.length"
+        class="private-show-focus"
+        aria-labelledby="private-show-focus-title"
+      >
+        <h2 id="private-show-focus-title">
+          只参考这些部分
+        </h2>
+        <ul class="reference-focus-list">
+          <li
+            v-for="area in privateReference.focusAreas"
+            :key="area.region"
+            :class="`reference-focus-list__item--${area.intent}`"
+          >
+            <b>{{ regionLabels[area.region] }}{{ area.intent === 'keep' ? '想保留' : '不要照搬' }}</b>
+            <span>{{ area.note }}</span>
+          </li>
+        </ul>
+      </section>
       <button
         class="style-show-wake-lock"
         type="button"

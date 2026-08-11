@@ -14,6 +14,8 @@ import {
   type PreparedLocalImage,
 } from '../features/images/prepareLocalImage'
 import { useHairstyleLibraryStore } from '../features/hairstyle-library/libraryStore'
+import ReferenceRegionEditor from '../features/hairstyle-library/components/ReferenceRegionEditor.vue'
+import type { PrivateReferenceFocusArea } from '../features/hairstyle-library/types'
 
 type ReferenceImagePreparer = (file: Blob) => Promise<PreparedLocalImage>
 
@@ -38,6 +40,7 @@ const unavailable = computed(() => (
 const name = ref('')
 const notes = ref('')
 const tagsText = ref('')
+const focusAreas = ref<PrivateReferenceFocusArea[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const prepared = ref<PreparedLocalImage | null>(null)
 const previewUrl = ref<string | null>(null)
@@ -74,6 +77,7 @@ const initializeEdit = () => {
   name.value = current.name
   notes.value = current.notes
   tagsText.value = current.tags.join('，')
+  focusAreas.value = [...(current.focusAreas ?? [])]
   showPreview(current.image)
 }
 
@@ -166,6 +170,7 @@ const validateDetails = () => {
     name: normalizedName,
     notes: normalizedNotes,
     tags: parseTags(),
+    focusAreas: focusAreas.value,
   }
 }
 
@@ -384,6 +389,12 @@ onBeforeUnmount(() => {
             清除所选照片
           </button>
         </section>
+
+        <ReferenceRegionEditor
+          v-if="previewUrl"
+          v-model="focusAreas"
+          :disabled="saveLocked"
+        />
 
         <label>
           <span>参考名称</span>

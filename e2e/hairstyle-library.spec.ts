@@ -810,6 +810,10 @@ test('keeps a processed private reference local while its mixed-plan snapshot su
   await page.getByLabel('参考名称').fill('耳侧长度参考')
   await page.getByLabel('我的备注').fill('只参考耳侧长度，不照搬颜色。')
   await page.getByLabel('标签').fill('通勤，耳侧，通勤')
+  await page.getByRole('button', { name: '两侧' }).click()
+  await page.getByRole('radio', { name: '喜欢这里' }).check()
+  await page.getByLabel('两侧说明').fill('耳侧长度要盖住一半耳朵')
+  await page.getByRole('button', { name: '记下两侧' }).click()
 
   await page.evaluate(() => {
     const state = globalThis as typeof globalThis & { __blockPrivateReferenceWrites?: boolean }
@@ -878,6 +882,7 @@ test('keeps a processed private reference local while its mixed-plan snapshot su
   expect(['image/webp', 'image/jpeg']).toContain(storedReference.type)
   expect(storedReference.keys).not.toContain('filename')
   expect(storedReference.serialized).not.toContain(PRIVATE_SOURCE_FILENAME)
+  expect(storedReference.serialized).toContain('耳侧长度要盖住一半耳朵')
   expect(storedReference.byteText).not.toMatch(/Exif|EXIF/)
   expect(storedReference.byteText).not.toContain(PRIVATE_SOURCE_MARKER)
 
@@ -891,6 +896,8 @@ test('keeps a processed private reference local while its mixed-plan snapshot su
   await page.reload()
   await expect(page.getByText(/已编辑[:：]只参考耳侧长度[,，]不照搬颜色。/)).toBeVisible()
   await expect(page.getByText('已编辑', { exact: true })).toBeVisible()
+  await expect(page.getByText('两侧想保留')).toBeVisible()
+  await expect(page.getByText('耳侧长度要盖住一半耳朵')).toBeVisible()
 
   await page.getByRole('button', { name: '更多' }).click()
   const favorite = page.getByRole('button', { name: '收藏：耳侧长度参考' })
@@ -904,6 +911,8 @@ test('keeps a processed private reference local while its mixed-plan snapshot su
   await page.getByRole('link', { name: '给理发师看' }).click()
   await expect(page.getByRole('heading', { level: 1, name: '耳侧长度参考' })).toBeVisible()
   await expect(page.getByText(/已编辑[:：]只参考耳侧长度[,，]不照搬颜色。/)).toBeVisible()
+  await expect(page.getByText('两侧想保留')).toBeVisible()
+  await expect(page.getByText('耳侧长度要盖住一半耳朵')).toBeVisible()
   await expect(page.getByText('给理发师看的要点')).toHaveCount(0)
   await expect(page.getByRole('navigation', { name: '主导航' })).toHaveCount(0)
   await captureSettled(page, testInfo, 'private-barber-390x844.png', { width: 390, height: 844 })
@@ -926,6 +935,7 @@ test('keeps a processed private reference local while its mixed-plan snapshot su
   await expect(page.getByRole('heading', { level: 1, name: '耳侧与鲍伯探索' })).toBeVisible()
   await expect(page.getByRole('img', { name: '耳侧长度参考本地候选图' })).toBeVisible()
   await expect(page.getByRole('img', { name: '齐颌短鲍伯预制示例' })).toBeVisible()
+  await expect(page.getByText(/两侧想保留：耳侧长度要盖住一半耳朵/u)).toBeVisible()
   const planPath = new URL(page.url()).pathname
   await page.getByRole('link', { name: '创建沟通卡' }).click()
   await fillBrief(page, '耳侧长度参考')
