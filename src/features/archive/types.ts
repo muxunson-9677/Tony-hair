@@ -8,15 +8,31 @@ export type WashFrequency =
   | 'weekly_or_less'
   | 'unsure'
 
+export type GenderIdentity = 'woman' | 'man' | 'nonbinary' | 'unspecified'
+export type PresentationPreference = 'feminine' | 'masculine' | 'androgynous' | 'unspecified'
+
+export interface HairProfilePhoto {
+  readonly id: string
+  readonly angle: 'front' | 'side' | 'back'
+  readonly image: Blob
+  readonly width: number
+  readonly height: number
+  readonly bytes: number
+  readonly processedAt: string
+}
+
 export interface HairProfile {
   readonly id: string
   readonly name: string
+  readonly genderIdentity?: GenderIdentity
+  readonly presentationPreference?: PresentationPreference
   readonly hairTexture: HairTexture
   readonly strandThickness: StrandThickness
   readonly density: HairDensity
   readonly stylingMinutes: number | null
   readonly washFrequency: WashFrequency
   readonly preferenceNotes: string
+  readonly profilePhotos?: readonly HairProfilePhoto[]
   readonly createdAt: string
   readonly updatedAt: string
 }
@@ -88,6 +104,7 @@ interface HaircutRecordBase {
   readonly satisfaction: 1 | 2 | 3 | 4 | 5
   readonly styleName: string
   readonly salonName?: string
+  readonly salonLocation?: string
   readonly barberName?: string
   readonly serviceName?: string
   readonly priceCents?: number
@@ -112,7 +129,7 @@ export type HaircutRecord = RepeatHaircutRecord | AvoidHaircutRecord
 export interface HaircutPhoto {
   readonly id: string
   readonly recordId: string
-  readonly stage: 'before' | 'during' | 'unstyled' | 'styled' | 'after_wash' | 'day_7'
+  readonly stage: 'before' | 'after' | 'during' | 'unstyled' | 'styled' | 'after_wash' | 'day_7'
   readonly image: Blob
   readonly capturedAt: string
   readonly width?: number

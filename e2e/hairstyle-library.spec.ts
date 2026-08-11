@@ -360,6 +360,7 @@ const fillBrief = async (page: Page, targetName: string) => {
   if (!(await target.isChecked())) {
     await target.check()
   }
+  await page.getByText('需要修改时展开').click()
   await page.getByLabel('整体').fill('整体保留轻盈轮廓')
   await page.getByLabel('顶部').fill('顶部保留自然支撑')
   await page.getByLabel('刘海').fill('刘海自然露额')
@@ -869,6 +870,7 @@ test('keeps a processed private reference local while its mixed-plan snapshot su
   expect(storedReference.byteText).not.toMatch(/Exif|EXIF/)
   expect(storedReference.byteText).not.toContain(PRIVATE_SOURCE_MARKER)
 
+  await page.getByRole('button', { name: '更多' }).click()
   await page.getByRole('link', { name: '编辑私人参考' }).click()
   await expect(page.getByRole('heading', { level: 1, name: '编辑私人参考' })).toBeVisible()
   await page.getByLabel('我的备注').fill('已编辑：只参考耳侧长度，不照搬颜色。')
@@ -879,6 +881,7 @@ test('keeps a processed private reference local while its mixed-plan snapshot su
   await expect(page.getByText(/已编辑[:：]只参考耳侧长度[,，]不照搬颜色。/)).toBeVisible()
   await expect(page.getByText('已编辑', { exact: true })).toBeVisible()
 
+  await page.getByRole('button', { name: '更多' }).click()
   const favorite = page.getByRole('button', { name: '收藏：耳侧长度参考' })
   await favorite.press('Space')
   await expect(favorite).toHaveAttribute('aria-pressed', 'true')
@@ -901,6 +904,7 @@ test('keeps a processed private reference local while its mixed-plan snapshot su
   await fillProfile(page, '阿青')
   await expect(page).toHaveURL(/\/archive\/plans\/new$/)
   await expect(page.getByText('已把“耳侧长度参考”加入探索计划；再选 1—3 个方向即可保存。')).toBeVisible()
+  await page.getByText('继续添加或更换候选').click()
   await page.getByRole('button', { name: '加入候选：齐颌短鲍伯' }).click()
   await page.getByLabel('计划标题').fill('耳侧与鲍伯探索')
   await page.getByLabel('计划日期').fill('2026-08-28')
@@ -918,6 +922,7 @@ test('keeps a processed private reference local while its mixed-plan snapshot su
   await captureSettled(page, testInfo, 'mixed-brief-390x844.png', { width: 390, height: 844 })
 
   await page.goto(referencePath)
+  await page.getByRole('button', { name: '更多' }).click()
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByRole('button', { name: '删除私人参考' }).click()
   await expect(page.getByRole('heading', { level: 1, name: '我的参考' })).toBeVisible()
@@ -938,6 +943,7 @@ test('keeps a processed private reference local while its mixed-plan snapshot su
 
   await page.goto('/styles/catalog/lin-bob/show')
   await expect(page.getByRole('heading', { level: 1, name: '齐颌短鲍伯' })).toBeVisible()
+  await page.getByText('完整部位说明与现实限制').click()
   await expect(page.getByText('只提供正面参考；侧面与后脑必须结合你的头型、发旋和现场长度确认。')).toBeVisible()
   await expect(page.getByRole('heading', { level: 2, name: '剪发沟通要点' })).toBeVisible()
   await expect(page.getByRole('navigation', { name: '主导航' })).toHaveCount(0)
@@ -967,8 +973,8 @@ test('creates a one-snapshot repeat plan and its communication card from an acti
   await page.getByLabel('理发日期').fill('2026-08-20')
   await page.getByLabel('发型名').fill('上次满意短发')
   await page.getByLabel('满意度').selectOption('5')
-  await page.getByLabel('已造型照片').setInputFiles('public/demo/persona-ran-sidepart.webp')
-  await page.getByLabel('复刻').check()
+  await page.getByLabel('剪后照片').setInputFiles('public/demo/persona-ran-sidepart.webp')
+  await page.getByLabel('值得复刻').check()
   await page.getByRole('button', { name: '保存剪后记录' }).click()
   await expect(page.getByText('已存为标准发型')).toBeVisible()
 

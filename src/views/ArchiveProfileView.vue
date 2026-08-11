@@ -13,6 +13,12 @@ import {
   POLL_DRAFT_REPOSITORY_KEY,
 } from '../features/polls/pollRuntime'
 import type { PollDraft } from '../features/polls/types'
+import type { HairProfilePhoto } from '../features/archive/types'
+import {
+  ImagePreparationError,
+  prepareLocalImage,
+} from '../features/images/prepareLocalImage'
+import { tactileDirective as vTactile } from '../ui/tactile'
 
 const router = useRouter()
 const route = useRoute()
@@ -20,6 +26,14 @@ const store = useArchiveStore()
 const pollDraftRepository = inject(POLL_DRAFT_REPOSITORY_KEY, defaultPollDraftRepository)
 const initializing = ref(true)
 const pollDeleteError = ref('')
+const profilePhotoError = ref('')
+const processingPhotoAngle = ref<HairProfilePhoto['angle'] | null>(null)
+const profilePhotoUrls = ref<Record<string, string>>({})
+const profilePhotoAngles = [
+  { angle: 'front', label: '正面' },
+  { angle: 'side', label: '侧面' },
+  { angle: 'back', label: '后脑' },
+] as const
 let viewActive = false
 let submitRequest = 0
 const canonicalReturnPath = computed(() => {
@@ -31,24 +45,79 @@ const canonicalReturnPath = computed(() => {
 
 const form = reactive<HairProfileDraft>({
   name: '',
-  hairTexture: 'straight',
-  strandThickness: 'medium',
-  density: 'medium',
-  stylingMinutes: 10,
-  washFrequency: 'every_other_day',
+  genderIdentity: 'unspecified',
+  presentationPreference: 'unspecified',
+  hairTexture: 'unsure',
+  strandThickness: 'unsure',
+  density: 'unsure',
+  stylingMinutes: null,
+  washFrequency: 'unsure',
   preferenceNotes: '',
+  profilePhotos: [],
 })
+
+const releaseProfilePhotoUrls = () => {
+  Object.values(profilePhotoUrls.value).forEach((url) => URL.revokeObjectURL(url))
+  profilePhotoUrls.value = {}
+}
+
+const refreshProfilePhotoUrls = () => {
+  releaseProfilePhotoUrls()
+  profilePhotoUrls.value = Object.fromEntries(
+    (form.profilePhotos ?? []).map((photo) => [photo.angle, URL.createObjectURL(photo.image)]),
+  )
+}
+
+const setProfilePhoto = async (angle: HairProfilePhoto['angle'], event: Event) => {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file || store.saving || processingPhotoAngle.value) return
+  profilePhotoError.value = ''
+  processingPhotoAngle.value = angle
+  try {
+    const prepared = await prepareLocalImage(file)
+    if (!viewActive) return
+    const photo: HairProfilePhoto = {
+      id: `profile-photo:${angle}`,
+      angle,
+      image: prepared.blob,
+      width: prepared.width,
+      height: prepared.height,
+      bytes: prepared.bytes,
+      processedAt: prepared.processedAt,
+    }
+    form.profilePhotos = [
+      ...(form.profilePhotos ?? []).filter((item) => item.angle !== angle),
+      photo,
+    ]
+    refreshProfilePhotoUrls()
+  } catch (caught) {
+    profilePhotoError.value = caught instanceof ImagePreparationError
+      ? caught.message
+      : '照片处理失败，请换一张重试。'
+  } finally {
+    processingPhotoAngle.value = null
+  }
+}
+
+const removeProfilePhoto = (angle: HairProfilePhoto['angle']) => {
+  form.profilePhotos = (form.profilePhotos ?? []).filter((photo) => photo.angle !== angle)
+  refreshProfilePhotoUrls()
+}
 
 const populateForm = () => {
   const profile = store.profile
   if (profile) {
     form.name = profile.name
+    form.genderIdentity = profile.genderIdentity ?? 'unspecified'
+    form.presentationPreference = profile.presentationPreference ?? 'unspecified'
     form.hairTexture = profile.hairTexture
     form.strandThickness = profile.strandThickness
     form.density = profile.density
     form.stylingMinutes = profile.stylingMinutes
     form.washFrequency = profile.washFrequency
     form.preferenceNotes = profile.preferenceNotes
+    form.profilePhotos = [...profile.profilePhotos ?? []]
+    refreshProfilePhotoUrls()
     document.title = '编辑发型档案｜咋剪发'
   }
 }
@@ -132,6 +201,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   viewActive = false
   submitRequest += 1
+  releaseProfilePhotoUrls()
 })
 </script>
 
@@ -197,6 +267,92 @@ onBeforeUnmount(() => {
         >
       </label>
 
+      <fieldset class="profile-photo-picker">
+        <legend>我的头发照片</legend>
+        <p>拍下正面、侧面或后脑。之后看档案和选发型时，会优先用你自己的真实照片。</p>
+        <div class="profile-photo-picker__grid">
+          <div
+            v-for="item in profilePhotoAngles"
+            :key="item.angle"
+            class="profile-photo-slot"
+          >
+            <img
+              v-if="profilePhotoUrls[item.angle]"
+              :src="profilePhotoUrls[item.angle]"
+              :alt="`我的头发${item.label}照片`"
+            >
+            <span
+              v-else
+              class="profile-photo-slot__placeholder"
+              aria-hidden="true"
+            >✦</span>
+            <b>{{ item.label }}</b>
+            <label
+              v-tactile
+              class="photo-pick-button"
+            >
+              <span>{{ profilePhotoUrls[item.angle] ? '更换' : '添加' }}</span>
+              <input
+                type="file"
+                :aria-label="`${item.label}头发照片`"
+                accept="image/jpeg,image/png,image/webp"
+                :disabled="store.saving || Boolean(processingPhotoAngle)"
+                @change="setProfilePhoto(item.angle, $event)"
+              >
+            </label>
+            <button
+              v-if="profilePhotoUrls[item.angle]"
+              v-tactile
+              type="button"
+              class="photo-remove-button"
+              @click="removeProfilePhoto(item.angle)"
+            >
+              移除
+            </button>
+          </div>
+        </div>
+        <p
+          v-if="processingPhotoAngle"
+          role="status"
+        >
+          正在本地处理照片…
+        </p>
+        <p
+          v-if="profilePhotoError"
+          class="form-alert"
+          role="alert"
+        >
+          {{ profilePhotoError }}
+        </p>
+      </fieldset>
+
+      <div class="form-grid">
+        <label>
+          <span>性别（用于筛选，可不透露）</span>
+          <select
+            v-model="form.genderIdentity"
+            name="genderIdentity"
+          >
+            <option value="unspecified">不透露</option>
+            <option value="woman">女</option>
+            <option value="man">男</option>
+            <option value="nonbinary">其他 / 非二元</option>
+          </select>
+        </label>
+        <label>
+          <span>更喜欢的呈现感觉</span>
+          <select
+            v-model="form.presentationPreference"
+            name="presentationPreference"
+          >
+            <option value="unspecified">都可以</option>
+            <option value="feminine">偏柔和</option>
+            <option value="masculine">偏利落</option>
+            <option value="androgynous">中性</option>
+          </select>
+        </label>
+      </div>
+
       <div class="form-grid">
         <label>
           <span>发质</span>
@@ -251,7 +407,7 @@ onBeforeUnmount(() => {
             max="180"
             step="1"
             inputmode="numeric"
-            required
+            placeholder="不确定可留空"
           >
         </label>
       </div>
@@ -292,6 +448,7 @@ onBeforeUnmount(() => {
       </aside>
 
       <button
+        v-tactile
         class="submit-button"
         type="submit"
         :disabled="store.saving"
@@ -301,6 +458,7 @@ onBeforeUnmount(() => {
 
       <button
         v-if="store.profile"
+        v-tactile
         class="danger-button"
         type="button"
         :disabled="store.saving"

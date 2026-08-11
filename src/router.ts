@@ -32,7 +32,7 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         path: '/try',
         name: 'try',
         component: TryView,
-        meta: { title: '试发型｜咋剪发' },
+        meta: { title: '示例方向对比｜咋剪发' },
       },
       {
         path: '/styles',
@@ -56,13 +56,13 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         path: '/styles/references/new',
         name: 'style-reference-new',
         component: HairstyleReferenceFormView,
-        meta: { title: '添加私人参考｜咋剪发', wideLayout: true },
+        meta: { title: '添加私人参考｜咋剪发', wideLayout: true, hideBottomNav: true },
       },
       {
         path: '/styles/references/:id/edit',
         name: 'style-reference-edit',
         component: HairstyleReferenceFormView,
-        meta: { title: '编辑私人参考｜咋剪发', wideLayout: true },
+        meta: { title: '编辑私人参考｜咋剪发', wideLayout: true, hideBottomNav: true },
       },
       {
         path: '/styles/references/:id/show',
@@ -74,13 +74,13 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         path: '/styles/references/:id',
         name: 'style-reference-detail',
         component: HairstyleReferenceDetailView,
-        meta: { title: '私人参考｜咋剪发', wideLayout: true },
+        meta: { title: '私人参考｜咋剪发', wideLayout: true, hideBottomNav: true },
       },
       {
         path: '/styles/catalog/:id',
         name: 'style-detail',
         component: HairstyleDetailView,
-        meta: { title: '发型详情｜咋剪发', wideLayout: true },
+        meta: { title: '发型详情｜咋剪发', wideLayout: true, hideBottomNav: true },
       },
       {
         path: '/styles/catalog/:id/show',
@@ -116,7 +116,7 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         path: '/archive/plans/:id/brief',
         name: 'archive-plan-brief',
         component: ArchiveBriefView,
-        meta: { title: '理发师沟通卡｜咋剪发' },
+        meta: { title: '理发师沟通卡｜咋剪发', hideBottomNav: true },
       },
       {
         path: '/archive/plans/:id',

@@ -120,6 +120,7 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
   await page.getByLabel('计划日期').fill('2026-08-22')
   await page.getByLabel('计划状态').selectOption('ready')
   await page.getByRole('button', { name: '加入候选：齐颌短鲍伯' }).click()
+  await page.getByText('继续添加或更换候选').click()
   await page.getByRole('button', { name: '加入候选：纹理短碎发' }).click()
   await expect(page.getByText('已选择 2 / 4')).toBeVisible()
   await page.getByRole('button', { name: '保存计划' }).click()
@@ -134,23 +135,27 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
   await page.getByRole('link', { name: '记录这次理发' }).click()
 
   await expect(page.getByRole('heading', { level: 1, name: '记录这次理发' })).toBeVisible()
+  await page.getByText('补充本次信息', { exact: true }).click()
   await page.getByLabel('关联计划（可选）').selectOption({ label: '夏末短发计划' })
   await page.getByLabel('理发日期').fill('2026-08-20')
   await page.getByLabel('发型名').fill('纹理短碎发')
-  await page.getByLabel('店铺').fill('巷口理发店')
+  await page.getByLabel('店铺', { exact: true }).fill('巷口理发店')
+  await page.getByLabel('店铺位置（可选）').fill('静安区南京西路 688 号')
   await page.getByLabel('理发师').fill('Tony')
   await page.getByLabel('服务').fill('洗剪吹')
   await page.getByLabel('价格（元）').fill('128.50')
   await page.getByLabel('耗时（分钟）').fill('75')
   await page.getByLabel('备注').fill('顶部保留自然纹理')
   await page.getByLabel('满意度').selectOption('5')
-  await page.getByLabel('已造型照片').setInputFiles(path.resolve('public/demo/persona-ran-sidepart.webp'))
-  await page.getByLabel('复刻').check()
+  await page.getByLabel('剪后照片').setInputFiles(path.resolve('public/demo/persona-ran-sidepart.webp'))
+  await page.getByLabel('值得复刻').check()
   await page.getByRole('button', { name: '保存剪后记录' }).click()
 
   await expect(page.getByRole('heading', { level: 1, name: '纹理短碎发' })).toBeVisible()
-  await expect(page.getByRole('img', { name: '纹理短碎发的已造型照片' })).toBeVisible()
+  await expect(page.getByRole('img', { name: '纹理短碎发的剪后照片' })).toBeVisible()
   await expect(page.getByText('5 / 5')).toBeVisible()
+  await page.getByText('查看本次店铺与备注').click()
+  await expect(page.getByText('静安区南京西路 688 号')).toBeVisible()
   await expect(page.getByText('已存为标准发型')).toBeVisible()
   await expect(page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '档案' }))
     .toHaveAttribute('aria-current', 'page')
@@ -158,7 +163,7 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
 
   await page.reload()
   await expect(page.getByRole('heading', { level: 1, name: '纹理短碎发' })).toBeVisible()
-  await expect(page.getByRole('img', { name: '纹理短碎发的已造型照片' })).toBeVisible()
+  await expect(page.getByRole('img', { name: '纹理短碎发的剪后照片' })).toBeVisible()
 
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '首页' }).click()
   await expect(page.getByRole('link', { name: '查看上次发型：纹理短碎发' })).toBeVisible()
@@ -171,15 +176,15 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
 
   await page.getByRole('link', { name: '查看上次发型：纹理短碎发' }).click()
   await page.getByRole('link', { name: '编辑记录' }).click()
-  await expect(page.getByText('已保留：已造型照片')).toBeVisible()
+  await expect(page.getByText('已保留：剪后照片')).toBeVisible()
   await page.getByLabel('满意度').selectOption('2')
-  await page.getByLabel('避雷').check()
+  await page.getByLabel('有些地方要调整').check()
   await page.getByLabel('避雷规则 1').fill('两侧不要推白')
   await page.getByRole('button', { name: '保存修改' }).click()
 
   await expect(page.getByText('这次记为避雷')).toBeVisible()
   await expect(page.getByText('两侧不要推白', { exact: true })).toBeVisible()
-  await expect(page.getByRole('img', { name: '纹理短碎发的已造型照片' })).toBeVisible()
+  await expect(page.getByRole('img', { name: '纹理短碎发的剪后照片' })).toBeVisible()
 
   await page.getByRole('link', { name: '返回档案' }).click()
   await expect(page.getByText('还没有标准发型。')).toBeVisible()
@@ -259,12 +264,12 @@ test('mixes prepared, past-record, and demo candidates without sending private b
   await page.getByLabel('理发日期').fill('2026-08-19')
   await page.getByLabel('发型名').fill('清爽短碎发')
   await page.getByLabel('满意度').selectOption('5')
-  await page.getByLabel('已造型照片').setInputFiles({
+  await page.getByLabel('剪后照片').setInputFiles({
     name: 'record-private.jpg',
     mimeType: 'image/jpeg',
     buffer: sourceJpeg,
   })
-  await page.getByLabel('复刻').check()
+  await page.getByLabel('值得复刻').check()
   await page.getByRole('button', { name: '保存剪后记录' }).click()
 
   await page.getByRole('link', { name: '返回档案' }).click()
@@ -275,7 +280,9 @@ test('mixes prepared, past-record, and demo candidates without sending private b
     buffer: sourceJpeg,
   })
   await expect(page.getByText(/40 × 80/)).toBeVisible()
+  await page.getByText('继续添加或更换候选').click()
   await page.getByRole('button', { name: '加入历史候选：清爽短碎发' }).click()
+  await page.getByText('继续添加或更换候选').click()
   await page.getByRole('button', { name: '加入候选：齐颌短鲍伯' }).click()
   await page.getByLabel('计划标题').fill('三路真实候选')
   await page.screenshot({ path: testInfo.outputPath('mixed-source-form-390x844.png'), fullPage: true })
@@ -292,6 +299,7 @@ test('mixes prepared, past-record, and demo candidates without sending private b
   await expect(page.getByRole('img', { name: '清爽短碎发本地候选图' })).toBeVisible()
   await page.getByRole('link', { name: '创建沟通卡' }).click()
   await page.getByLabel('目标候选：我的参考图 1').check()
+  await page.getByText('需要修改时展开').click()
   await page.getByLabel('整体').fill('整体保留轻盈轮廓')
   await page.getByLabel('顶部').fill('顶部保留支撑')
   await page.getByLabel('刘海').fill('刘海自然露额')
@@ -404,14 +412,14 @@ test('prepares an orientation-6 JPEG locally before saving and never sends sourc
   await page.getByRole('link', { name: '记录这次理发' }).click()
   await page.getByLabel('理发日期').fill('2026-08-10')
   await page.getByLabel('发型名').fill('方向纠正测试')
-  await page.getByLabel('已造型照片').setInputFiles({
+  await page.getByLabel('剪后照片').setInputFiles({
     name: '私密原图-tony.jpg',
     mimeType: 'image/jpeg',
     buffer: sourceJpeg,
   })
 
   await expect(page.getByText(/已在本地处理：40 × 80/)).toBeVisible()
-  const preparedPreview = page.getByRole('img', { name: '已造型处理后预览' })
+  const preparedPreview = page.getByRole('img', { name: '剪后处理后预览' })
   await expect(preparedPreview).toBeVisible()
   await expect.poll(() => preparedPreview.evaluate((image) => ({
     width: (image as HTMLImageElement).naturalWidth,
@@ -453,6 +461,8 @@ test('prepares an orientation-6 JPEG locally before saving and never sends sourc
   expect(transitionSeconds).toBeLessThanOrEqual(0.001)
   await page.emulateMedia({ reducedMotion: 'no-preference' })
 
+  await page.getByLabel('满意度').selectOption('5')
+  await page.getByLabel('值得复刻').check()
   await page.getByRole('button', { name: '保存剪后记录' }).click()
   await expect(page.getByRole('heading', { level: 1, name: '方向纠正测试' })).toBeVisible()
 
@@ -511,7 +521,7 @@ test('prepares an orientation-6 JPEG locally before saving and never sends sourc
   expect(photo.byteText).not.toContain(PRIVATE_SOURCE_MARKER)
 
   await page.reload()
-  const savedImage = page.getByRole('img', { name: '方向纠正测试的已造型照片' })
+  const savedImage = page.getByRole('img', { name: '方向纠正测试的剪后照片' })
   await expect(savedImage).toBeVisible()
   const displayed = await savedImage.evaluate((image) => {
     const photo = image as HTMLImageElement
@@ -542,4 +552,48 @@ test('prepares an orientation-6 JPEG locally before saving and never sends sourc
   })
   expect(externalRequests).toEqual([])
   expect(requests.some(({ body }) => body?.includes(Buffer.from(PRIVATE_SOURCE_MARKER)))).toBe(false)
+})
+
+test('builds a personal photo passport and keeps the haircut record mobile-first', async ({ page }, testInfo) => {
+  await page.goto('/archive/profile')
+  await page.getByLabel('称呼').fill('小林')
+  await page.getByLabel('性别（用于筛选，可不透露）').selectOption('woman')
+  await page.getByLabel('更喜欢的呈现感觉').selectOption('androgynous')
+  await page.getByLabel('发质').selectOption('straight')
+  await page.getByLabel('发丝粗细').selectOption('fine')
+  await page.getByLabel('发量').selectOption('medium')
+  await page.getByLabel('日常打理分钟').fill('5')
+  await page.getByLabel('洗发频率').selectOption('every_other_day')
+  await page.locator('.profile-photo-slot input[type="file"]').first().setInputFiles(
+    path.resolve('public/demo/persona-ran-sidepart.webp'),
+  )
+  await expect(page.getByRole('img', { name: '我的头发正面照片' })).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('profile-passport-390x844.png'), fullPage: true })
+  await page.getByRole('button', { name: '保存档案' }).click()
+
+  await expect(page.getByRole('heading', { level: 2, name: '小林的发型档案' })).toBeVisible()
+  await expect(page.getByRole('img', { name: '我的头发正面照片' })).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('archive-photo-wall-390x844.png'), fullPage: true })
+
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '找发型' }).click()
+  await expect(page.getByText(/已根据 小林 的发质、偏好和打理时间在本机排序/)).toBeVisible()
+  await expect(page.locator('.hairstyle-tile__match').first()).toContainText('为你推荐：')
+  await page.screenshot({ path: testInfo.outputPath('personalized-library-390x844.png'), fullPage: true })
+
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '档案' }).click()
+  await page.getByRole('link', { name: '记录这次理发' }).click()
+  await expect(page.locator('.record-photos input[type="file"]')).toHaveCount(2)
+  await expect(page.getByText('剪前照片', { exact: true })).toBeVisible()
+  await expect(page.getByText('剪后照片', { exact: true })).toBeVisible()
+  await expect(page.getByText('理发中照片')).toHaveCount(0)
+  await expect(page.getByText('洗后照片')).toHaveCount(0)
+  await expect(page.getByText('第 7 天照片')).toHaveCount(0)
+  await expect(page.getByLabel('店铺位置（可选）')).toBeHidden()
+  await page.getByText('补充本次信息', { exact: true }).click()
+  await expect(page.getByLabel('店铺位置（可选）')).toBeVisible()
+  await expect(page.getByLabel('满意度')).toHaveValue('')
+  await expect(page.getByLabel('值得复刻')).not.toBeChecked()
+  await expect(page.getByLabel('有些地方要调整')).not.toBeChecked()
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('record-before-after-390x844.png'), fullPage: true })
 })

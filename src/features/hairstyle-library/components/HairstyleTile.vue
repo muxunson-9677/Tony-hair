@@ -8,6 +8,7 @@ defineProps<{
   readonly style: CuratedHairstyle
   readonly favorite: boolean
   readonly busy?: boolean
+  readonly personalizedReason?: string
 }>()
 
 defineEmits<{
@@ -38,6 +39,12 @@ defineEmits<{
       <span class="hairstyle-tile__copy">
         <strong>{{ style.name }}</strong>
         <small>{{ MAINTENANCE_LEVEL_LABELS[style.maintenanceLevel] }}</small>
+        <span
+          v-if="personalizedReason"
+          class="hairstyle-tile__match"
+        >
+          <span aria-hidden="true">✦</span> 为你推荐：{{ personalizedReason }}
+        </span>
       </span>
     </RouterLink>
 

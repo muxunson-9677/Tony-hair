@@ -256,23 +256,19 @@ describe('resolveHomeAction', () => {
     })
   })
 
-  test('puts the six-day after-wash follow-up ahead of multiple active plans', () => {
+  test('does not nag for after-wash photos and keeps the real plan task first', () => {
     expect(resolve({
       plans: [plan(), plan({ id: 'plan-2' })],
       records: [record()],
       photosByRecordId: { 'record-1': [photo('styled')] },
-    })).toEqual({
-      kind: 'record_follow_up',
-      label: '补一张真实状态',
-      to: '/archive/records/record-1/edit',
-    })
+    })).toMatchObject({ kind: 'choose_plan' })
   })
 
-  test('uses the seventh-to-fourteenth local day for the day-7 follow-up only when missing', () => {
+  test('does not create a day-7 follow-up task', () => {
     expect(resolve({
       records: [record({ date: '2026-08-03' })],
       photosByRecordId: { 'record-1': [photo('after_wash')] },
-    })).toMatchObject({ kind: 'record_follow_up' })
+    })).toMatchObject({ kind: 'discover_styles' })
 
     expect(resolve({
       records: [record({ date: '2026-07-27' })],

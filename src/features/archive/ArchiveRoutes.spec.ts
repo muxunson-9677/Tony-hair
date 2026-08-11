@@ -75,6 +75,11 @@ async function renderAt(path: string) {
   return router
 }
 
+async function chooseRepeatDecision() {
+  await fireEvent.update(screen.getByLabelText('满意度'), '5')
+  await fireEvent.click(screen.getByLabelText('值得复刻'))
+}
+
 describe('archive routes and forms', () => {
   beforeEach(async () => {
     defaultArchiveDb.close()
@@ -115,6 +120,16 @@ describe('archive routes and forms', () => {
 
     expect((await screen.findByRole('alert')).textContent).toMatch(/不可用|无痕/)
     expect(screen.queryByText('请先建立发型档案')).toBeNull()
+  })
+
+  test('does not invent hair facts before a new user has answered', async () => {
+    await renderAt('/archive/profile')
+
+    expect((await screen.findByLabelText('发质') as HTMLSelectElement).value).toBe('unsure')
+    expect((screen.getByLabelText('发丝粗细') as HTMLSelectElement).value).toBe('unsure')
+    expect((screen.getByLabelText('发量') as HTMLSelectElement).value).toBe('unsure')
+    expect((screen.getByLabelText('洗发频率') as HTMLSelectElement).value).toBe('unsure')
+    expect((screen.getByLabelText('日常打理分钟') as HTMLInputElement).value).toBe('')
   })
 
   test('returns through a canonical add pointer after creating a profile without creating a half-plan', async () => {
@@ -419,7 +434,7 @@ describe('archive routes and forms', () => {
     expect(screen.getByText(/已获照片本人明确授权/)).toBeTruthy()
     expect(screen.getByText(/清理浏览器数据/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: /上传/ })).toBeNull()
-    expect(document.querySelector('input[type="file"]')).toBeNull()
+    expect(document.querySelectorAll('input[type="file"]')).toHaveLength(3)
 
     await fireEvent.update(screen.getByLabelText('称呼'), '小林')
     await fireEvent.update(screen.getByLabelText('发质'), 'wavy')
@@ -528,7 +543,7 @@ describe('archive routes and forms', () => {
     await defaultArchiveRepository.saveRecordWithPhotos(record, [{
       id: 'repeat-source-photo',
       recordId: record.id,
-      stage: 'styled',
+      stage: 'after',
       image: snapshotBlob,
       capturedAt: record.updatedAt,
       width: 900,
@@ -575,6 +590,7 @@ describe('archive routes and forms', () => {
     await fireEvent.update(screen.getByLabelText('最在意 1'), '轮廓一致')
     await fireEvent.update(screen.getByLabelText('绝对不要 1'), '不要打薄')
     await fireEvent.click(screen.getByRole('button', { name: '保存沟通卡' }))
+    expect((await screen.findByRole('status')).textContent).toContain('沟通卡已保存在当前设备。')
     expect(await defaultArchiveRepository.getBrief(planId)).toMatchObject({
       targetCandidateId: savedSnapshot?.id,
     })
@@ -668,7 +684,7 @@ describe('archive routes and forms', () => {
     await defaultArchiveRepository.saveRecordWithPhotos(record, [{
       id: 'source-record-photo',
       recordId: record.id,
-      stage: 'styled',
+      stage: 'after',
       image: sourcePhoto,
       capturedAt: record.updatedAt,
       width: 900,
@@ -696,7 +712,9 @@ describe('archive routes and forms', () => {
     await fireEvent(input, new Event('change', { bubbles: true }))
 
     expect(await screen.findByText(/960 × 1280.*26 B/)).toBeTruthy()
+    await fireEvent.click(screen.getByText('继续添加或更换候选'))
     await fireEvent.click(screen.getByRole('button', { name: '加入历史候选：清爽短碎发' }))
+    await fireEvent.click(screen.getByText('继续添加或更换候选'))
     await fireEvent.click(screen.getByRole('button', { name: '加入候选：齐颌短鲍伯' }))
     expect(screen.getByText('已选择 3 / 4')).toBeTruthy()
     await fireEvent.update(screen.getByLabelText('计划标题'), '三种来源计划')
@@ -828,13 +846,15 @@ describe('archive routes and forms', () => {
     const router = await renderAt(`/archive/plans/${plan.id}`)
 
     expect(await screen.findByRole('link', { name: '创建沟通卡' })).toBeTruthy()
-    await fireEvent.click(screen.getByRole('link', { name: '创建沟通卡' }))
+    await fireEvent.click(screen.getByRole('link', { name: '选“纹理短碎发”为主方案' }))
     expect(await screen.findByRole('heading', { level: 1, name: '创建理发师沟通卡' })).toBeTruthy()
     expect(screen.getByRole('link', { name: '返回计划' }).getAttribute('href')).toBe(`/archive/plans/${plan.id}`)
-    expect(screen.getByRole('link', { name: '档案' }).getAttribute('aria-current')).toBe('page')
+    expect(screen.queryByRole('navigation', { name: '主导航' })).toBeNull()
+    expect((screen.getByLabelText('整体') as HTMLTextAreaElement).value).toMatch(/自然卷.*不要贴头皮/)
+    expect((screen.getByLabelText('顶部') as HTMLTextAreaElement).value).toMatch(/卷束.*回缩/)
+    expect((screen.getByLabelText('绝对不要 1') as HTMLInputElement).value).toBe('不要湿发判断到过短')
 
     const targetRadio = screen.getByLabelText('目标候选：纹理短碎发') as HTMLInputElement
-    await fireEvent.click(targetRadio)
     expect(targetRadio.checked).toBe(true)
     const plainText = '<img src=x onerror=alert(1)>整体保持轻盈'
     await fireEvent.update(screen.getByLabelText('整体'), plainText)
@@ -1124,7 +1144,8 @@ describe('archive routes and forms', () => {
     ])
 
     const router = await renderAt(`/archive/records/${record.id}/edit`)
-    expect(await screen.findByText('已保留：已造型照片')).toBeTruthy()
+    await screen.findByLabelText('备注')
+    expect(screen.queryByText('已保留：已造型照片')).toBeNull()
     await fireEvent.update(screen.getByLabelText('备注'), '只修改文字')
     await fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
     await waitFor(() => expect(router.currentRoute.value.path).toBe(`/archive/records/${record.id}`))
@@ -1157,7 +1178,7 @@ describe('archive routes and forms', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: '记录这次理发' })).toBeTruthy()
     await screen.findByLabelText('理发日期')
-    expect(document.querySelectorAll('input[type="file"]')).toHaveLength(6)
+    expect(document.querySelectorAll('.record-photos input[type="file"]')).toHaveLength(2)
     await fireEvent.update(screen.getByLabelText('理发日期'), '2026-08-20')
     await fireEvent.update(screen.getByLabelText('发型名'), '纹理短碎发')
     await fireEvent.update(screen.getByLabelText('价格（元）'), '128.555')
@@ -1174,26 +1195,27 @@ describe('archive routes and forms', () => {
     await fireEvent.update(screen.getByLabelText('服务'), '洗剪吹')
     await fireEvent.update(screen.getByLabelText('耗时（分钟）'), '75')
     await fireEvent.update(screen.getByLabelText('备注'), '顶部保留自然纹理')
-    const styledPhotoInput = screen.getByLabelText('已造型照片') as HTMLInputElement
+    await chooseRepeatDecision()
+    const styledPhotoInput = screen.getByLabelText('剪后照片') as HTMLInputElement
     Object.defineProperty(styledPhotoInput, 'files', {
       configurable: true,
       value: [localPhoto],
     })
     await fireEvent(styledPhotoInput, new Event('change', { bubbles: true }))
     expect(await screen.findByText(/1280 × 1920.*14 B/)).toBeTruthy()
-    const preview = screen.getByRole('img', { name: '已造型处理后预览' })
+    const preview = screen.getByRole('img', { name: '剪后处理后预览' })
     const previewCallIndex = vi.mocked(URL.createObjectURL).mock.calls.findIndex(
       ([blob]) => blob === preparedBlob,
     )
     const previewUrl = vi.mocked(URL.createObjectURL).mock.results[previewCallIndex]?.value
     expect(preview.getAttribute('src')).toBe(previewUrl)
     expect(previewUrl).toBeTruthy()
-    await fireEvent.click(screen.getByLabelText('避雷'))
+    await fireEvent.click(screen.getByLabelText('有些地方要调整'))
     await fireEvent.update(screen.getByLabelText('避雷规则 1'), '   ')
     await fireEvent.click(screen.getByRole('button', { name: '保存剪后记录' }))
     expect((await screen.findByRole('alert')).textContent).toMatch(/1 到 3 条非空规则/)
     expect(await defaultArchiveRepository.listRecords(existingProfile.id)).toEqual([])
-    await fireEvent.click(screen.getByLabelText('复刻'))
+    await fireEvent.click(screen.getByLabelText('值得复刻'))
     await fireEvent.click(screen.getByRole('button', { name: '保存剪后记录' }))
 
     await waitFor(() => expect(router.currentRoute.value.path).not.toBe('/archive/records/new'))
@@ -1208,7 +1230,7 @@ describe('archive routes and forms', () => {
     expect(prepareImage).toHaveBeenCalledWith(localPhoto)
     const submittedPhotos = saveRecord.mock.calls[0]?.[1]
     expect(submittedPhotos?.[0]).toMatchObject({
-      stage: 'styled',
+      stage: 'after',
       image: preparedBlob,
       width: 1280,
       height: 1920,
@@ -1218,7 +1240,7 @@ describe('archive routes and forms', () => {
     expect(submittedPhotos?.[0]?.image).not.toBe(localPhoto)
     const storedPhoto = (await defaultArchiveRepository.listPhotos(record?.id ?? ''))[0]
     expect(storedPhoto).toMatchObject({
-      stage: 'styled',
+      stage: 'after',
       width: 1280,
       height: 1920,
       bytes: preparedBlob.size,
@@ -1230,9 +1252,9 @@ describe('archive routes and forms', () => {
     expect(screen.getByText('已存为标准发型')).toBeTruthy()
 
     await fireEvent.click(screen.getByRole('link', { name: '编辑记录' }))
-    expect(await screen.findByText('已保留：已造型照片')).toBeTruthy()
+    expect(await screen.findByText('已保留：剪后照片')).toBeTruthy()
     await fireEvent.update(screen.getByLabelText('满意度'), '2')
-    await fireEvent.click(screen.getByLabelText('避雷'))
+    await fireEvent.click(screen.getByLabelText('有些地方要调整'))
     await fireEvent.update(screen.getByLabelText('避雷规则 1'), '两侧不要推白')
     await fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
 
@@ -1252,6 +1274,70 @@ describe('archive routes and forms', () => {
     ])
   })
 
+  test('shows the real before and after photos as the first comparison on record detail', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    const record: HaircutRecord = {
+      id: 'comparison-record',
+      profileId: existingProfile.id,
+      date: '2026-08-20',
+      status: 'completed',
+      satisfaction: 4,
+      styleName: '对比短发',
+      outcome: 'repeat',
+      createdAt: '2026-08-20T10:00:00.000Z',
+      updatedAt: '2026-08-20T10:00:00.000Z',
+    }
+    const beforeBlob = new NodeBlob(['before'], { type: 'image/webp' }) as unknown as Blob
+    const afterBlob = new NodeBlob(['after'], { type: 'image/webp' }) as unknown as Blob
+    await defaultArchiveRepository.saveRecordWithPhotos(record, [
+      {
+        id: 'comparison-before',
+        recordId: record.id,
+        stage: 'before',
+        image: beforeBlob,
+        capturedAt: record.createdAt,
+      },
+      {
+        id: 'comparison-after',
+        recordId: record.id,
+        stage: 'after',
+        image: afterBlob,
+        capturedAt: record.updatedAt,
+      },
+    ])
+
+    const router = await renderAt('/archive')
+    expect(await screen.findByRole('group', { name: '最近一次剪前剪后' })).toBeTruthy()
+    await router.push(`/archive/records/${record.id}`)
+
+    const comparison = await screen.findByRole('group', { name: '剪前剪后对比' })
+    expect(within(comparison).getByRole('img', { name: '对比短发的剪前照片' })).toBeTruthy()
+    expect(within(comparison).getByRole('img', { name: '对比短发的剪后照片' })).toBeTruthy()
+    expect(comparison.compareDocumentPosition(screen.getByText('已存为标准发型')) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy()
+  })
+
+  test('puts the two photos first and keeps optional haircut details collapsed', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+    await renderAt('/archive/records/new')
+
+    const dateInput = await screen.findByLabelText('理发日期')
+    const photoFieldset = screen.getByText('剪前 / 剪后 · 至少一张').closest('fieldset')
+    const detailsSummary = screen.getByText('补充本次信息')
+    const details = detailsSummary.closest('details')
+
+    expect(photoFieldset).toBeTruthy()
+    expect(Boolean(
+      photoFieldset
+      && (photoFieldset.compareDocumentPosition(dateInput) & Node.DOCUMENT_POSITION_FOLLOWING),
+    )).toBe(true)
+    expect(details).toBeTruthy()
+    expect(details?.hasAttribute('open')).toBe(false)
+    expect(details?.contains(screen.getByLabelText('店铺', { exact: true }))).toBe(true)
+    expect(screen.getByText('选择剪前照片')).toBeTruthy()
+    expect(screen.getByText('选择剪后照片')).toBeTruthy()
+  })
+
   test('waits for local image preparation before enabling save', async () => {
     await defaultArchiveRepository.createProfile(existingProfile)
     let finishPreparation!: (value: localImages.PreparedLocalImage) => void
@@ -1260,7 +1346,7 @@ describe('archive routes and forms', () => {
     }))
     await renderAt('/archive/records/new')
     const saveButton = await screen.findByRole('button', { name: '保存剪后记录' })
-    const input = screen.getByLabelText('已造型照片') as HTMLInputElement
+    const input = screen.getByLabelText('剪后照片') as HTMLInputElement
     Object.defineProperty(input, 'files', { configurable: true, value: [localPhoto] })
 
     await fireEvent(input, new Event('change', { bubbles: true }))
@@ -1293,7 +1379,7 @@ describe('archive routes and forms', () => {
     await renderAt('/archive/records/new')
     await fireEvent.update(await screen.findByLabelText('理发日期'), '2026-08-20')
     await fireEvent.update(screen.getByLabelText('发型名'), '无法处理的照片')
-    const input = screen.getByLabelText('已造型照片') as HTMLInputElement
+    const input = screen.getByLabelText('剪后照片') as HTMLInputElement
     Object.defineProperty(input, 'files', { configurable: true, value: [localPhoto] })
 
     await fireEvent(input, new Event('change', { bubbles: true }))
@@ -1323,7 +1409,7 @@ describe('archive routes and forms', () => {
     const router = await renderAt('/archive/records/new')
     await fireEvent.update(await screen.findByLabelText('理发日期'), '2026-08-20')
     await fireEvent.update(screen.getByLabelText('发型名'), '保留有效照片')
-    const styledInput = screen.getByLabelText('已造型照片') as HTMLInputElement
+    const styledInput = screen.getByLabelText('剪后照片') as HTMLInputElement
     Object.defineProperty(styledInput, 'files', { configurable: true, value: [localPhoto] })
     await fireEvent(styledInput, new Event('change', { bubbles: true }))
     expect(await screen.findByText(/800 × 1200/)).toBeTruthy()
@@ -1340,6 +1426,7 @@ describe('archive routes and forms', () => {
       expect(screen.queryByText('请重新选择处理失败的照片。')).toBeNull()
       expect(screen.queryAllByText('无法读取这张照片，请换一张后重试。')).toEqual([])
     })
+    await chooseRepeatDecision()
     await fireEvent.click(screen.getByRole('button', { name: '保存剪后记录' }))
     await waitFor(() => expect(router.currentRoute.value.path).not.toBe('/archive/records/new'))
     const record = (await defaultArchiveRepository.listRecords(existingProfile.id))[0]
@@ -1373,10 +1460,11 @@ describe('archive routes and forms', () => {
     const router = await renderAt('/archive/records/new')
     await fireEvent.update(await screen.findByLabelText('理发日期'), '2026-08-20')
     await fireEvent.update(screen.getByLabelText('发型名'), '保存中冻结')
-    const input = screen.getByLabelText('已造型照片') as HTMLInputElement
+    const input = screen.getByLabelText('剪后照片') as HTMLInputElement
     Object.defineProperty(input, 'files', { configurable: true, value: [localPhoto] })
     await fireEvent(input, new Event('change', { bubbles: true }))
     expect(await screen.findByText(/800 × 1200/)).toBeTruthy()
+    await chooseRepeatDecision()
     await fireEvent.click(screen.getByRole('button', { name: '保存剪后记录' }))
 
     try {

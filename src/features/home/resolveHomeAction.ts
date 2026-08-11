@@ -22,7 +22,6 @@ export interface HomeActionInput {
 
 export type HomeAction = {
   readonly kind:
-    | 'record_follow_up'
     | 'choose_plan'
     | 'open_ready_brief'
     | 'add_candidates'
@@ -62,32 +61,6 @@ const calendarDateOrdinal = (value: string) => {
   return localDayOrdinal(date)
 }
 
-const latestRecord = (records: readonly HaircutRecord[]) => (
-  [...records].sort((left, right) => (
-    right.date.localeCompare(left.date) || right.updatedAt.localeCompare(left.updatedAt)
-  ))[0]
-)
-
-const followUpAction = (input: HomeActionInput): HomeAction | null => {
-  const record = latestRecord(input.records)
-  const recordDay = record ? calendarDateOrdinal(record.date) : null
-  if (!record || recordDay === null) {
-    return null
-  }
-
-  const age = localDayOrdinal(input.now) - recordDay
-  const stages = new Set((input.photosByRecordId[record.id] ?? []).map(({ stage }) => stage))
-  const needsAfterWash = age >= 1 && age <= 6 && !stages.has('after_wash')
-  const needsDaySeven = age >= 7 && age <= 14 && !stages.has('day_7')
-  return needsAfterWash || needsDaySeven
-    ? {
-        kind: 'record_follow_up',
-        label: '补一张真实状态',
-        to: `/archive/records/${record.id}/edit`,
-      }
-    : null
-}
-
 export const resolveHomeAction = (input: HomeActionInput): HomeAction => {
   if (!input.profile) {
     return {
@@ -95,11 +68,6 @@ export const resolveHomeAction = (input: HomeActionInput): HomeAction => {
       label: '建立我的头发档案',
       to: '/archive/profile',
     }
-  }
-
-  const followUp = followUpAction(input)
-  if (followUp) {
-    return followUp
   }
 
   const activePlans = input.plans

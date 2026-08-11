@@ -23,7 +23,7 @@ test('navigates through the four primary destinations', async ({ page }) => {
 test('keeps the demo try-on reachable as a direct local tool', async ({ page }) => {
   await page.goto('/try')
 
-  await expect(page.getByRole('heading', { level: 1, name: '试发型' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: '示例方向对比' })).toBeVisible()
   await expect(page.getByText('预先制作的合成人物素材，不会处理你的照片')).toBeVisible()
 })
 

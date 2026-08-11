@@ -69,6 +69,7 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
     await page.getByLabel('计划日期').fill('2026-08-22')
     await page.getByLabel('计划状态').selectOption('ready')
     await page.getByRole('button', { name: '加入候选：齐颌短鲍伯' }).click()
+    await page.getByText('继续添加或更换候选').click()
     await page.getByRole('button', { name: '加入候选：纹理短碎发' }).click()
     await page.getByRole('button', { name: '保存计划' }).click()
 
@@ -76,6 +77,7 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
     await page.getByRole('link', { name: '创建沟通卡' }).click()
     await expect(page.getByRole('heading', { level: 1, name: '创建理发师沟通卡' })).toBeVisible()
     await page.getByLabel('目标候选：纹理短碎发').check()
+    await page.getByText('需要修改时展开').click()
     await page.getByLabel('整体').fill('整体保持轻盈轮廓')
     await page.getByLabel('顶部').fill('顶部保留自然支撑')
     await page.getByLabel('刘海').fill('刘海轻薄并自然露额')
@@ -90,6 +92,7 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
 
     await expect(page.getByRole('heading', { level: 1, name: '编辑理发师沟通卡' })).toBeVisible()
     await page.reload()
+    await page.getByText('需要修改时展开').click()
     await expect(page.getByLabel('整体')).toHaveValue('整体保持轻盈轮廓')
     const refreshedPreview = page.getByRole('region', { name: '理发师沟通卡预览' })
     await expect(refreshedPreview).toContainText('请现场确认')

@@ -96,11 +96,13 @@ describe('hairstyle library routes', () => {
 
     expect(router.resolve('/styles/references/reference-1/show').meta.hideBottomNav).toBe(true)
     expect(router.resolve('/styles/catalog/lin-bob/show').meta.hideBottomNav).toBe(true)
+    expect(router.resolve('/styles/references/new').meta.hideBottomNav).toBe(true)
+    expect(router.resolve('/styles/references/reference-1').meta.hideBottomNav).toBe(true)
+    expect(router.resolve('/styles/catalog/lin-bob').meta.hideBottomNav).toBe(true)
 
     await renderAt('/styles/catalog/lin-bob')
     expect(await screen.findByRole('heading', { level: 1, name: '齐颌短鲍伯' })).toBeTruthy()
-    const mainNav = screen.getByRole('navigation', { name: '主导航' })
-    expect(within(mainNav).getByRole('link', { name: '找发型' }).getAttribute('aria-current')).toBe('page')
+    expect(screen.queryByRole('navigation', { name: '主导航' })).toBeNull()
     await waitFor(() => expect(document.title).toBe('齐颌短鲍伯｜咋剪发'))
   })
 
@@ -281,14 +283,30 @@ describe('hairstyle library routes', () => {
   })
 
   test('shows complete reality and barber guidance with a canonical add-to-plan action', async () => {
+    await defaultArchiveDb.profiles.put({
+      id: 'profile-personalized-detail',
+      name: '阿青',
+      genderIdentity: 'unspecified',
+      presentationPreference: 'feminine',
+      hairTexture: 'straight',
+      strandThickness: 'fine',
+      density: 'medium',
+      stylingMinutes: 8,
+      washFrequency: 'every_other_day',
+      preferenceNotes: '',
+      createdAt: '2026-08-11T00:00:00.000Z',
+      updatedAt: '2026-08-11T00:00:00.000Z',
+    })
     await renderAt('/styles/catalog/lin-bob')
 
     expect(await screen.findByRole('heading', { level: 1, name: '齐颌短鲍伯' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 2, name: '为什么排在你的前面' })).toBeTruthy()
+    expect(screen.getByText(/适合你的直发/)).toBeTruthy()
     expect(screen.getByText(/项目内 AI 合成成年人物正面示例/)).toBeTruthy()
     expect(screen.getByText('适合条件')).toBeTruthy()
-    expect(screen.getByText('维护成本')).toBeTruthy()
-    expect(screen.getByText('现实取舍')).toBeTruthy()
-    expect(screen.getByText('给理发师看的要点')).toBeTruthy()
+    expect(screen.getAllByText('维护成本').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('现实取舍').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('给理发师看的要点').length).toBeGreaterThan(0)
     expect(screen.getByText(/保留耳前重量，后区只做轻层次/)).toBeTruthy()
     expect(screen.getByText(/顶部只做轻层次维持饱满/)).toBeTruthy()
     expect(screen.getByRole('link', { name: '给理发师看' }).getAttribute('href'))
@@ -768,6 +786,7 @@ describe('hairstyle library routes', () => {
     defaultArchiveDb.close()
     await defaultArchiveDb.open()
     await renderAt(`/styles/references/${reference.id}`)
+    await fireEvent.click(await screen.findByRole('button', { name: '更多' }))
     const favoriteButton = await screen.findByRole('button', {
       name: `收藏：${reference.name}`,
     })
@@ -778,6 +797,7 @@ describe('hairstyle library routes', () => {
   test('toggles favorite from detail and deletes only the local source after an explicit snapshot warning', async () => {
     const reference = await seedPrivateReference('准备删除的参考')
     const { router } = await renderAt(`/styles/references/${reference.id}`)
+    await fireEvent.click(await screen.findByRole('button', { name: '更多' }))
     const favoriteButton = await screen.findByRole('button', {
       name: `收藏：${reference.name}`,
     })
@@ -810,6 +830,7 @@ describe('hairstyle library routes', () => {
       new ArchiveStorageError('unavailable', new Error('blocked')),
     )
     await renderAt(`/styles/references/${reference.id}`)
+    await fireEvent.click(await screen.findByRole('button', { name: '更多' }))
     const favoriteButton = await screen.findByRole('button', {
       name: `收藏：${reference.name}`,
     })
@@ -861,6 +882,11 @@ describe('hairstyle library routes', () => {
     expect(screen.getByText(/不要过度打薄/)).toBeTruthy()
     expect(screen.getByText(/齐颌轮廓完整/)).toBeTruthy()
     expect(screen.getByText(/保留耳前重量，后区只做轻层次，避免过度打薄/)).toBeTruthy()
+    expect(screen.getByText('完整部位说明与现实限制').closest('details')?.hasAttribute('open')).toBe(false)
+    await fireEvent.click(screen.getByRole('button', { name: '放大发型图片' }))
+    expect(screen.getByRole('dialog', { name: '发型图片大图' })).toBeTruthy()
+    await fireEvent.click(screen.getByRole('button', { name: '关闭大图' }))
+    expect(screen.queryByRole('dialog', { name: '发型图片大图' })).toBeNull()
   })
 
   test('shows only the processed image, name and user notes for a private barber view', async () => {
@@ -870,6 +896,7 @@ describe('hairstyle library routes', () => {
     expect(await screen.findByRole('heading', { level: 1, name: reference.name })).toBeTruthy()
     expect(screen.queryByRole('navigation', { name: '主导航' })).toBeNull()
     expect(screen.getByRole('img', { name: `${reference.name}的私人参考` })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '放大发型图片' })).toBeTruthy()
     expect(screen.getByText(reference.notes)).toBeTruthy()
     expect(document.body.textContent).not.toMatch(/整体|顶部|刘海|两侧|鬓角|后脑|绝对不要/u)
     expect(document.body.textContent).not.toContain('通勤')

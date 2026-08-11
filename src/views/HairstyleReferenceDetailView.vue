@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { buildArchivePlanReturnPath } from '../features/archive/archiveReturnPath'
 import { useHairstyleLibraryStore } from '../features/hairstyle-library/libraryStore'
+import { tactileDirective as vTactile } from '../ui/tactile'
 
 const route = useRoute()
 const router = useRouter()
@@ -11,6 +12,7 @@ const store = useHairstyleLibraryStore()
 const id = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
 const reference = computed(() => store.getReference(id.value))
 const imageUrl = ref<string | null>(null)
+const moreOpen = ref(false)
 const favorite = computed(() => reference.value
   ? store.isFavorite(`private_reference:${reference.value.id}`)
   : false)
@@ -160,15 +162,38 @@ onBeforeUnmount(releaseImage)
     >
       <RouterLink
         v-if="addToPlanPath"
+        v-tactile
         class="reference-action-dock__primary"
         :to="addToPlanPath"
       >
         加入计划
       </RouterLink>
-      <RouterLink :to="`/styles/references/${reference.id}/show`">
+      <RouterLink
+        v-tactile
+        :to="`/styles/references/${reference.id}/show`"
+      >
         给理发师看
       </RouterLink>
       <button
+        v-tactile
+        type="button"
+        :aria-expanded="moreOpen"
+        aria-controls="reference-more-actions"
+        @click="moreOpen = !moreOpen"
+      >
+        更多
+      </button>
+    </div>
+
+    <div
+      v-if="moreOpen"
+      id="reference-more-actions"
+      class="reference-more-sheet"
+      role="region"
+      aria-label="更多私人参考操作"
+    >
+      <button
+        v-tactile
         type="button"
         :aria-label="`收藏：${reference.name}`"
         :aria-pressed="favorite"
@@ -177,10 +202,14 @@ onBeforeUnmount(releaseImage)
       >
         {{ favorite ? '已收藏' : '收藏' }}
       </button>
-      <RouterLink :to="`/styles/references/${reference.id}/edit`">
+      <RouterLink
+        v-tactile
+        :to="`/styles/references/${reference.id}/edit`"
+      >
         编辑私人参考
       </RouterLink>
       <button
+        v-tactile
         class="reference-action-dock__delete"
         type="button"
         :disabled="libraryBusy"

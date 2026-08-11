@@ -22,6 +22,7 @@ import {
   type MaskStyle,
   type MaskTransform,
 } from './types'
+import { tactileDirective as vTactile } from '../../ui/tactile'
 
 type EditorState = 'idle' | 'preparing' | 'detecting' | 'confirm' | 'editing' | 'blocked' | 'error'
 type EditorStatus = { readonly state: EditorState, readonly detection?: MaskDetectionOutcome['kind'] }
@@ -319,6 +320,7 @@ onBeforeUnmount(() => {
 
     <label
       v-if="allowSelection"
+      v-tactile
       class="mask-file-control"
     >
       <span>{{ source ? '换一张照片' : '选择本人或已授权照片' }}</span>
@@ -361,6 +363,7 @@ onBeforeUnmount(() => {
 
     <button
       v-if="state === 'detecting'"
+      v-tactile
       class="mask-manual-button"
       type="button"
       @click="useManualNow"
@@ -370,6 +373,7 @@ onBeforeUnmount(() => {
 
     <button
       v-if="state === 'confirm'"
+      v-tactile
       class="mask-confirm-button"
       type="button"
       @click="confirmAutomaticPosition"
@@ -386,6 +390,7 @@ onBeforeUnmount(() => {
         <label
           v-for="item in MASK_STYLES"
           :key="item"
+          v-tactile
         >
           <input
             v-model="style"
@@ -438,6 +443,7 @@ onBeforeUnmount(() => {
         aria-label="遮罩微调"
       >
         <button
+          v-tactile
           type="button"
           aria-label="向上微调遮罩"
           @click="nudge(0, -1)"
@@ -445,6 +451,7 @@ onBeforeUnmount(() => {
           ↑
         </button>
         <button
+          v-tactile
           type="button"
           aria-label="向左微调遮罩"
           @click="nudge(-1, 0)"
@@ -452,6 +459,7 @@ onBeforeUnmount(() => {
           ←
         </button>
         <button
+          v-tactile
           type="button"
           aria-label="向右微调遮罩"
           @click="nudge(1, 0)"
@@ -459,6 +467,7 @@ onBeforeUnmount(() => {
           →
         </button>
         <button
+          v-tactile
           type="button"
           aria-label="向下微调遮罩"
           @click="nudge(0, 1)"
@@ -468,6 +477,7 @@ onBeforeUnmount(() => {
       </div>
 
       <button
+        v-tactile
         class="mask-export-button"
         type="button"
         :disabled="exporting"

@@ -48,7 +48,12 @@ export interface ArchiveRepositoryPort {
 }
 
 export type HairProfileDraft = {
-  -readonly [Key in Exclude<keyof HairProfile, 'id' | 'createdAt' | 'updatedAt'>]: HairProfile[Key]
+  -readonly [Key in Exclude<
+    keyof HairProfile,
+    'id' | 'createdAt' | 'updatedAt' | 'genderIdentity' | 'presentationPreference' | 'profilePhotos'
+  >]: HairProfile[Key]
+} & {
+  -readonly [Key in 'genderIdentity' | 'presentationPreference' | 'profilePhotos']?: HairProfile[Key]
 }
 export type CandidateDraft = Omit<Candidate, 'id' | 'planId' | 'order'> & {
   readonly id?: string
@@ -81,6 +86,7 @@ export interface HaircutRecordDraft {
   readonly date: string
   readonly styleName: string
   readonly salonName?: string
+  readonly salonLocation?: string
   readonly barberName?: string
   readonly serviceName?: string
   readonly priceCents?: number
@@ -284,6 +290,9 @@ export const createArchiveStore = (
         ...draft,
         name: draft.name.trim(),
         preferenceNotes: draft.preferenceNotes.trim(),
+        genderIdentity: draft.genderIdentity ?? 'unspecified',
+        presentationPreference: draft.presentationPreference ?? 'unspecified',
+        profilePhotos: (draft.profilePhotos ?? []).map((photo) => ({ ...photo })),
         id: current?.id ?? createId(),
         createdAt: current?.createdAt ?? timestamp,
         updatedAt: timestamp,
@@ -548,8 +557,8 @@ export const createArchiveStore = (
       error.value = '请先建立本设备档案，再记录这次理发。'
       return null
     }
-    if (draft.styleName.trim().length === 0 || Number.isNaN(Date.parse(draft.date))) {
-      error.value = '请填写有效的理发日期和发型名。'
+    if (Number.isNaN(Date.parse(draft.date))) {
+      error.value = '请选择有效的理发日期。'
       return null
     }
     if (!Number.isInteger(draft.satisfaction) || draft.satisfaction < 1 || draft.satisfaction > 5) {
@@ -607,8 +616,9 @@ export const createArchiveStore = (
         date: draft.date,
         status: 'completed' as const,
         satisfaction: draft.satisfaction as HaircutRecord['satisfaction'],
-        styleName: draft.styleName.trim(),
+        styleName: draft.styleName.trim() || `${draft.date} 理发记录`,
         salonName: optionalText(draft.salonName),
+        salonLocation: optionalText(draft.salonLocation),
         barberName: optionalText(draft.barberName),
         serviceName: optionalText(draft.serviceName),
         priceCents: draft.priceCents,

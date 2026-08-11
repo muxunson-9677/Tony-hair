@@ -14,6 +14,13 @@ const curatedStyle = computed(() => isPrivate.value ? undefined : curatedHairsty
 ))
 const privateReference = computed(() => isPrivate.value ? store.getReference(id.value) : undefined)
 const privateImageUrl = ref<string | null>(null)
+const imageExpanded = ref(false)
+const wakeLockActive = ref(false)
+let wakeLockSentinel: { release: () => Promise<void> } | null = null
+const activeImageSource = computed(() => curatedStyle.value?.coverImage ?? privateImageUrl.value ?? '')
+const activeImageAlt = computed(() => curatedStyle.value?.imageAlt ?? (
+  privateReference.value ? `${privateReference.value.name}的私人参考` : '发型参考大图'
+))
 
 const releasePrivateImage = () => {
   if (privateImageUrl.value) {
@@ -43,12 +50,35 @@ watchEffect(() => {
 
 const loadLibrary = () => store.load()
 
+const toggleWakeLock = async () => {
+  if (wakeLockSentinel) {
+    await wakeLockSentinel.release()
+    wakeLockSentinel = null
+    wakeLockActive.value = false
+    return
+  }
+  const wakeLock = (navigator as Navigator & {
+    wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void> }> }
+  }).wakeLock
+  if (!wakeLock) return
+  try {
+    wakeLockSentinel = await wakeLock.request('screen')
+    wakeLockActive.value = true
+  } catch {
+    wakeLockActive.value = false
+  }
+}
+
 onMounted(() => {
   if (isPrivate.value) {
     void loadLibrary()
   }
 })
-onBeforeUnmount(releasePrivateImage)
+onBeforeUnmount(() => {
+  releasePrivateImage()
+  void wakeLockSentinel?.release()
+  wakeLockSentinel = null
+})
 </script>
 
 <template>
@@ -58,11 +88,18 @@ onBeforeUnmount(releasePrivateImage)
     aria-labelledby="style-show-title"
   >
     <div class="style-show-media">
-      <img
-        :src="curatedStyle.coverImage"
-        :alt="curatedStyle.imageAlt"
-        fetchpriority="high"
+      <button
+        class="style-show-image-button"
+        type="button"
+        aria-label="放大发型图片"
+        @click="imageExpanded = true"
       >
+        <img
+          :src="curatedStyle.coverImage"
+          :alt="curatedStyle.imageAlt"
+          fetchpriority="high"
+        >
+      </button>
       <RouterLink
         class="style-show-back"
         :to="`/styles/catalog/${curatedStyle.id}`"
@@ -83,39 +120,15 @@ onBeforeUnmount(releasePrivateImage)
         <p class="style-show-disclosure">
           {{ curatedStyle.disclosure }}
         </p>
-        <p class="style-show-limitation">
-          只提供正面参考；侧面与后脑必须结合你的头型、发旋和现场长度确认。
-        </p>
+        <button
+          class="style-show-wake-lock"
+          type="button"
+          :aria-pressed="wakeLockActive"
+          @click="toggleWakeLock"
+        >
+          {{ wakeLockActive ? '屏幕将保持常亮' : '保持屏幕常亮' }}
+        </button>
       </header>
-
-      <section aria-labelledby="style-show-reality-title">
-        <h2 id="style-show-reality-title">
-          现实限制
-        </h2>
-        <p>{{ curatedStyle.feasibility }}</p>
-        <ul>
-          <li
-            v-for="tradeoff in curatedStyle.tradeoffs"
-            :key="tradeoff"
-          >
-            {{ tradeoff }}
-          </li>
-        </ul>
-      </section>
-
-      <section aria-labelledby="style-show-guide-title">
-        <h2 id="style-show-guide-title">
-          剪发沟通要点
-        </h2>
-        <dl class="style-show-guide">
-          <div><dt>整体</dt><dd>{{ curatedStyle.barberGuide.overall }}</dd></div>
-          <div><dt>顶部</dt><dd>{{ curatedStyle.barberGuide.top }}</dd></div>
-          <div><dt>刘海</dt><dd>{{ curatedStyle.barberGuide.fringe }}</dd></div>
-          <div><dt>两侧</dt><dd>{{ curatedStyle.barberGuide.sides }}</dd></div>
-          <div><dt>鬓角</dt><dd>{{ curatedStyle.barberGuide.sideburns }}</dd></div>
-          <div><dt>后脑</dt><dd>{{ curatedStyle.barberGuide.back }}</dd></div>
-        </dl>
-      </section>
 
       <section
         class="style-show-priorities"
@@ -144,6 +157,40 @@ onBeforeUnmount(releasePrivateImage)
           </ol>
         </div>
       </section>
+
+      <details class="style-show-details">
+        <summary>完整部位说明与现实限制</summary>
+        <p class="style-show-limitation">
+          只提供正面参考；侧面与后脑必须结合你的头型、发旋和现场长度确认。
+        </p>
+        <section aria-labelledby="style-show-reality-title">
+          <h2 id="style-show-reality-title">
+            现实限制
+          </h2>
+          <p>{{ curatedStyle.feasibility }}</p>
+          <ul>
+            <li
+              v-for="tradeoff in curatedStyle.tradeoffs"
+              :key="tradeoff"
+            >
+              {{ tradeoff }}
+            </li>
+          </ul>
+        </section>
+        <section aria-labelledby="style-show-guide-title">
+          <h2 id="style-show-guide-title">
+            剪发沟通要点
+          </h2>
+          <dl class="style-show-guide">
+            <div><dt>整体</dt><dd>{{ curatedStyle.barberGuide.overall }}</dd></div>
+            <div><dt>顶部</dt><dd>{{ curatedStyle.barberGuide.top }}</dd></div>
+            <div><dt>刘海</dt><dd>{{ curatedStyle.barberGuide.fringe }}</dd></div>
+            <div><dt>两侧</dt><dd>{{ curatedStyle.barberGuide.sides }}</dd></div>
+            <div><dt>鬓角</dt><dd>{{ curatedStyle.barberGuide.sideburns }}</dd></div>
+            <div><dt>后脑</dt><dd>{{ curatedStyle.barberGuide.back }}</dd></div>
+          </dl>
+        </section>
+      </details>
     </article>
   </section>
 
@@ -153,12 +200,19 @@ onBeforeUnmount(releasePrivateImage)
     aria-labelledby="private-style-show-title"
   >
     <div class="style-show-media">
-      <img
+      <button
         v-if="privateImageUrl"
-        :src="privateImageUrl"
-        :alt="`${privateReference.name}的私人参考`"
-        fetchpriority="high"
+        class="style-show-image-button"
+        type="button"
+        aria-label="放大发型图片"
+        @click="imageExpanded = true"
       >
+        <img
+          :src="privateImageUrl"
+          :alt="`${privateReference.name}的私人参考`"
+          fetchpriority="high"
+        >
+      </button>
       <RouterLink
         class="style-show-back"
         :to="`/styles/references/${privateReference.id}`"
@@ -179,6 +233,14 @@ onBeforeUnmount(releasePrivateImage)
       <p class="private-show-notes">
         {{ privateReference.notes || '未填写备注。' }}
       </p>
+      <button
+        class="style-show-wake-lock"
+        type="button"
+        :aria-pressed="wakeLockActive"
+        @click="toggleWakeLock"
+      >
+        {{ wakeLockActive ? '屏幕将保持常亮' : '保持屏幕常亮' }}
+      </button>
     </article>
   </section>
 
@@ -235,4 +297,24 @@ onBeforeUnmount(releasePrivateImage)
       返回找发型
     </RouterLink>
   </section>
+
+  <div
+    v-if="imageExpanded && activeImageSource"
+    class="style-show-lightbox"
+    role="dialog"
+    aria-modal="true"
+    aria-label="发型图片大图"
+  >
+    <img
+      :src="activeImageSource"
+      :alt="activeImageAlt"
+    >
+    <button
+      type="button"
+      aria-label="关闭大图"
+      @click="imageExpanded = false"
+    >
+      关闭
+    </button>
+  </div>
 </template>

@@ -132,6 +132,7 @@ export class ZajianfaDb extends Dexie {
         ...record,
         planId: record.planId || undefined,
         salonName: record.salonName || undefined,
+        salonLocation: record.salonLocation || undefined,
         barberName: record.barberName || undefined,
         serviceName: record.serviceName || undefined,
         priceCents: record.priceCents,
@@ -195,6 +196,7 @@ const WASH_FREQUENCIES = new Set([
 ])
 const PHOTO_STAGE_ORDER = [
   'before',
+  'after',
   'during',
   'unstyled',
   'styled',

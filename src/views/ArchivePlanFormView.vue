@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -56,6 +56,7 @@ const previewUrls = ref<Record<string, string>>({})
 const processingReference = ref(false)
 const referenceError = ref<string | null>(null)
 const addNotice = ref<string | null>(null)
+const candidateSourceDisclosure = ref<HTMLDetailsElement | null>(null)
 let referenceRequest = 0
 let routeRequest = 0
 let viewActive = false
@@ -174,6 +175,7 @@ const toggleDemo = (choice: ArchiveDemoCandidate) => {
     source: 'demo_ai',
     demoImagePath: choice.image,
   })
+  void closeCandidateSources()
 }
 
 const togglePastRecord = (choice: PastRecordChoice) => {
@@ -209,6 +211,7 @@ const togglePastRecord = (choice: PastRecordChoice) => {
     referenceImageProcessedAt: choice.photo.processedAt ?? choice.photo.capturedAt,
   })
   rebuildPreviewUrls()
+  void closeCandidateSources()
 }
 
 const setPlanMode = (mode: HaircutPlan['mode']) => {
@@ -219,6 +222,13 @@ const setPlanMode = (mode: HaircutPlan['mode']) => {
   selectedCandidates.value = []
   referenceError.value = null
   rebuildPreviewUrls()
+}
+
+const closeCandidateSources = async () => {
+  await nextTick()
+  if (candidateSourceDisclosure.value) {
+    candidateSourceDisclosure.value.open = false
+  }
 }
 
 const formatBytes = (bytes: number) => (
@@ -285,6 +295,7 @@ const selectReference = async (event: Event) => {
       referenceImageProcessedAt: prepared.processedAt,
     })
     rebuildPreviewUrls()
+    await closeCandidateSources()
   } catch (caught) {
     if (request === referenceRequest) {
       referenceError.value = caught instanceof Error
@@ -683,183 +694,194 @@ onBeforeUnmount(() => {
         </ol>
       </section>
 
-      <section
-        v-if="form.mode === 'repeat'"
-        class="candidate-source-section past-record-picker repeat-standard-picker"
-        aria-labelledby="repeat-standard-title"
+      <details
+        ref="candidateSourceDisclosure"
+        class="candidate-source-disclosure"
+        :open="selectedCandidates.length === 0"
       >
-        <p class="section-index">
-          STANDARD · ACTIVE
-        </p>
-        <h2 id="repeat-standard-title">
-          选择一个标准发型
-        </h2>
-        <p>复刻计划只能使用仍在当前档案中的标准发型，并保存一份独立照片快照。</p>
-        <div
-          v-if="standardRecordChoices.length === 0"
-          class="archive-empty archive-empty--inner"
-        >
-          <h3>还没有可复刻的标准发型</h3>
-          <p>先用探索计划选方向；满意的剪后记录可在之后标为标准发型。</p>
-          <button
-            type="button"
-            class="text-link"
-            @click="setPlanMode('exploration')"
-          >
-            转为探索计划
-          </button>
-        </div>
-        <ol v-else>
-          <li
-            v-for="choice in standardRecordChoices"
-            :key="choice.record.id"
-          >
-            <img
-              :src="previewUrls[`past-record-choice:${choice.record.id}`] || ''"
-              alt=""
-            >
-            <div>
-              <span>标准发型 · {{ choice.record.date }}</span>
-              <b>{{ choice.name }}</b>
-              <small>满意度 {{ choice.record.satisfaction }} / 5</small>
-              <button
-                type="button"
-                :disabled="store.saving || processingReference"
-                @click="togglePastRecord(choice)"
-              >
-                {{ isPastSelected(choice) ? `移除标准发型：${choice.name}` : `选择标准发型：${choice.name}` }}
-              </button>
-            </div>
-          </li>
-        </ol>
-      </section>
+        <summary>
+          <span>{{ selectedCandidates.length === 0 ? '选择第一个候选' : '继续添加或更换候选' }}</span>
+          <small>{{ form.mode === 'repeat' ? '从标准发型中选 1 个' : '从我的照片、历史或精选中选 2—4 个' }}</small>
+        </summary>
 
-      <section
-        v-if="form.mode === 'exploration'"
-        class="candidate-source-section local-reference-picker"
-        aria-labelledby="local-reference-title"
-      >
-        <p class="section-index">
-          01 · OWN REFERENCE
-        </p>
-        <h2 id="local-reference-title">
-          加入自己的参考图
-        </h2>
-        <p>照片只在当前设备纠正方向、压缩并去除 EXIF，不会上传。</p>
-        <label class="local-reference-input">
-          <span>本地参考图</span>
-          <span
-            class="local-reference-control"
-            :class="{ 'local-reference-control--disabled': store.saving || processingReference || selectedCandidates.length >= 4 }"
-          >
-            <b aria-hidden="true">{{ processingReference ? '本地处理中…' : '选择本地照片' }}</b>
-            <small aria-hidden="true">JPEG · PNG · WebP</small>
-            <input
-              type="file"
-              aria-label="本地参考图"
-              accept="image/jpeg,image/png,image/webp"
-              :disabled="store.saving || processingReference || selectedCandidates.length >= 4"
-              @change="selectReference"
-            >
-          </span>
-        </label>
-        <p
-          v-if="processingReference"
-          class="image-processing-status"
-          role="status"
+        <section
+          v-if="form.mode === 'repeat'"
+          class="candidate-source-section past-record-picker repeat-standard-picker"
+          aria-labelledby="repeat-standard-title"
         >
-          本地处理中…
-        </p>
-        <p
-          v-if="referenceError"
-          class="form-alert"
-          role="alert"
-        >
-          {{ referenceError }}
-        </p>
-      </section>
-
-      <section
-        v-if="form.mode === 'exploration'"
-        class="candidate-source-section past-record-picker"
-        aria-labelledby="past-record-title"
-      >
-        <p class="section-index">
-          02 · YOUR HISTORY
-        </p>
-        <h2 id="past-record-title">
-          从剪后记录复刻
-        </h2>
-        <p v-if="pastRecordChoices.length === 0">
-          还没有带照片的剪后记录。
-        </p>
-        <ol v-else>
-          <li
-            v-for="choice in pastRecordChoices"
-            :key="choice.record.id"
+          <p class="section-index">
+            STANDARD · ACTIVE
+          </p>
+          <h2 id="repeat-standard-title">
+            选择一个标准发型
+          </h2>
+          <p>复刻计划只能使用仍在当前档案中的标准发型，并保存一份独立照片快照。</p>
+          <div
+            v-if="standardRecordChoices.length === 0"
+            class="archive-empty archive-empty--inner"
           >
-            <img
-              :src="previewUrls[`past-record-choice:${choice.record.id}`] || ''"
-              alt=""
+            <h3>还没有可复刻的标准发型</h3>
+            <p>先用探索计划选方向；满意的剪后记录可在之后标为标准发型。</p>
+            <button
+              type="button"
+              class="text-link"
+              @click="setPlanMode('exploration')"
             >
-            <div>
-              <span>{{ choice.isStandard ? '标准发型' : '剪后记录' }} · {{ choice.record.date }}</span>
-              <b>{{ choice.name }}</b>
-              <small>满意度 {{ choice.record.satisfaction }} / 5</small>
-              <button
-                type="button"
-                :disabled="store.saving || processingReference || (!isPastSelected(choice) && selectedCandidates.length >= 4)"
-                @click="togglePastRecord(choice)"
+              转为探索计划
+            </button>
+          </div>
+          <ol v-else>
+            <li
+              v-for="choice in standardRecordChoices"
+              :key="choice.record.id"
+            >
+              <img
+                :src="previewUrls[`past-record-choice:${choice.record.id}`] || ''"
+                alt=""
               >
-                {{ isPastSelected(choice) ? `移除历史候选：${choice.name}` : `加入历史候选：${choice.name}` }}
-              </button>
-            </div>
-          </li>
-        </ol>
-      </section>
+              <div>
+                <span>标准发型 · {{ choice.record.date }}</span>
+                <b>{{ choice.name }}</b>
+                <small>满意度 {{ choice.record.satisfaction }} / 5</small>
+                <button
+                  type="button"
+                  :disabled="store.saving || processingReference"
+                  @click="togglePastRecord(choice)"
+                >
+                  {{ isPastSelected(choice) ? `移除标准发型：${choice.name}` : `选择标准发型：${choice.name}` }}
+                </button>
+              </div>
+            </li>
+          </ol>
+        </section>
 
-      <section
-        v-if="form.mode === 'exploration'"
-        class="demo-candidate-picker candidate-source-section"
-        aria-labelledby="demo-candidate-title"
-      >
-        <p class="section-index">
-          03 · SIX PRESETS
-        </p>
-        <h2 id="demo-candidate-title">
-          选择预制短发
-        </h2>
-        <aside
-          class="sample-disclosure"
-          aria-label="示例候选说明"
+        <section
+          v-if="form.mode === 'exploration'"
+          class="candidate-source-section local-reference-picker"
+          aria-labelledby="local-reference-title"
         >
-          <b>示例体验 · 非用户生成</b>
-          <p>虚构成年人物素材，不处理你的照片，也不是个性化 AI 结果。</p>
-        </aside>
-        <div class="demo-candidate-grid">
-          <figure
-            v-for="choice in archiveDemoCandidates"
-            :key="choice.key"
-            :class="{ 'demo-candidate--selected': isDemoSelected(choice) }"
-          >
-            <img
-              :src="choice.image"
-              :alt="choice.imageAlt"
+          <p class="section-index">
+            01 · OWN REFERENCE
+          </p>
+          <h2 id="local-reference-title">
+            加入自己的参考图
+          </h2>
+          <p>照片只在当前设备纠正方向、压缩并去除 EXIF，不会上传。</p>
+          <label class="local-reference-input">
+            <span>本地参考图</span>
+            <span
+              class="local-reference-control"
+              :class="{ 'local-reference-control--disabled': store.saving || processingReference || selectedCandidates.length >= 4 }"
             >
-            <figcaption>
-              <span>{{ choice.personaName }}</span>
-              <b>{{ choice.name }}</b>
-              <button
-                type="button"
-                :disabled="store.saving || processingReference || (!isDemoSelected(choice) && selectedCandidates.length >= 4)"
-                @click="toggleDemo(choice)"
+              <b aria-hidden="true">{{ processingReference ? '本地处理中…' : '选择本地照片' }}</b>
+              <small aria-hidden="true">JPEG · PNG · WebP</small>
+              <input
+                type="file"
+                aria-label="本地参考图"
+                accept="image/jpeg,image/png,image/webp"
+                :disabled="store.saving || processingReference || selectedCandidates.length >= 4"
+                @change="selectReference"
               >
-                {{ isDemoSelected(choice) ? `移除候选：${choice.name}` : `加入候选：${choice.name}` }}
-              </button>
-            </figcaption>
-          </figure>
-        </div>
-      </section>
+            </span>
+          </label>
+          <p
+            v-if="processingReference"
+            class="image-processing-status"
+            role="status"
+          >
+            本地处理中…
+          </p>
+          <p
+            v-if="referenceError"
+            class="form-alert"
+            role="alert"
+          >
+            {{ referenceError }}
+          </p>
+        </section>
+
+        <section
+          v-if="form.mode === 'exploration'"
+          class="candidate-source-section past-record-picker"
+          aria-labelledby="past-record-title"
+        >
+          <p class="section-index">
+            02 · YOUR HISTORY
+          </p>
+          <h2 id="past-record-title">
+            从剪后记录复刻
+          </h2>
+          <p v-if="pastRecordChoices.length === 0">
+            还没有带照片的剪后记录。
+          </p>
+          <ol v-else>
+            <li
+              v-for="choice in pastRecordChoices"
+              :key="choice.record.id"
+            >
+              <img
+                :src="previewUrls[`past-record-choice:${choice.record.id}`] || ''"
+                alt=""
+              >
+              <div>
+                <span>{{ choice.isStandard ? '标准发型' : '剪后记录' }} · {{ choice.record.date }}</span>
+                <b>{{ choice.name }}</b>
+                <small>满意度 {{ choice.record.satisfaction }} / 5</small>
+                <button
+                  type="button"
+                  :disabled="store.saving || processingReference || (!isPastSelected(choice) && selectedCandidates.length >= 4)"
+                  @click="togglePastRecord(choice)"
+                >
+                  {{ isPastSelected(choice) ? `移除历史候选：${choice.name}` : `加入历史候选：${choice.name}` }}
+                </button>
+              </div>
+            </li>
+          </ol>
+        </section>
+
+        <section
+          v-if="form.mode === 'exploration'"
+          class="demo-candidate-picker candidate-source-section"
+          aria-labelledby="demo-candidate-title"
+        >
+          <p class="section-index">
+            03 · SIX PRESETS
+          </p>
+          <h2 id="demo-candidate-title">
+            选择预制短发
+          </h2>
+          <aside
+            class="sample-disclosure"
+            aria-label="示例候选说明"
+          >
+            <b>示例体验 · 非用户生成</b>
+            <p>虚构成年人物素材，不处理你的照片，也不是个性化 AI 结果。</p>
+          </aside>
+          <div class="demo-candidate-grid">
+            <figure
+              v-for="choice in archiveDemoCandidates"
+              :key="choice.key"
+              :class="{ 'demo-candidate--selected': isDemoSelected(choice) }"
+            >
+              <img
+                :src="choice.image"
+                :alt="choice.imageAlt"
+              >
+              <figcaption>
+                <span>{{ choice.personaName }}</span>
+                <b>{{ choice.name }}</b>
+                <button
+                  type="button"
+                  :disabled="store.saving || processingReference || (!isDemoSelected(choice) && selectedCandidates.length >= 4)"
+                  @click="toggleDemo(choice)"
+                >
+                  {{ isDemoSelected(choice) ? `移除候选：${choice.name}` : `加入候选：${choice.name}` }}
+                </button>
+              </figcaption>
+            </figure>
+          </div>
+        </section>
+      </details>
 
       <button
         class="submit-button"

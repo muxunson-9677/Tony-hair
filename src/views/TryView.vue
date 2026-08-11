@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import { DemoProvider } from '@/features/try-on/DemoProvider'
+import { tactileDirective as vTactile } from '@/ui/tactile'
 
 const personas = new DemoProvider().getPersonas()
 const selectedPersonaId = ref(personas[0].id)
@@ -70,7 +71,7 @@ function selectAdjustment(adjustment: (typeof adjustments)[number]) {
         TRY A DIRECTION · 02
       </p>
       <h1 id="try-title">
-        试发型
+        示例方向对比
       </h1>
       <p>以下三位均为 AI 生成的虚构成年人；这里只比较预制方向，不是对个人剪后效果的预测。</p>
     </header>
@@ -106,6 +107,7 @@ function selectAdjustment(adjustment: (typeof adjustments)[number]) {
         <button
           v-for="persona in personas"
           :key="persona.id"
+          v-tactile
           type="button"
           class="persona-option"
           :class="{ 'persona-option--active': persona.id === selectedPersona.id }"
@@ -144,6 +146,7 @@ function selectAdjustment(adjustment: (typeof adjustments)[number]) {
         <button
           v-for="(option, index) in selectedPersona.options"
           :key="option.id"
+          v-tactile
           type="button"
           class="plan-option"
           :class="{ 'plan-option--active': option.id === selectedOption.id }"
@@ -207,6 +210,7 @@ function selectAdjustment(adjustment: (typeof adjustments)[number]) {
         <button
           v-for="adjustment in adjustments"
           :key="adjustment.id"
+          v-tactile
           type="button"
           :class="{ 'adjustment-action--active': adjustment.id === selectedAdjustmentId }"
           :aria-label="`微调示例：${adjustment.label}`"

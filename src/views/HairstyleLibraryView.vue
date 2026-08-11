@@ -9,6 +9,8 @@ import {
   filterCuratedHairstyles,
 } from '../features/hairstyle-library/curatedCatalog'
 import { useHairstyleLibraryStore } from '../features/hairstyle-library/libraryStore'
+import { useArchiveStore } from '../features/archive/archiveStore'
+import { rankStylesForProfile } from '../features/archive/personalization'
 import type {
   CuratedHairstyle,
   MaintenanceLevel,
@@ -18,6 +20,7 @@ import type {
 
 const route = useRoute()
 const store = useHairstyleLibraryStore()
+const archiveStore = useArchiveStore()
 const query = ref('')
 const goals = ref<StyleGoal[]>([])
 const maintenanceLevels = ref<MaintenanceLevel[]>([])
@@ -63,6 +66,10 @@ const filteredCatalog = computed(() => filterCuratedHairstyles({
   goals: goals.value,
   maintenanceLevels: maintenanceLevels.value,
 }))
+const rankedCatalog = computed(() => rankStylesForProfile(filteredCatalog.value, archiveStore.profile))
+const personalizationByStyleId = computed(() => new Map(
+  rankedCatalog.value.map(({ style, reason }) => [style.id, reason]),
+))
 
 const belongsToSelectedFolder = (favorite: { readonly folderId: string | null } | undefined) => {
   if (!favorite) {
@@ -85,7 +92,7 @@ const resultStyles = computed(() => {
     ? filteredCatalog.value.filter((style) => (
         belongsToSelectedFolder(favoriteByStyleId.value.get(style.id))
       ))
-    : filteredCatalog.value
+    : rankedCatalog.value.map(({ style }) => style)
 })
 
 const resultReferences = computed(() => {
@@ -199,7 +206,7 @@ watch([showingFavorites, showingReferences], ([isFavorites]) => {
   }
 })
 
-const loadLibrary = () => store.load()
+const loadLibrary = () => Promise.all([store.load(), archiveStore.load()])
 
 onMounted(loadLibrary)
 onBeforeUnmount(releaseReferenceUrls)
@@ -225,7 +232,7 @@ onBeforeUnmount(releaseReferenceUrls)
           只保存在当前设备。把你真正想留给下次理发看的图片，整理成私人参考。
         </p>
         <p v-else>
-          六个诚实的短发方向，先看维护与现实限制，再决定要不要继续。
+          {{ archiveStore.profile ? `已根据 ${archiveStore.profile.name} 的发质、偏好和打理时间在本机排序。` : '六个诚实的短发方向，建立档案后会按你的真实情况排序。' }}
         </p>
       </div>
 
@@ -479,6 +486,7 @@ onBeforeUnmount(releaseReferenceUrls)
                   :style="style"
                   :favorite="store.isFavorite(`curated_style:${style.id}`)"
                   :busy="libraryBusy"
+                  :personalized-reason="showingCatalog && archiveStore.profile ? personalizationByStyleId.get(style.id) : ''"
                   @toggle-favorite="toggleFavorite(style)"
                 />
                 <label

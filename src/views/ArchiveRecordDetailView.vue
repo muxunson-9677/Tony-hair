@@ -7,6 +7,7 @@ import type { HaircutPhoto } from '../features/archive/types'
 
 const stageLabels: Record<HaircutPhoto['stage'], string> = {
   before: '剪前',
+  after: '剪后',
   during: '理发中',
   unstyled: '未打理',
   styled: '已造型',
@@ -20,6 +21,16 @@ const store = useArchiveStore()
 const recordId = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
 const record = computed(() => store.records.find(({ id }) => id === recordId.value))
 const photos = computed(() => store.photosByRecordId[recordId.value] ?? [])
+const comparisonPhotos = computed(() => {
+  const before = photos.value.find(({ stage }) => stage === 'before')
+  const after = photos.value.find(({ stage }) => stage === 'after')
+    ?? photos.value.find(({ stage }) => stage === 'styled')
+    ?? photos.value.find(({ stage }) => stage === 'unstyled')
+  return [before, after].filter((photo): photo is HaircutPhoto => Boolean(photo))
+})
+const legacyPhotos = computed(() => photos.value.filter(({ id }) => (
+  !comparisonPhotos.value.some((photo) => photo.id === id)
+)))
 const plan = computed(() => store.plans.find(({ id }) => id === record.value?.planId))
 const recordAvoidRules = computed(() => store.avoidRules.filter((rule) => (
   rule.recordId === recordId.value && rule.active
@@ -143,11 +154,12 @@ onBeforeUnmount(revokePhotoUrls)
       </header>
 
       <div
-        class="record-photo-strip"
-        aria-label="剪后照片"
+        class="record-photo-comparison"
+        role="group"
+        aria-label="剪前剪后对比"
       >
         <figure
-          v-for="photo in photos"
+          v-for="photo in comparisonPhotos"
           :key="photo.id"
         >
           <img
@@ -158,29 +170,24 @@ onBeforeUnmount(revokePhotoUrls)
         </figure>
       </div>
 
-      <dl class="record-metadata">
-        <div v-if="plan">
-          <dt>关联计划</dt><dd>{{ plan.title }}</dd>
+      <details
+        v-if="legacyPhotos.length"
+        class="record-legacy-photos"
+      >
+        <summary>查看旧版其他阶段照片（{{ legacyPhotos.length }}）</summary>
+        <div class="record-photo-strip">
+          <figure
+            v-for="photo in legacyPhotos"
+            :key="photo.id"
+          >
+            <img
+              :src="photoUrls[photo.id]"
+              :alt="`${record.styleName}的${stageLabels[photo.stage]}照片`"
+            >
+            <figcaption>{{ stageLabels[photo.stage] }}</figcaption>
+          </figure>
         </div>
-        <div v-if="record.salonName">
-          <dt>店铺</dt><dd>{{ record.salonName }}</dd>
-        </div>
-        <div v-if="record.barberName">
-          <dt>理发师</dt><dd>{{ record.barberName }}</dd>
-        </div>
-        <div v-if="record.serviceName">
-          <dt>服务</dt><dd>{{ record.serviceName }}</dd>
-        </div>
-        <div v-if="record.priceCents !== undefined">
-          <dt>价格</dt><dd>{{ formatPrice(record.priceCents) }}</dd>
-        </div>
-        <div v-if="record.durationMinutes !== undefined">
-          <dt>耗时</dt><dd>{{ record.durationMinutes }} 分钟</dd>
-        </div>
-        <div v-if="record.notes">
-          <dt>备注</dt><dd>{{ record.notes }}</dd>
-        </div>
-      </dl>
+      </details>
 
       <section
         v-if="record.outcome === 'repeat'"
@@ -215,6 +222,36 @@ onBeforeUnmount(revokePhotoUrls)
           </li>
         </ul>
       </section>
+
+      <details class="record-detail-more">
+        <summary>查看本次店铺与备注</summary>
+        <dl class="record-metadata">
+          <div v-if="plan">
+            <dt>关联计划</dt><dd>{{ plan.title }}</dd>
+          </div>
+          <div v-if="record.salonName">
+            <dt>店铺</dt><dd>{{ record.salonName }}</dd>
+          </div>
+          <div v-if="record.salonLocation">
+            <dt>店铺位置</dt><dd>{{ record.salonLocation }}</dd>
+          </div>
+          <div v-if="record.barberName">
+            <dt>理发师</dt><dd>{{ record.barberName }}</dd>
+          </div>
+          <div v-if="record.serviceName">
+            <dt>服务</dt><dd>{{ record.serviceName }}</dd>
+          </div>
+          <div v-if="record.priceCents !== undefined">
+            <dt>价格</dt><dd>{{ formatPrice(record.priceCents) }}</dd>
+          </div>
+          <div v-if="record.durationMinutes !== undefined">
+            <dt>耗时</dt><dd>{{ record.durationMinutes }} 分钟</dd>
+          </div>
+          <div v-if="record.notes">
+            <dt>备注</dt><dd>{{ record.notes }}</dd>
+          </div>
+        </dl>
+      </details>
     </template>
   </section>
 </template>

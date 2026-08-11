@@ -7,6 +7,7 @@ import * as briefExport from '../features/archive/briefExport'
 import { resolveCandidateImageBlob } from '../features/archive/candidateSources'
 import { isValidPlanCandidateCount } from '../features/archive/types'
 import type { Candidate } from '../features/archive/types'
+import { curatedHairstyles } from '../features/hairstyle-library/curatedCatalog'
 
 const route = useRoute()
 const router = useRouter()
@@ -30,6 +31,7 @@ const back = ref('')
 const topPriorities = ref([''])
 const absoluteAvoids = ref([''])
 const message = ref<string | null>(null)
+const messageTone = ref<'success' | 'error' | null>(null)
 const exporting = ref(false)
 const hydrated = ref(false)
 let viewActive = false
@@ -66,17 +68,31 @@ const buildCandidateUrls = () => {
 
 const hydrate = () => {
   const current = savedBrief.value
+  const requestedTargetId = typeof route.query.target === 'string' ? route.query.target : ''
   const availableTarget = candidates.value.find(({ id }) => id === current?.targetCandidateId)
+    ?? candidates.value.find(({ id }) => id === requestedTargetId)
     ?? candidates.value[0]
+  const catalogStyle = availableTarget?.source === 'demo_ai'
+    ? curatedHairstyles.find(({ coverImage }) => coverImage === availableTarget.demoImagePath)
+    : undefined
+  const guide = catalogStyle?.barberGuide
+  const profileNote = store.profile?.preferenceNotes.trim() ?? ''
+  const activeAvoids = store.avoidRules.filter(({ active }) => active).map(({ text }) => text)
   targetCandidateId.value = availableTarget?.id ?? ''
-  overall.value = current?.overall ?? ''
-  top.value = current?.top ?? ''
-  fringe.value = current?.fringe ?? ''
-  sides.value = current?.sides ?? ''
-  sideburns.value = current?.sideburns ?? ''
-  back.value = current?.back ?? ''
-  topPriorities.value = current?.topPriorities.length ? [...current.topPriorities] : ['']
-  absoluteAvoids.value = current?.absoluteAvoids.length ? [...current.absoluteAvoids] : ['']
+  overall.value = current?.overall ?? [guide?.overall, profileNote].filter(Boolean).join('；')
+  top.value = current?.top ?? guide?.top ?? ''
+  fringe.value = current?.fringe ?? guide?.fringe ?? ''
+  sides.value = current?.sides ?? guide?.sides ?? ''
+  sideburns.value = current?.sideburns ?? guide?.sideburns ?? ''
+  back.value = current?.back ?? guide?.back ?? ''
+  topPriorities.value = current?.topPriorities.length
+    ? [...current.topPriorities]
+    : [...guide?.topPriorities ?? ['']].slice(0, 3)
+  absoluteAvoids.value = current?.absoluteAvoids.length
+    ? [...current.absoluteAvoids]
+    : [...new Set([...(guide?.absoluteAvoids ?? []), ...activeAvoids])].slice(0, 3)
+  if (topPriorities.value.length === 0) topPriorities.value = ['']
+  if (absoluteAvoids.value.length === 0) absoluteAvoids.value = ['']
 }
 
 const addItem = (items: string[]) => {
@@ -93,6 +109,7 @@ const removeItem = (items: string[], index: number) => {
 
 const save = async () => {
   message.value = null
+  messageTone.value = null
   const saved = await store.saveBrief(planId.value, {
     targetCandidateId: targetCandidateId.value,
     overall: overall.value,
@@ -106,10 +123,12 @@ const save = async () => {
   })
   if (!saved) {
     message.value = store.error
+    messageTone.value = 'error'
     return
   }
   hydrate()
   message.value = '沟通卡已保存在当前设备。'
+  messageTone.value = 'success'
   document.title = `编辑理发师沟通卡｜咋剪发`
 }
 
@@ -118,11 +137,13 @@ const exportPng = async () => {
   const candidate = targetCandidate.value
   if (!currentPlan || !candidate || (!targetImageBlob.value && !targetImageSource.value)) {
     message.value = '目标候选没有可导出的本地图片。'
+    messageTone.value = 'error'
     return
   }
 
   exporting.value = true
   message.value = null
+  messageTone.value = null
   try {
     await briefExport.exportBriefPng({
       planTitle: currentPlan.title,
@@ -138,8 +159,10 @@ const exportPng = async () => {
       absoluteAvoids: absoluteAvoids.value,
     })
     message.value = 'PNG 已生成并开始下载。'
+    messageTone.value = 'success'
   } catch {
     message.value = '导出失败，没有创建 PNG 文件。请稍后重试。'
+    messageTone.value = 'error'
   } finally {
     exporting.value = false
   }
@@ -147,10 +170,12 @@ const exportPng = async () => {
 
 const printBrief = () => {
   message.value = null
+  messageTone.value = null
   try {
     window.print()
   } catch {
     message.value = '打印窗口打开失败，请稍后重试。'
+    messageTone.value = 'error'
   }
 }
 
@@ -167,6 +192,7 @@ const deleteBrief = async () => {
     await router.push(`/archive/plans/${planId.value}`)
   } else {
     message.value = store.error
+    messageTone.value = 'error'
   }
 }
 
@@ -278,8 +304,8 @@ onBeforeUnmount(() => {
 
         <p
           v-if="message"
-          class="form-alert"
-          role="alert"
+          :class="messageTone === 'success' ? 'form-status' : 'form-alert'"
+          :role="messageTone === 'success' ? 'status' : 'alert'"
         >
           {{ message }}
         </p>
@@ -317,118 +343,125 @@ onBeforeUnmount(() => {
             </div>
           </fieldset>
 
-          <div class="brief-section-fields">
-            <label>
-              <span>整体</span>
-              <textarea
-                v-model="overall"
-                required
-              />
-            </label>
-            <label>
-              <span>顶部</span>
-              <textarea
-                v-model="top"
-                required
-              />
-            </label>
-            <label>
-              <span>刘海</span>
-              <textarea
-                v-model="fringe"
-                required
-              />
-            </label>
-            <label>
-              <span>两侧</span>
-              <textarea
-                v-model="sides"
-                required
-              />
-            </label>
-            <label>
-              <span>鬓角</span>
-              <textarea
-                v-model="sideburns"
-                required
-              />
-            </label>
-            <label>
-              <span>后脑</span>
-              <textarea
-                v-model="back"
-                required
-              />
-            </label>
-          </div>
+          <details class="brief-edit-details">
+            <summary>
+              <span>需要修改时展开</span>
+              <small>已根据主方案、个人偏好和避雷规则生成草稿</small>
+            </summary>
 
-          <fieldset class="brief-list-editor">
-            <legend>最在意</legend>
-            <p>保留 1—3 条，空白内容不会保存。</p>
-            <div
-              v-for="(_, index) in topPriorities"
-              :key="`priority-${index}`"
-              class="brief-list-row"
-            >
+            <div class="brief-section-fields">
               <label>
-                <span>最在意 {{ index + 1 }}</span>
-                <input
-                  v-model="topPriorities[index]"
+                <span>整体</span>
+                <textarea
+                  v-model="overall"
                   required
-                >
+                />
               </label>
-              <button
-                type="button"
-                :aria-label="`删除最在意 ${index + 1}`"
-                :disabled="topPriorities.length === 1"
-                @click="removeItem(topPriorities, index)"
-              >
-                删除
-              </button>
+              <label>
+                <span>顶部</span>
+                <textarea
+                  v-model="top"
+                  required
+                />
+              </label>
+              <label>
+                <span>刘海</span>
+                <textarea
+                  v-model="fringe"
+                  required
+                />
+              </label>
+              <label>
+                <span>两侧</span>
+                <textarea
+                  v-model="sides"
+                  required
+                />
+              </label>
+              <label>
+                <span>鬓角</span>
+                <textarea
+                  v-model="sideburns"
+                  required
+                />
+              </label>
+              <label>
+                <span>后脑</span>
+                <textarea
+                  v-model="back"
+                  required
+                />
+              </label>
             </div>
-            <button
-              class="brief-add-button"
-              type="button"
-              :disabled="topPriorities.length >= 3"
-              @click="addItem(topPriorities)"
-            >
-              添加最在意
-            </button>
-          </fieldset>
 
-          <fieldset class="brief-list-editor brief-list-editor--avoid">
-            <legend>绝对不要</legend>
-            <p>保留 1—3 条，明确说出不可接受的结果。</p>
-            <div
-              v-for="(_, index) in absoluteAvoids"
-              :key="`avoid-${index}`"
-              class="brief-list-row"
-            >
-              <label>
-                <span>绝对不要 {{ index + 1 }}</span>
-                <input
-                  v-model="absoluteAvoids[index]"
-                  required
-                >
-              </label>
-              <button
-                type="button"
-                :aria-label="`删除绝对不要 ${index + 1}`"
-                :disabled="absoluteAvoids.length === 1"
-                @click="removeItem(absoluteAvoids, index)"
+            <fieldset class="brief-list-editor">
+              <legend>最在意</legend>
+              <p>保留 1—3 条，空白内容不会保存。</p>
+              <div
+                v-for="(_, index) in topPriorities"
+                :key="`priority-${index}`"
+                class="brief-list-row"
               >
-                删除
+                <label>
+                  <span>最在意 {{ index + 1 }}</span>
+                  <input
+                    v-model="topPriorities[index]"
+                    required
+                  >
+                </label>
+                <button
+                  type="button"
+                  :aria-label="`删除最在意 ${index + 1}`"
+                  :disabled="topPriorities.length === 1"
+                  @click="removeItem(topPriorities, index)"
+                >
+                  删除
+                </button>
+              </div>
+              <button
+                class="brief-add-button"
+                type="button"
+                :disabled="topPriorities.length >= 3"
+                @click="addItem(topPriorities)"
+              >
+                添加最在意
               </button>
-            </div>
-            <button
-              class="brief-add-button"
-              type="button"
-              :disabled="absoluteAvoids.length >= 3"
-              @click="addItem(absoluteAvoids)"
-            >
-              添加绝对不要
-            </button>
-          </fieldset>
+            </fieldset>
+
+            <fieldset class="brief-list-editor brief-list-editor--avoid">
+              <legend>绝对不要</legend>
+              <p>保留 1—3 条，明确说出不可接受的结果。</p>
+              <div
+                v-for="(_, index) in absoluteAvoids"
+                :key="`avoid-${index}`"
+                class="brief-list-row"
+              >
+                <label>
+                  <span>绝对不要 {{ index + 1 }}</span>
+                  <input
+                    v-model="absoluteAvoids[index]"
+                    required
+                  >
+                </label>
+                <button
+                  type="button"
+                  :aria-label="`删除绝对不要 ${index + 1}`"
+                  :disabled="absoluteAvoids.length === 1"
+                  @click="removeItem(absoluteAvoids, index)"
+                >
+                  删除
+                </button>
+              </div>
+              <button
+                class="brief-add-button"
+                type="button"
+                :disabled="absoluteAvoids.length >= 3"
+                @click="addItem(absoluteAvoids)"
+              >
+                添加绝对不要
+              </button>
+            </fieldset>
+          </details>
 
           <button
             class="submit-button"

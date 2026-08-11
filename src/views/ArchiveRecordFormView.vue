@@ -12,17 +12,21 @@ import {
   prepareLocalImage,
   type PreparedLocalImage,
 } from '../features/images/prepareLocalImage'
+import { editableRecordPhotoStages, initialRecordDecision } from '../features/archive/recordExperience'
+import { tactileDirective as vTactile } from '../ui/tactile'
 
 type PhotoStage = HaircutPhoto['stage']
 
-const photoStages: readonly { stage: PhotoStage, label: string }[] = [
-  { stage: 'before', label: '剪前' },
+const photoStages = editableRecordPhotoStages
+const legacyPhotoStages: readonly { stage: PhotoStage, label: string }[] = [
   { stage: 'during', label: '理发中' },
   { stage: 'unstyled', label: '未打理' },
   { stage: 'styled', label: '已造型' },
   { stage: 'after_wash', label: '洗后' },
   { stage: 'day_7', label: '第 7 天' },
 ]
+const managedPhotoStages = [...photoStages, ...legacyPhotoStages]
+const decisionDefaults = initialRecordDecision()
 
 const route = useRoute()
 const router = useRouter()
@@ -66,13 +70,14 @@ const form = reactive({
   date: localDateInputValue(),
   styleName: '',
   salonName: '',
+  salonLocation: '',
   barberName: '',
   serviceName: '',
   priceYuan: '',
   durationMinutes: '',
   notes: '',
-  satisfaction: '5',
-  outcome: 'repeat' as 'repeat' | 'avoid',
+  satisfaction: decisionDefaults.satisfaction as '' | '1' | '2' | '3' | '4' | '5',
+  outcome: decisionDefaults.outcome as '' | 'repeat' | 'avoid',
   avoidRules: ['', '', ''],
 })
 
@@ -182,7 +187,7 @@ const photoPreparationLabel = (stage: PhotoStage) => {
 
 const existingPhotoLabel = (stage: PhotoStage) => (
   !replacementPhotosByStage[stage] && existingPhotos.value.some((photo) => photo.stage === stage)
-    ? `已保留：${photoStages.find((item) => item.stage === stage)?.label ?? stage}照片`
+    ? `已保留：${managedPhotoStages.find((item) => item.stage === stage)?.label ?? stage}照片`
     : ''
 )
 
@@ -206,7 +211,7 @@ const submit = async () => {
     localError.value = '耗时请填写大于 0 的整数分钟。'
     return
   }
-  const photos = photoStages.flatMap(({ stage }) => {
+  const photos = managedPhotoStages.flatMap(({ stage }) => {
     const replacement = replacementPhotosByStage[stage]
     return replacement
       ? [replacement]
@@ -214,6 +219,10 @@ const submit = async () => {
   })
   if (photos.length === 0) {
     localError.value = '请至少选择一张照片。'
+    return
+  }
+  if (!form.satisfaction || !form.outcome) {
+    localError.value = '请在保存前选择满意度，并确认这次是否值得复刻。'
     return
   }
   const avoidRules = form.avoidRules.map((rule) => rule.trim()).filter(Boolean)
@@ -228,13 +237,14 @@ const submit = async () => {
     date: form.date,
     styleName: form.styleName,
     salonName: form.salonName,
+    salonLocation: form.salonLocation,
     barberName: form.barberName,
     serviceName: form.serviceName,
     priceCents,
     durationMinutes: durationText ? Number(durationText) : undefined,
     notes: form.notes,
     satisfaction: Number(form.satisfaction),
-    outcome: form.outcome,
+    outcome: form.outcome as 'repeat' | 'avoid',
     avoidRules,
     photos,
   })
@@ -267,12 +277,13 @@ onMounted(async () => {
   form.date = record.date.slice(0, 10)
   form.styleName = record.styleName
   form.salonName = record.salonName ?? ''
+  form.salonLocation = record.salonLocation ?? ''
   form.barberName = record.barberName ?? ''
   form.serviceName = record.serviceName ?? ''
   form.priceYuan = record.priceCents === undefined ? '' : (record.priceCents / 100).toFixed(2)
   form.durationMinutes = record.durationMinutes?.toString() ?? ''
   form.notes = record.notes ?? ''
-  form.satisfaction = record.satisfaction.toString()
+  form.satisfaction = record.satisfaction.toString() as '1' | '2' | '3' | '4' | '5'
   form.outcome = record.outcome
   if (record.outcome === 'avoid') {
     record.avoidRules.slice(0, 3).forEach((rule, index) => {
@@ -286,7 +297,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   unmounted = true
-  photoStages.forEach(({ stage }) => releasePhotoPreview(stage))
+  managedPhotoStages.forEach(({ stage }) => releasePhotoPreview(stage))
 })
 </script>
 
@@ -368,24 +379,41 @@ onBeforeUnmount(() => {
         {{ localError || store.error }}
       </p>
 
-      <label>
-        <span>关联计划（可选）</span>
-        <select
-          v-model="form.planId"
-          name="planId"
+      <fieldset class="record-photos">
+        <legend>剪前 / 剪后 · 至少一张</legend>
+        <label
+          v-for="item in photoStages"
+          :key="item.stage"
         >
-          <option value="">不关联计划</option>
-          <option
-            v-for="plan in store.plans"
-            :key="plan.id"
-            :value="plan.id"
+          <span>{{ item.label }}照片</span>
+          <small v-if="existingPhotoLabel(item.stage)">{{ existingPhotoLabel(item.stage) }}</small>
+          <small
+            v-if="photoPreparationLabel(item.stage)"
+            :class="{ 'photo-status--error': photoPreparationByStage[item.stage]?.status === 'error' }"
+            :role="photoPreparationByStage[item.stage]?.status === 'error' ? 'alert' : 'status'"
           >
-            {{ plan.title }}
-          </option>
-        </select>
-      </label>
+            {{ photoPreparationLabel(item.stage) }}
+          </small>
+          <img
+            v-if="photoPreviewUrl(item.stage)"
+            class="photo-preparation-preview"
+            :src="photoPreviewUrl(item.stage)"
+            :alt="`${item.label}处理后预览`"
+          >
+          <span class="record-photo-trigger">选择{{ item.label }}照片</span>
+          <input
+            class="record-photo-input"
+            :name="`photo-${item.stage}`"
+            :aria-label="`${item.label}照片`"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            :disabled="store.saving"
+            @change="setPhoto(item.stage, $event)"
+          >
+        </label>
+      </fieldset>
 
-      <div class="form-grid">
+      <div class="form-grid record-form__essentials">
         <label>
           <span>理发日期</span>
           <input
@@ -401,51 +429,7 @@ onBeforeUnmount(() => {
             v-model="form.styleName"
             name="styleName"
             maxlength="80"
-            required
-          >
-        </label>
-        <label>
-          <span>店铺</span>
-          <input
-            v-model="form.salonName"
-            name="salonName"
-            maxlength="80"
-          >
-        </label>
-        <label>
-          <span>理发师</span>
-          <input
-            v-model="form.barberName"
-            name="barberName"
-            maxlength="80"
-          >
-        </label>
-        <label>
-          <span>服务</span>
-          <input
-            v-model="form.serviceName"
-            name="serviceName"
-            maxlength="80"
-          >
-        </label>
-        <label>
-          <span>价格（元）</span>
-          <input
-            v-model="form.priceYuan"
-            name="priceYuan"
-            inputmode="decimal"
-            placeholder="例如 128.50"
-          >
-        </label>
-        <label>
-          <span>耗时（分钟）</span>
-          <input
-            v-model="form.durationMinutes"
-            name="durationMinutes"
-            inputmode="numeric"
-            type="number"
-            min="1"
-            step="1"
+            placeholder="可不填，系统会按日期命名"
           >
         </label>
         <label>
@@ -455,6 +439,10 @@ onBeforeUnmount(() => {
             name="satisfaction"
             required
           >
+            <option
+              value=""
+              disabled
+            >请打分</option>
             <option
               v-for="score in 5"
               :key="score"
@@ -466,25 +454,15 @@ onBeforeUnmount(() => {
         </label>
       </div>
 
-      <label>
-        <span>备注</span>
-        <textarea
-          v-model="form.notes"
-          name="notes"
-          rows="4"
-          maxlength="1000"
-        />
-      </label>
-
       <fieldset class="record-outcome">
-        <legend>这次结果</legend>
+        <legend>以后还想这样剪吗？</legend>
         <label>
           <input
             v-model="form.outcome"
             type="radio"
             value="repeat"
           >
-          复刻
+          值得复刻
         </label>
         <label>
           <input
@@ -492,7 +470,7 @@ onBeforeUnmount(() => {
             type="radio"
             value="avoid"
           >
-          避雷
+          有些地方要调整
         </label>
       </fieldset>
 
@@ -514,36 +492,94 @@ onBeforeUnmount(() => {
         </label>
       </div>
 
-      <fieldset class="record-photos">
-        <legend>照片阶段 · 至少一张</legend>
-        <label
-          v-for="item in photoStages"
-          :key="item.stage"
-        >
-          <span>{{ item.label }}照片</span>
-          <small v-if="existingPhotoLabel(item.stage)">{{ existingPhotoLabel(item.stage) }}</small>
-          <small
-            v-if="photoPreparationLabel(item.stage)"
-            :class="{ 'photo-status--error': photoPreparationByStage[item.stage]?.status === 'error' }"
-            :role="photoPreparationByStage[item.stage]?.status === 'error' ? 'alert' : 'status'"
-          >
-            {{ photoPreparationLabel(item.stage) }}
-          </small>
-          <img
-            v-if="photoPreviewUrl(item.stage)"
-            class="photo-preparation-preview"
-            :src="photoPreviewUrl(item.stage)"
-            :alt="`${item.label}处理后预览`"
-          >
-          <input
-            :name="`photo-${item.stage}`"
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            :disabled="store.saving"
-            @change="setPhoto(item.stage, $event)"
-          >
-        </label>
-      </fieldset>
+      <details class="record-extra-details">
+        <summary v-tactile>
+          <span>补充本次信息</span>
+          <small>店铺、位置、理发师、价格和备注</small>
+        </summary>
+        <div class="record-extra-details__body">
+          <label>
+            <span>关联计划（可选）</span>
+            <select
+              v-model="form.planId"
+              name="planId"
+            >
+              <option value="">不关联计划</option>
+              <option
+                v-for="plan in store.plans"
+                :key="plan.id"
+                :value="plan.id"
+              >
+                {{ plan.title }}
+              </option>
+            </select>
+          </label>
+          <div class="form-grid">
+            <label>
+              <span>店铺</span>
+              <input
+                v-model="form.salonName"
+                name="salonName"
+                maxlength="80"
+              >
+            </label>
+            <label>
+              <span>店铺位置（可选）</span>
+              <input
+                v-model="form.salonLocation"
+                name="salonLocation"
+                maxlength="160"
+                placeholder="例如：静安区南京西路 688 号"
+              >
+            </label>
+            <label>
+              <span>理发师</span>
+              <input
+                v-model="form.barberName"
+                name="barberName"
+                maxlength="80"
+              >
+            </label>
+            <label>
+              <span>服务</span>
+              <input
+                v-model="form.serviceName"
+                name="serviceName"
+                maxlength="80"
+              >
+            </label>
+            <label>
+              <span>价格（元）</span>
+              <input
+                v-model="form.priceYuan"
+                name="priceYuan"
+                inputmode="decimal"
+                placeholder="例如 128.50"
+              >
+            </label>
+            <label>
+              <span>耗时（分钟）</span>
+              <input
+                v-model="form.durationMinutes"
+                name="durationMinutes"
+                inputmode="numeric"
+                type="number"
+                min="1"
+                step="1"
+              >
+            </label>
+          </div>
+          <label>
+            <span>备注</span>
+            <textarea
+              v-model="form.notes"
+              name="notes"
+              rows="4"
+              maxlength="1000"
+            />
+          </label>
+        </div>
+      </details>
 
       <aside
         class="privacy-note"
@@ -554,6 +590,7 @@ onBeforeUnmount(() => {
       </aside>
 
       <button
+        v-tactile
         class="submit-button"
         type="submit"
         :disabled="store.saving || isProcessingPhotos"

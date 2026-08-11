@@ -185,7 +185,7 @@ describe('app shell', () => {
   test('labels the try-on route as a sample without promising real generation', async () => {
     await renderAt('/try')
 
-    expect(screen.getByRole('heading', { level: 1, name: '试发型' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: '示例方向对比' })).toBeTruthy()
     expect(screen.getByText('示例体验')).toBeTruthy()
     expect(screen.getByText('预先制作的合成人物素材，不会处理你的照片')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /上传|生成/ })).toBeNull()

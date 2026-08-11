@@ -4133,6 +4133,17 @@ a:focus-visible {
   line-height: 1.6;
 }
 
+.form-status {
+  margin: 20px 0;
+  padding: 14px;
+  border-left: 4px solid #1d7a4b;
+  color: #155d3a;
+  background: #e0f7eb;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
 .style-detail-copy > section {
   padding: 28px 0;
   border-bottom: 1px solid var(--line);

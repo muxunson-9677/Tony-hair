@@ -13,6 +13,7 @@ import { tactileDirective as vTactile } from '../ui/tactile'
 
 const stageLabels: Record<HaircutPhoto['stage'], string> = {
   before: '剪前',
+  after: '剪后',
   during: '理发中',
   unstyled: '未打理',
   styled: '已造型',
@@ -53,8 +54,6 @@ const homeAction = computed(() => resolveHomeAction({
 
 const actionContext = computed(() => {
   switch (homeAction.value.kind) {
-    case 'record_follow_up':
-      return '记录真实变化，下一次才有可靠依据。'
     case 'choose_plan':
       return '你有多个进行中的计划，先明确这次继续哪一个。'
     case 'open_ready_brief':

@@ -256,6 +256,18 @@ onBeforeUnmount(() => {
               <span>0{{ candidate.order }} · {{ candidateSourceLabel(candidate) }}</span>
               <h2>{{ candidate.name }}</h2>
               <p>{{ candidate.notes }}</p>
+              <span
+                v-if="brief?.targetCandidateId === candidate.id"
+                class="candidate-main-badge"
+              >当前主方案</span>
+              <RouterLink
+                v-else
+                class="candidate-main-action"
+                :to="{ path: `/archive/plans/${plan.id}/brief`, query: { target: candidate.id } }"
+                :aria-label="`选“${candidate.name}”为主方案`"
+              >
+                选为主方案
+              </RouterLink>
             </figcaption>
           </figure>
         </li>

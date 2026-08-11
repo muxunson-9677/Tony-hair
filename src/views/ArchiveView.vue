@@ -6,6 +6,15 @@ import type { HairProfile, HaircutPlan } from '../features/archive/types'
 
 const store = useArchiveStore()
 const recordPhotoUrls = ref<Record<string, string>>({})
+const profilePhotoUrls = ref<Record<string, string>>({})
+const availableProfilePhotos = computed(() => [
+  { angle: 'front', label: '正面' },
+  { angle: 'side', label: '侧面' },
+  { angle: 'back', label: '后脑' },
+].flatMap((item) => {
+  const url = profilePhotoUrls.value[item.angle]
+  return url ? [{ ...item, url }] : []
+}))
 const savedBriefs = computed(() => store.plans.flatMap((plan) => {
   const brief = store.briefsByPlanId[plan.id]
   if (!brief) {
@@ -18,6 +27,20 @@ const savedBriefs = computed(() => store.plans.flatMap((plan) => {
   )
   return [{ plan, brief, candidate, candidateLabel }]
 }))
+const latestRecord = computed(() => store.records[0])
+const photoForRecord = (recordId: string, stages: readonly string[]) => (
+  (store.photosByRecordId[recordId] ?? []).find(({ stage }) => stages.includes(stage))
+)
+const recordHeroPhoto = (recordId: string) => photoForRecord(
+  recordId,
+  ['after', 'styled', 'unstyled', 'before'],
+)
+const latestComparison = computed(() => {
+  if (!latestRecord.value) return []
+  const before = photoForRecord(latestRecord.value.id, ['before'])
+  const after = photoForRecord(latestRecord.value.id, ['after', 'styled', 'unstyled'])
+  return [before, after].filter((photo): photo is NonNullable<typeof photo> => Boolean(photo))
+})
 
 const textureLabels: Record<HairProfile['hairTexture'], string> = {
   straight: '直发',
@@ -63,20 +86,41 @@ const revokeRecordUrls = () => {
   recordPhotoUrls.value = {}
 }
 
+const revokeProfileUrls = () => {
+  Object.values(profilePhotoUrls.value).forEach((url) => URL.revokeObjectURL(url))
+  profilePhotoUrls.value = {}
+}
+
+watch(
+  () => store.profile?.profilePhotos,
+  (photos) => {
+    revokeProfileUrls()
+    profilePhotoUrls.value = Object.fromEntries(
+      (photos ?? []).map((photo) => [photo.angle, URL.createObjectURL(photo.image)]),
+    )
+  },
+  { immediate: true },
+)
+
 watch(
   [() => store.records, () => store.photosByRecordId],
   () => {
     revokeRecordUrls()
-    recordPhotoUrls.value = Object.fromEntries(store.records.flatMap((record) => {
-      const photo = store.photosByRecordId[record.id]?.[0]
-      return photo ? [[record.id, URL.createObjectURL(photo.image)]] : []
-    }))
+    recordPhotoUrls.value = Object.fromEntries(store.records.flatMap((record) => (
+      (store.photosByRecordId[record.id] ?? []).map((photo) => [
+        photo.id,
+        URL.createObjectURL(photo.image),
+      ])
+    )))
   },
   { immediate: true },
 )
 
 onMounted(() => store.load())
-onBeforeUnmount(revokeRecordUrls)
+onBeforeUnmount(() => {
+  revokeRecordUrls()
+  revokeProfileUrls()
+})
 </script>
 
 <template>
@@ -138,6 +182,21 @@ onBeforeUnmount(revokeRecordUrls)
         class="profile-summary"
         aria-labelledby="profile-summary-title"
       >
+        <div
+          v-if="availableProfilePhotos.length"
+          :class="[
+            'profile-photo-wall',
+            { 'profile-photo-wall--single': availableProfilePhotos.length === 1 },
+          ]"
+          aria-label="我的头发照片"
+        >
+          <img
+            v-for="photo in availableProfilePhotos"
+            :key="photo.angle"
+            :src="photo.url"
+            :alt="`我的头发${photo.label}照片`"
+          >
+        </div>
         <div>
           <p class="section-index">
             01 / 本机主档案
@@ -167,13 +226,52 @@ onBeforeUnmount(revokeRecordUrls)
       </section>
 
       <section
+        v-if="latestRecord && latestComparison.length"
+        class="archive-latest-comparison"
+        aria-labelledby="archive-latest-comparison-title"
+      >
+        <div class="archive-section-heading">
+          <div>
+            <p class="section-index">
+              02 / 最近变化
+            </p>
+            <h2 id="archive-latest-comparison-title">
+              这次剪前 / 剪后
+            </h2>
+          </div>
+          <RouterLink
+            class="text-link"
+            :to="`/archive/records/${latestRecord.id}`"
+          >
+            查看记录
+          </RouterLink>
+        </div>
+        <div
+          class="archive-comparison-grid"
+          role="group"
+          aria-label="最近一次剪前剪后"
+        >
+          <figure
+            v-for="photo in latestComparison"
+            :key="photo.id"
+          >
+            <img
+              :src="recordPhotoUrls[photo.id]"
+              :alt="`${latestRecord.styleName}${photo.stage === 'before' ? '剪前' : '剪后'}照片`"
+            >
+            <figcaption>{{ photo.stage === 'before' ? '剪前' : '剪后' }}</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section
         class="archive-plans"
         aria-labelledby="archive-plans-title"
       >
         <div class="archive-section-heading">
           <div>
             <p class="section-index">
-              02 / 发型计划
+              04 / 发型计划
             </p>
             <h2 id="archive-plans-title">
               最近计划
@@ -253,8 +351,8 @@ onBeforeUnmount(revokeRecordUrls)
           >
             <RouterLink :to="`/archive/records/${record.id}`">
               <img
-                v-if="recordPhotoUrls[record.id]"
-                :src="recordPhotoUrls[record.id]"
+                v-if="recordHeroPhoto(record.id)"
+                :src="recordPhotoUrls[recordHeroPhoto(record.id)?.id ?? '']"
                 :alt="`${record.styleName}剪后照片`"
               >
               <span class="record-list__copy">
@@ -273,7 +371,7 @@ onBeforeUnmount(revokeRecordUrls)
         aria-labelledby="archive-standard-title"
       >
         <p class="section-index">
-          04 / 可复刻
+          05 / 可复刻
         </p>
         <h2 id="archive-standard-title">
           标准发型
@@ -302,7 +400,7 @@ onBeforeUnmount(revokeRecordUrls)
         aria-labelledby="archive-avoid-title"
       >
         <p class="section-index">
-          05 / 要避开
+          06 / 要避开
         </p>
         <h2 id="archive-avoid-title">
           避雷规则
@@ -331,7 +429,7 @@ onBeforeUnmount(revokeRecordUrls)
         aria-labelledby="archive-brief-title"
       >
         <p class="section-index">
-          06 / 沟通卡
+          07 / 沟通卡
         </p>
         <h2 id="archive-brief-title">
           {{ savedBriefs.length > 0 ? `已保存 ${savedBriefs.length} 张沟通卡` : '还没有沟通卡' }}
