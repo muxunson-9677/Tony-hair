@@ -837,6 +837,68 @@ describe('archive store', () => {
     ])
   })
 
+  test('saves region marks atomically with the record and rejects invalid marks (step 2B)', async () => {
+    repository.profiles = [fullProfile()]
+    ids = ['record-new', 'photo-new']
+    const store = useTestStore()
+    await store.load()
+
+    const baseDraft = {
+      date: '2026-08-20',
+      styleName: '翻车短发',
+      satisfaction: 2 as const,
+      outcome: 'avoid' as const,
+      avoidRules: ['两侧不要推白'],
+      photos: [{ stage: 'after' as const, image: localPhoto }],
+    }
+
+    expect(await store.saveRecord({
+      ...baseDraft,
+      regionMarks: [{ id: 'mark-bad', region: 'sides', issue: 'custom', note: '  ', x: 0.5, y: 0.5 }],
+    })).toBeNull()
+    expect(store.error).toContain('自定义')
+
+    const saved = await store.saveRecord({
+      ...baseDraft,
+      regionMarks: [
+        { id: 'mark-1', region: 'sides', issue: 'too_short', x: 0.4, y: 0.6 },
+        { id: 'mark-2', region: 'sideburns', issue: 'custom', note: ' 剃成直角了 ', x: 0.8, y: 0.7 },
+      ],
+    })
+    expect(saved?.record.outcome).toBe('avoid')
+    expect(saved?.record.outcome !== 'repeat' && saved?.record.regionMarks).toEqual([
+      { id: 'mark-1', region: 'sides', issue: 'too_short', x: 0.4, y: 0.6, note: undefined },
+      { id: 'mark-2', region: 'sideburns', issue: 'custom', note: '剃成直角了', x: 0.8, y: 0.7 },
+    ])
+    expect(repository.records[0]).toMatchObject({ id: 'record-new' })
+  })
+
+  test('saves plan region requests, keeps them on edit, and rejects duplicate regions (step 2B)', async () => {
+    repository.profiles = [fullProfile()]
+    ids = ['plan-new', 'candidate-new-1', 'candidate-new-2']
+    const store = useTestStore()
+    await store.load()
+
+    expect(await store.savePlan(planDraft({
+      regionRequests: [
+        { region: 'sides', direction: 'cut_shorter' },
+        { region: 'sides', direction: 'thin_out' },
+      ],
+    }))).toBeNull()
+    expect(store.error).toContain('一个本次要求')
+
+    const saved = await store.savePlan(planDraft({
+      regionRequests: [{ region: 'sides', direction: 'keep_length' }],
+    }))
+    expect(saved?.plan.regionRequests).toEqual([{ region: 'sides', direction: 'keep_length' }])
+
+    // 编辑时不传 regionRequests → 保留原值；传空数组 → 清空。
+    const kept = await store.savePlan(planDraft({ id: saved?.plan.id, title: '改名计划' }))
+    expect(kept?.plan.regionRequests).toEqual([{ region: 'sides', direction: 'keep_length' }])
+    const cleared = await store.savePlan(planDraft({ id: saved?.plan.id, regionRequests: [] }))
+    expect(cleared?.plan.regionRequests).toBeUndefined()
+  })
+
   test('shows human storage messages and always resets loading and saving', async () => {
     const store = useTestStore()
     repository.nextFailure = new ArchiveStorageError('quota_exceeded', new Error('technical'))

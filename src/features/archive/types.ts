@@ -44,6 +44,7 @@ export interface HaircutPlan {
   readonly date: string
   readonly mode: 'exploration' | 'repeat'
   readonly status: 'draft' | 'ready' | 'completed'
+  readonly regionRequests?: readonly PlanRegionRequest[]
   readonly createdAt: string
   readonly updatedAt: string
 }
@@ -115,20 +116,49 @@ interface HaircutRecordBase {
   readonly updatedAt: string
 }
 
+export type HairRegion = 'top' | 'sides' | 'fringe' | 'back' | 'sideburns'
+
+export type RegionMarkIssue =
+  | 'too_short'
+  | 'too_thin'
+  | 'wrong_shape'
+  | 'harsh_transition'
+  | 'custom'
+
+export interface RegionMark {
+  readonly id: string
+  readonly region: HairRegion
+  readonly issue: RegionMarkIssue
+  readonly note?: string
+  readonly x: number
+  readonly y: number
+  readonly photoId?: string
+}
+
+export type RegionRequestDirection = 'cut_shorter' | 'thin_out' | 'keep_length' | 'keep_volume'
+
+export interface PlanRegionRequest {
+  readonly region: HairRegion
+  readonly direction: RegionRequestDirection
+}
+
 interface RepeatHaircutRecord extends HaircutRecordBase {
   readonly outcome: 'repeat'
   readonly avoidRules?: never
+  readonly regionMarks?: never
 }
 
 interface AvoidHaircutRecord extends HaircutRecordBase {
   readonly outcome: 'avoid'
   readonly avoidRules: readonly string[]
+  readonly regionMarks?: readonly RegionMark[]
 }
 
 interface AdjustHaircutRecord extends HaircutRecordBase {
   readonly outcome: 'adjust'
   readonly adjustmentNotes: readonly string[]
   readonly avoidRules?: never
+  readonly regionMarks?: readonly RegionMark[]
 }
 
 export type HaircutRecord = RepeatHaircutRecord | AdjustHaircutRecord | AvoidHaircutRecord
@@ -177,6 +207,7 @@ export type PlanMemorySource =
   | 'adjustment_note'
   | 'avoid_rule'
   | 'brief_priority'
+  | 'region_mark'
 
 export interface PlanMemoryItem {
   readonly id: string

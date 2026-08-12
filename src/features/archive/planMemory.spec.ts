@@ -266,6 +266,38 @@ describe('buildPlanMemorySuggestions', () => {
     expect(result.overflowAvoids.map(({ text }) => text)).toEqual(['避雷一'])
   })
 
+  test('feeds region marks into the avoid group ahead of free-text rules (step 2B)', () => {
+    const marked = avoidRecord('record-marked', '2026-08-05', ['两侧不要推白'], {
+      regionMarks: [{ id: 'mark-1', region: 'sides', issue: 'too_short', x: 0.4, y: 0.6 }],
+    })
+    const result = buildPlanMemorySuggestions({
+      records: [marked],
+      avoidRules: [avoidRule('rule-1', 'record-marked', '两侧不要推白', '2026-08-05T10:00:00.000Z')],
+      briefsByPlanId: {},
+    })
+    expect(result.avoid.map(({ text, source }) => ({ text, source }))).toEqual([
+      { text: '两侧：上次剪太短，这次保留长度', source: 'region_mark' },
+      { text: '两侧不要推白', source: 'avoid_rule' },
+    ])
+  })
+
+  test('region mark suggestions still respect the three item cap and overflow', () => {
+    const marked = avoidRecord('record-marked', '2026-08-05', ['避雷一'], {
+      regionMarks: [
+        { id: 'm1', region: 'sides', issue: 'too_short', x: 0.1, y: 0.1 },
+        { id: 'm2', region: 'top', issue: 'too_thin', x: 0.2, y: 0.2 },
+        { id: 'm3', region: 'fringe', issue: 'wrong_shape', x: 0.3, y: 0.3 },
+      ],
+    })
+    const result = buildPlanMemorySuggestions({
+      records: [marked],
+      avoidRules: [avoidRule('rule-1', 'record-marked', '避雷一', '2026-08-05T10:00:00.000Z')],
+      briefsByPlanId: {},
+    })
+    expect(result.avoid).toHaveLength(PLAN_MEMORY_GROUP_LIMIT)
+    expect(result.overflowAvoids.map(({ text }) => text)).toEqual(['避雷一'])
+  })
+
   test('does not fabricate suggestions or semantic conflicts', () => {
     const result = buildPlanMemorySuggestions({
       records: [repeatRecord('record-repeat', '2026-08-10')],

@@ -70,6 +70,53 @@ describe('local backup', () => {
     expect(await target.favoriteFolders.get('folder-1')).toMatchObject({ name: '下次想剪' })
   })
 
+  test('round-trips step 2B region marks and plan region requests without loss', async () => {
+    const source = database()
+    await source.records.add({
+      id: 'record-1',
+      profileId: 'profile-1',
+      date: '2026-08-10',
+      status: 'completed',
+      satisfaction: 2,
+      outcome: 'avoid',
+      styleName: '翻车短发',
+      avoidRules: ['两侧不要推白'],
+      regionMarks: [{ id: 'mark-1', region: 'sides', issue: 'too_short', x: 0.4, y: 0.6 }],
+      createdAt: '2026-08-10T00:00:00.000Z',
+      updatedAt: '2026-08-10T00:00:00.000Z',
+    })
+    await source.plans.add({
+      id: 'plan-1',
+      profileId: 'profile-1',
+      title: '下次计划',
+      date: '2026-08-20',
+      mode: 'exploration',
+      status: 'draft',
+      regionRequests: [{ region: 'sides', direction: 'keep_length' }],
+      createdAt: '2026-08-10T00:00:00.000Z',
+      updatedAt: '2026-08-10T00:00:00.000Z',
+    })
+
+    const backup = await exportLocalBackup(source, new Date('2026-08-13T01:00:00.000Z'))
+    const target = database()
+    await importLocalBackup(
+      target,
+      backup,
+      (parts, options) => new NodeBlob(
+        parts as unknown as ArrayBuffer[],
+        options,
+      ) as unknown as Blob,
+    )
+
+    const record = await target.records.get('record-1')
+    expect(record?.outcome === 'avoid' && record.regionMarks).toEqual([
+      { id: 'mark-1', region: 'sides', issue: 'too_short', x: 0.4, y: 0.6 },
+    ])
+    expect((await target.plans.get('plan-1'))?.regionRequests).toEqual([
+      { region: 'sides', direction: 'keep_length' },
+    ])
+  })
+
   test('rejects an unrelated JSON file without changing existing data', async () => {
     const db = database()
     await db.favoriteFolders.add({

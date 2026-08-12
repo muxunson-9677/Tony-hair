@@ -5,6 +5,7 @@ import type {
   PlanMemoryKind,
   PlanMemorySource,
 } from './types'
+import { buildRegionMarkSuggestions } from './regionMarks'
 
 export const PLAN_MEMORY_GROUP_LIMIT = 3
 export const PLAN_MEMORY_TEXT_LIMIT = 160
@@ -117,17 +118,22 @@ export const buildPlanMemorySuggestions = (
     .sort((left, right) => (
       right.createdAt.localeCompare(left.createdAt) || left.id.localeCompare(right.id)
     ))
-  const avoidItems = dedupeByTrimmedText(activeAvoidRules.map((rule): PlanMemorySuggestion => {
-    const record = recordsById.get(rule.recordId)
-    return {
-      kind: 'avoid',
-      text: rule.text,
-      source: 'avoid_rule',
-      sourceRecordId: rule.recordId,
-      sourceRecordDate: (record?.date ?? rule.createdAt).slice(0, 10),
-      sourceLabel: record?.styleName ?? '避雷记录',
-    }
-  }))
+  // ②B：区域打标产出的结构化避雷条目排在自由文本避雷规则之前。
+  const regionMarkItems = buildRegionMarkSuggestions(sortedRecords)
+  const avoidItems = dedupeByTrimmedText([
+    ...regionMarkItems,
+    ...activeAvoidRules.map((rule): PlanMemorySuggestion => {
+      const record = recordsById.get(rule.recordId)
+      return {
+        kind: 'avoid',
+        text: rule.text,
+        source: 'avoid_rule',
+        sourceRecordId: rule.recordId,
+        sourceRecordDate: (record?.date ?? rule.createdAt).slice(0, 10),
+        sourceLabel: record?.styleName ?? '避雷记录',
+      }
+    }),
+  ])
 
   return {
     keep,

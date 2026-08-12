@@ -7,6 +7,7 @@ import {
   ZajianfaDb,
 } from './ArchiveRepository'
 import { candidateSourceKey } from './candidateSources'
+import { REGION_MARK_LIMIT, regionMarkValidationError } from './regionMarks'
 import { isValidPlanCandidateCount } from './types'
 import type {
   AvoidRule,
@@ -20,6 +21,8 @@ import type {
   PlanMemoryItem,
   PlanMemoryKind,
   PlanMemorySource,
+  PlanRegionRequest,
+  RegionMark,
   StandardStyle,
 } from './types'
 
@@ -83,6 +86,7 @@ export interface HaircutPlanDraft {
   readonly status: 'draft' | 'ready'
   readonly candidates: readonly CandidateDraft[]
   readonly memories?: readonly PlanMemoryDraft[]
+  readonly regionRequests?: readonly PlanRegionRequest[]
 }
 
 export type BarberBriefDraft = Omit<
@@ -114,6 +118,7 @@ export interface HaircutRecordDraft {
   readonly outcome: 'repeat' | 'adjust' | 'avoid'
   readonly avoidRules: readonly string[]
   readonly adjustmentNotes?: readonly string[]
+  readonly regionMarks?: readonly RegionMark[]
   readonly photos: readonly HaircutPhotoDraft[]
 }
 
@@ -405,6 +410,13 @@ export const createArchiveStore = (
         return null
       }
     }
+    if (draft.regionRequests) {
+      const regions = draft.regionRequests.map(({ region }) => region)
+      if (new Set(regions).size !== regions.length) {
+        error.value = '每个区域只能选择一个本次要求。'
+        return null
+      }
+    }
     if (saving.value) {
       return null
     }
@@ -416,6 +428,10 @@ export const createArchiveStore = (
       const planId = existingPlan?.id ?? createId()
       const existingCandidates = candidatesByPlanId.value[planId] ?? []
       const existingMemories = planMemoryByPlanId.value[planId] ?? []
+      // regionRequests 未提供时保留原值，提供空数组则视为清空。
+      const regionRequests: readonly PlanRegionRequest[] | undefined = draft.regionRequests
+        ? (draft.regionRequests.length > 0 ? draft.regionRequests : undefined)
+        : existingPlan?.regionRequests
       const plan: HaircutPlan = {
         id: planId,
         profileId: currentProfile.id,
@@ -423,6 +439,7 @@ export const createArchiveStore = (
         date: draft.date,
         mode: draft.mode,
         status: draft.status,
+        ...(regionRequests ? { regionRequests } : {}),
         createdAt: existingPlan?.createdAt ?? timestamp,
         updatedAt: timestamp,
       }
@@ -688,6 +705,18 @@ export const createArchiveStore = (
       error.value = '选择“有一点要改”时，请写下 1 到 3 条下次调整。'
       return null
     }
+    const draftRegionMarks = draft.outcome === 'repeat' ? [] : draft.regionMarks ?? []
+    if (draftRegionMarks.length > REGION_MARK_LIMIT) {
+      error.value = `最多标注 ${REGION_MARK_LIMIT} 个问题区域。`
+      return null
+    }
+    for (const markDraft of draftRegionMarks) {
+      const markError = regionMarkValidationError(markDraft)
+      if (markError) {
+        error.value = markError
+        return null
+      }
+    }
     if (saving.value) {
       return null
     }
@@ -722,11 +751,27 @@ export const createArchiveStore = (
         createdAt: existing?.createdAt ?? timestamp,
         updatedAt: timestamp,
       }
+      const regionMarks: readonly RegionMark[] | undefined = draftRegionMarks.length > 0
+        ? draftRegionMarks.map((markDraft) => ({
+          ...markDraft,
+          note: markDraft.note?.trim() || undefined,
+        }))
+        : undefined
       const record: HaircutRecord = draft.outcome === 'repeat'
         ? { ...base, outcome: 'repeat' }
         : draft.outcome === 'adjust'
-          ? { ...base, outcome: 'adjust', adjustmentNotes: normalizedAdjustments }
-          : { ...base, outcome: 'avoid', avoidRules: normalizedAvoidRules }
+          ? {
+            ...base,
+            outcome: 'adjust',
+            adjustmentNotes: normalizedAdjustments,
+            ...(regionMarks ? { regionMarks } : {}),
+          }
+          : {
+            ...base,
+            outcome: 'avoid',
+            avoidRules: normalizedAvoidRules,
+            ...(regionMarks ? { regionMarks } : {}),
+          }
       const photos = draft.photos.map((photo): HaircutPhoto => ({
         ...photo,
         id: photo.id ?? createId(),
