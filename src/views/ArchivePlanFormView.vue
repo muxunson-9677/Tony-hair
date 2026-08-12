@@ -27,7 +27,18 @@ import type {
   HaircutPhoto,
   HaircutPlan,
   HaircutRecord,
+  PlanMemoryItem,
+  PlanMemoryKind,
+  PlanMemorySource,
 } from '../features/archive/types'
+import {
+  buildPlanMemorySuggestions,
+  swapAvoidSuggestion,
+  type PlanMemorySuggestion,
+} from '../features/archive/planMemory'
+import PlanMemoryEditor, {
+  type PlanMemoryEntry,
+} from '../features/archive/components/PlanMemoryEditor.vue'
 import { tactileDirective as vTactile } from '../ui/tactile'
 import { resolveLibraryCandidateDraft } from '../features/hairstyle-library/libraryCandidates'
 import { useHairstyleLibraryStore } from '../features/hairstyle-library/libraryStore'
@@ -36,6 +47,18 @@ import type { CuratedHairstyle } from '../features/hairstyle-library/types'
 import { prepareLocalImage } from '../features/images/prepareLocalImage'
 
 type SelectedCandidate = CandidateDraft & { readonly uiKey: string }
+
+interface MemoryEntryDraft {
+  readonly uiKey: string
+  readonly id?: string
+  readonly kind: PlanMemoryKind
+  text: string
+  readonly originalText: string
+  readonly source: PlanMemorySource
+  readonly sourceRecordId: string
+  readonly sourceRecordDate: string
+  readonly sourceLabel: string
+}
 
 interface PastRecordChoice {
   readonly record: HaircutRecord
@@ -66,6 +89,10 @@ const processingReference = ref(false)
 const referenceError = ref<string | null>(null)
 const addNotice = ref<string | null>(null)
 const candidateSourceDisclosure = ref<HTMLDetailsElement | null>(null)
+const memoryKeep = ref<MemoryEntryDraft[]>([])
+const memoryAvoid = ref<MemoryEntryDraft[]>([])
+const memoryOverflow = ref<MemoryEntryDraft[]>([])
+let memoryUiKey = 0
 let referenceRequest = 0
 let routeRequest = 0
 let viewActive = false
@@ -290,6 +317,95 @@ const toSelectedCandidate = (candidate: Candidate): SelectedCandidate => ({
   uiKey: candidate.id,
 })
 
+const suggestionToMemoryDraft = (suggestion: PlanMemorySuggestion): MemoryEntryDraft => ({
+  uiKey: `memory-${memoryUiKey += 1}`,
+  kind: suggestion.kind,
+  text: suggestion.text,
+  originalText: suggestion.text,
+  source: suggestion.source,
+  sourceRecordId: suggestion.sourceRecordId,
+  sourceRecordDate: suggestion.sourceRecordDate,
+  sourceLabel: suggestion.sourceLabel,
+})
+
+const memoryItemToDraft = (item: PlanMemoryItem): MemoryEntryDraft => ({
+  uiKey: item.id,
+  id: item.id,
+  kind: item.kind,
+  text: item.text,
+  originalText: item.originalText,
+  source: item.source,
+  sourceRecordId: item.sourceRecordId,
+  sourceRecordDate: item.sourceRecordDate,
+  sourceLabel: item.sourceLabel,
+})
+
+const toMemoryEntry = (draft: MemoryEntryDraft): PlanMemoryEntry => ({
+  uiKey: draft.uiKey,
+  kind: draft.kind,
+  text: draft.text,
+  sourceRecordId: draft.sourceRecordId,
+  sourceRecordDate: draft.sourceRecordDate,
+  sourceLabel: draft.sourceLabel,
+  sourceExists: store.records.some(({ id }) => id === draft.sourceRecordId),
+})
+
+const memoryKeepEntries = computed(() => memoryKeep.value.map(toMemoryEntry))
+const memoryAvoidEntries = computed(() => memoryAvoid.value.map(toMemoryEntry))
+const memoryOverflowEntries = computed(() => memoryOverflow.value.map(toMemoryEntry))
+
+const hydrateNewPlanMemories = () => {
+  const suggestions = buildPlanMemorySuggestions({
+    records: store.records,
+    avoidRules: store.avoidRules,
+    briefsByPlanId: store.briefsByPlanId,
+  })
+  memoryKeep.value = suggestions.keep.map(suggestionToMemoryDraft)
+  memoryAvoid.value = suggestions.avoid.map(suggestionToMemoryDraft)
+  memoryOverflow.value = suggestions.overflowAvoids.map(suggestionToMemoryDraft)
+}
+
+const hydratePlanMemoriesFromSnapshot = (planId: string) => {
+  const items = store.planMemoryByPlanId[planId] ?? []
+  memoryKeep.value = items
+    .filter(({ kind }) => kind !== 'avoid')
+    .map(memoryItemToDraft)
+  memoryAvoid.value = items
+    .filter(({ kind }) => kind === 'avoid')
+    .map(memoryItemToDraft)
+  memoryOverflow.value = []
+}
+
+const updateMemoryText = (group: 'keep' | 'avoid', index: number, text: string) => {
+  const list = group === 'keep' ? memoryKeep : memoryAvoid
+  const target = list.value[index]
+  if (target) {
+    target.text = text
+  }
+}
+
+const removeMemory = (group: 'keep' | 'avoid', index: number) => {
+  if (store.saving) {
+    return
+  }
+  const list = group === 'keep' ? memoryKeep : memoryAvoid
+  list.value.splice(index, 1)
+}
+
+const swapMemoryAvoid = (overflowIndex: number, avoidIndex: number) => {
+  if (store.saving) {
+    return
+  }
+  const { avoid, overflowAvoids } = swapAvoidSuggestion(
+    memoryAvoid.value,
+    memoryOverflow.value,
+    overflowIndex,
+    avoidIndex,
+  )
+  memoryAvoid.value = avoid
+  memoryOverflow.value = overflowAvoids
+}
+
 const selectReference = async (event: Event) => {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
@@ -356,6 +472,16 @@ const submit = async () => {
     mode: form.mode,
     status: form.status,
     candidates: selectedCandidates.value.map(toCandidateDraft),
+    memories: [...memoryKeep.value, ...memoryAvoid.value].map((draft) => ({
+      id: draft.id,
+      kind: draft.kind,
+      text: draft.text,
+      originalText: draft.originalText,
+      source: draft.source,
+      sourceRecordId: draft.sourceRecordId,
+      sourceRecordDate: draft.sourceRecordDate,
+      sourceLabel: draft.sourceLabel,
+    })),
   })
 
   if (saved) {
@@ -416,6 +542,7 @@ const hydrateEditingPlan = () => {
   form.mode = plan.mode
   form.status = plan.status === 'ready' ? 'ready' : 'draft'
   selectedCandidates.value = existingCandidates.map(toSelectedCandidate)
+  hydratePlanMemoriesFromSnapshot(plan.id)
   rebuildPreviewUrls()
   document.title = '调整下次剪法｜咋剪发'
 }
@@ -454,6 +581,9 @@ const initializeForRoute = async () => {
     loadError.value = libraryStore.error
     initializing.value = false
     return
+  }
+  if (!isEditing.value) {
+    hydrateNewPlanMemories()
   }
   if (!isEditing.value && hasQuery && !returnTarget && !hasRecognizedIntent.value) {
     addNotice.value = '这个加入计划入口无效或已过期，未加入任何候选。'
@@ -708,6 +838,16 @@ onBeforeUnmount(() => {
           </fieldset>
         </div>
       </details>
+
+      <PlanMemoryEditor
+        :keep-items="memoryKeepEntries"
+        :avoid-items="memoryAvoidEntries"
+        :overflow-items="memoryOverflowEntries"
+        :disabled="store.saving || processingReference"
+        @update-text="updateMemoryText"
+        @remove="removeMemory"
+        @swap="swapMemoryAvoid"
+      />
 
       <section
         v-if="selectedCandidates.length > 0"

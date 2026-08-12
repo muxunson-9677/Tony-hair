@@ -120,7 +120,7 @@ describe('plan memory persistence', () => {
     for (const database of databases) {
       database.close()
     }
-    await Dexie.delete(dbName, { indexedDB })
+    await new Dexie(dbName, { indexedDB, IDBKeyRange }).delete()
   })
 
   const seedProfile = () => repository.createProfile(profile())

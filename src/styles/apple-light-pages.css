@@ -2143,3 +2143,172 @@
     background: rgb(255 255 255 / 96%);
   }
 }
+
+.plan-memory-editor {
+  display: grid;
+  gap: 14px;
+  padding: 18px 16px 20px;
+  border: 1px solid rgba(91, 113, 146, 0.18);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 16px 38px rgba(64, 78, 105, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.96);
+}
+
+.plan-memory-editor__intro {
+  margin: -6px 0 0;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.plan-memory-group {
+  display: grid;
+  gap: 10px;
+}
+
+.plan-memory-group h3 {
+  font-size: 15px;
+  font-weight: 760;
+}
+
+.plan-memory-group--avoid h3 {
+  color: #b3261e;
+}
+
+.plan-memory-group ol {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+}
+
+.plan-memory-group li {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid rgba(91, 113, 146, 0.16);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.plan-memory-kind {
+  justify-self: start;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(52, 120, 246, 0.1);
+  color: #2c5fc4;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.plan-memory-group--avoid .plan-memory-kind {
+  background: rgba(179, 38, 30, 0.09);
+  color: #b3261e;
+}
+
+.plan-memory-group textarea {
+  width: 100%;
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 1px solid rgba(91, 113, 146, 0.24);
+  border-radius: 12px;
+  background: #fbfcfe;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.plan-memory-source {
+  color: var(--color-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.plan-memory-source a {
+  color: #3478f6;
+  text-decoration: none;
+}
+
+.plan-memory-remove,
+.plan-memory-swap-target,
+.plan-memory-overflow button {
+  justify-self: start;
+  min-height: 45px;
+  padding: 9px 14px;
+  border: 1px solid rgba(91, 113, 146, 0.3);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 640;
+  cursor: pointer;
+}
+
+.plan-memory-swap-target {
+  border-color: rgba(179, 38, 30, 0.4);
+  color: #b3261e;
+}
+
+.plan-memory-swap-hint {
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: rgba(179, 38, 30, 0.07);
+  color: #b3261e;
+  font-size: 13px;
+  font-weight: 640;
+}
+
+.plan-memory-overflow {
+  border: 1px solid rgba(91, 113, 146, 0.18);
+  border-radius: 16px;
+  background: #fbfcfe;
+}
+
+.plan-memory-overflow > summary {
+  min-height: 48px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 660;
+}
+
+.plan-memory-overflow > summary::-webkit-details-marker {
+  display: none;
+}
+
+.plan-memory-overflow ul {
+  display: grid;
+  gap: 10px;
+  padding: 0 14px 14px;
+  list-style: none;
+}
+
+.plan-memory-overflow li {
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(91, 113, 146, 0.14);
+}
+
+.plan-memory-overflow li b {
+  font-size: 14.5px;
+  font-weight: 680;
+}
+
+.plan-memory-overflow li small {
+  color: var(--color-muted);
+  font-size: 12.5px;
+}
+
+.plan-memory-remove:disabled,
+.plan-memory-swap-target:disabled,
+.plan-memory-overflow button:disabled,
+.plan-memory-group textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
