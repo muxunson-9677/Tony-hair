@@ -661,7 +661,7 @@ describe('archive routes and forms', () => {
     await fireEvent.update(screen.getByLabelText('最在意 1'), '轮廓一致')
     await fireEvent.update(screen.getByLabelText('绝对不要 1'), '不要打薄')
     await fireEvent.click(screen.getByRole('button', { name: '保存Tony卡' }))
-    expect((await screen.findByRole('status')).textContent).toContain('Tony卡已保存在当前设备，到店直接打开。')
+    expect(await screen.findByText('Tony卡已保存在当前设备，到店直接打开。')).toBeTruthy()
     expect(await defaultArchiveRepository.getBrief(planId)).toMatchObject({
       targetCandidateId: savedSnapshot?.id,
     })

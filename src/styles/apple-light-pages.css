@@ -2405,3 +2405,123 @@
   font-weight: 660;
   text-decoration: none;
 }
+
+/* ===== V4 第②步：离线保证 + 现场体验 ===== */
+
+.offline-readiness {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 680;
+  line-height: 1.5;
+}
+
+.offline-readiness--ready {
+  color: #245c3c;
+  border: 1px solid rgba(36, 92, 60, 0.22);
+  background: #eef8f0;
+}
+
+.offline-readiness--pending {
+  color: #5a5f68;
+  border: 1px solid #e0e4ea;
+  background: #f5f7fa;
+}
+
+.offline-readiness--warning {
+  color: #8a4a06;
+  border: 1px solid rgba(212, 122, 24, 0.32);
+  background: #fff6ea;
+}
+
+.brief-barber-status {
+  display: grid;
+  gap: 8px;
+  padding: 12px 16px 0;
+}
+
+.brief-barber-status .offline-readiness {
+  margin: 0;
+}
+
+.brief-wake-status {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  margin: 0;
+  padding: 8px 14px;
+  border: 1px solid #e0e4ea;
+  border-radius: 14px;
+  background: #f5f7fa;
+  color: #3c414a;
+  font-size: 14px;
+  font-weight: 660;
+}
+
+/* 理发店环境：现场页第 1、2 层超大字号高对比 */
+.brief-view--barber .brief-preview__header span {
+  font-size: 1rem;
+  color: var(--ink, #17150f);
+}
+
+.brief-view--barber .brief-preview__lists h3 {
+  font-size: 1.3rem;
+}
+
+.brief-view--barber .brief-preview__lists li {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.7;
+}
+
+.brief-preview__overflow {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border-top: 1px solid #e3e7ec;
+}
+
+.brief-preview__overflow h3 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.brief-preview__overflow ol,
+.brief-preview__overflow ul {
+  margin: 8px 0 0;
+  padding-left: 1.25rem;
+}
+
+.brief-preview__overflow li {
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+/* 横竖屏可读：横屏时图左信息右 */
+@media (orientation: landscape) and (min-width: 640px) {
+  .brief-view--barber .brief-preview {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    column-gap: 24px;
+    align-items: start;
+  }
+
+  .brief-view--barber .brief-preview__header,
+  .brief-view--barber .brief-preview__lists,
+  .brief-view--barber .brief-preview__regional-details,
+  .brief-view--barber .brief-preview footer {
+    grid-column: 2;
+  }
+
+  .brief-view--barber .brief-preview .brief-stage {
+    grid-column: 1;
+    grid-row: 1 / span 4;
+    position: sticky;
+    top: 12px;
+  }
+}

@@ -35,6 +35,8 @@ self.addEventListener('activate', (event) => {
   // 刻意不 clients.claim：已打开的旧页面继续用旧缓存直到下次导航。
 })
 
+const fetchFn = (request: unknown) => fetch(request as Request)
+
 self.addEventListener('fetch', (event) => {
   const strategy = classifyRequest(event.request, self.location.origin)
   if (strategy === 'passthrough') {
@@ -43,13 +45,13 @@ self.addEventListener('fetch', (event) => {
   if (strategy === 'navigation') {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME)
-      return await respondNavigation({ fetchFn: fetch, cache, request: event.request }) as Response
+      return await respondNavigation({ fetchFn, cache, request: event.request }) as Response
     })())
     return
   }
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME)
     const cacheKey = new URL(event.request.url).pathname
-    return await respondCacheFirst({ fetchFn: fetch, cache, request: event.request, cacheKey }) as Response
+    return await respondCacheFirst({ fetchFn, cache, request: event.request, cacheKey }) as Response
   })())
 })

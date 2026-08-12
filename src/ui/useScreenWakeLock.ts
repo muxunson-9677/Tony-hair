@@ -12,7 +12,7 @@ export interface WakeLockApi {
 }
 
 export interface UseScreenWakeLockOptions {
-  readonly auto?: boolean
+  readonly auto?: boolean | (() => boolean)
   /** 测试注入口；缺省读取 navigator.wakeLock。显式传 undefined 表示不支持。 */
   readonly wakeLockApi?: WakeLockApi
 }
@@ -72,8 +72,12 @@ export const useScreenWakeLock = (options?: UseScreenWakeLockOptions): ScreenWak
     }
   }
 
+  const autoEnabled = () => (
+    typeof options?.auto === 'function' ? options.auto() : Boolean(options?.auto)
+  )
+
   const onVisibilityChange = () => {
-    if (options?.auto && document.visibilityState !== 'hidden') {
+    if (autoEnabled() && document.visibilityState !== 'hidden') {
       // 系统在页面退到后台时会自动释放锁，回前台需要重新申请。
       handle = null
       void request()
@@ -82,7 +86,7 @@ export const useScreenWakeLock = (options?: UseScreenWakeLockOptions): ScreenWak
 
   onMounted(() => {
     document.addEventListener('visibilitychange', onVisibilityChange)
-    if (options?.auto) {
+    if (autoEnabled()) {
       void request()
     }
   })

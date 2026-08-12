@@ -1,16 +1,20 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { pageTitle } from '../config/brand'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
+import { buildBarberLayers } from '../features/archive/barberLayers'
 import * as briefExport from '../features/archive/briefExport'
 import { buildBriefListDefaults } from '../features/archive/briefMemory'
 import { resolveCandidateImageBlob } from '../features/archive/candidateSources'
+import BriefStage from '../features/archive/components/BriefStage.vue'
 import { isValidPlanCandidateCount } from '../features/archive/types'
 import type { Candidate } from '../features/archive/types'
 import { curatedHairstyles } from '../features/hairstyle-library/curatedCatalog'
+import OfflineReadinessNote from '../features/offline/OfflineReadinessNote.vue'
 import { tactileDirective as vTactile } from '../ui/tactile'
+import { useScreenWakeLock } from '../ui/useScreenWakeLock'
 
 const route = useRoute()
 const router = useRouter()
@@ -60,6 +64,45 @@ const targetImageBlob = computed(() => targetCandidate.value
 const legacyTargetMissing = computed(() => Boolean(
   savedBrief.value && !savedBrief.value.targetCandidateId,
 ))
+
+// 主图展示台：本步只开放「参考原图」，状态位为 AI 效果图/日常状态预留（不实现、不显示）。
+const stageStateId = ref('reference')
+const stageStates = computed(() => [{
+  id: 'reference',
+  label: '参考原图',
+  imageSource: targetImageSource.value || undefined,
+  imageAlt: `${targetCandidate.value?.name ?? '目标候选'}目标参考图`,
+  available: true,
+}])
+
+// 三层阅读结构（V4 4.1）：正面 ≤1 图 + 7 条信息；第 2 层 3+3；其余折叠。
+const barberLayers = computed(() => buildBarberLayers({
+  planTitle: plan.value?.title ?? '',
+  targetName: targetCandidate.value?.name,
+  backupName: backupCandidate.value?.name,
+  topPriorities: topPriorities.value,
+  absoluteAvoids: absoluteAvoids.value,
+  sections: [
+    { label: '整体', text: overall.value },
+    { label: '顶部', text: top.value },
+    { label: '刘海', text: fringe.value },
+    { label: '两侧', text: sides.value },
+    { label: '鬓角', text: sideburns.value },
+    { label: '后脑', text: back.value },
+  ],
+}))
+const barberFaceLines = computed(() => barberLayers.value.face.infoItems.slice(1, -1))
+const barberConfirmLine = computed(() => barberLayers.value.face.infoItems.at(-1) ?? '')
+
+// 现场模式自动保持屏幕常亮；编辑模式不占用锁。
+const wakeLock = useScreenWakeLock({ auto: () => isBarberMode.value })
+watch(isBarberMode, (barber) => {
+  if (barber) {
+    void wakeLock.request()
+  } else {
+    void wakeLock.release()
+  }
+})
 
 const revokeCandidateUrls = () => {
   Object.values(candidateObjectUrls.value).forEach((url) => URL.revokeObjectURL(url))
@@ -150,6 +193,12 @@ const save = async () => {
   message.value = 'Tony卡已保存在当前设备，到店直接打开。'
   messageTone.value = 'success'
   document.title = pageTitle(`编辑Tony卡`)
+  // 请求持久存储，降低系统清理 IndexedDB 导致 Tony卡丢失的概率；拒绝则静默。
+  try {
+    void navigator.storage?.persist?.().catch(() => {})
+  } catch {
+    // 旧内核没有 storage API：忽略。
+  }
 }
 
 const exportPng = async () => {
@@ -524,6 +573,8 @@ onBeforeUnmount(() => {
           </button>
         </form>
 
+        <OfflineReadinessNote v-if="savedBrief" />
+
         <div class="brief-output-actions">
           <RouterLink
             v-if="savedBrief"
@@ -584,6 +635,22 @@ onBeforeUnmount(() => {
       </button>
     </nav>
 
+    <div
+      v-if="isBarberMode && savedBrief"
+      class="brief-barber-status brief-screen-only"
+    >
+      <OfflineReadinessNote />
+      <p
+        class="brief-wake-status"
+        role="status"
+        data-testid="wake-lock-status"
+      >
+        {{ wakeLock.active.value
+          ? '✓ 屏幕保持常亮中'
+          : '这台设备不能自动常亮，建议先调长自动锁屏时间' }}
+      </p>
+    </div>
+
     <article
       v-if="plan && hasValidCandidateCount && (!isBarberMode || savedBrief)"
       class="brief-preview"
@@ -593,26 +660,27 @@ onBeforeUnmount(() => {
       <header class="brief-preview__header">
         <p>Tony宝 · 给理发师看</p>
         <h2>{{ plan.title }}</h2>
-        <span>目标方案 · {{ targetCandidate?.name ?? '请选择' }}</span>
-        <span v-if="backupCandidate">备选 · {{ backupCandidate.name }}</span>
+        <template v-if="isBarberMode">
+          <span
+            v-for="line in barberFaceLines"
+            :key="line"
+          >{{ line }}</span>
+        </template>
+        <template v-else>
+          <span>目标方案 · {{ targetCandidate?.name ?? '请选择' }}</span>
+          <span v-if="backupCandidate">备选 · {{ backupCandidate.name }}</span>
+        </template>
       </header>
-      <img
-        v-if="targetImageSource"
-        :src="targetImageSource"
-        :alt="`${targetCandidate?.name ?? '目标候选'}目标参考图`"
-      >
-      <div
-        v-else
-        class="brief-preview__image-missing"
-      >
-        目标候选暂无可显示图片
-      </div>
+      <BriefStage
+        v-model="stageStateId"
+        :states="stageStates"
+      />
       <div class="brief-preview__lists">
         <section>
           <h3>最在意</h3>
           <ol>
             <li
-              v-for="(item, index) in topPriorities"
+              v-for="(item, index) in isBarberMode ? barberLayers.focus.topPriorities : topPriorities"
               :key="`preview-priority-${index}`"
             >
               {{ item || '待填写' }}
@@ -623,7 +691,7 @@ onBeforeUnmount(() => {
           <h3>绝对不要</h3>
           <ul>
             <li
-              v-for="(item, index) in absoluteAvoids"
+              v-for="(item, index) in isBarberMode ? barberLayers.focus.absoluteAvoids : absoluteAvoids"
               :key="`preview-avoid-${index}`"
             >
               {{ item || '待填写' }}
@@ -642,7 +710,47 @@ onBeforeUnmount(() => {
           <span>查看顶部、刘海和侧后细节</span>
           <small>需要时再展开</small>
         </summary>
-        <dl class="brief-preview__sections">
+        <template v-if="isBarberMode">
+          <dl class="brief-preview__sections">
+            <div
+              v-for="section in barberLayers.folded.sections"
+              :key="section.label"
+            >
+              <dt>{{ section.label }}</dt><dd>{{ section.text }}</dd>
+            </div>
+          </dl>
+          <div
+            v-if="barberLayers.folded.overflowPriorities.length || barberLayers.folded.overflowAvoids.length"
+            class="brief-preview__overflow"
+          >
+            <section v-if="barberLayers.folded.overflowPriorities.length">
+              <h3>更多在意</h3>
+              <ol>
+                <li
+                  v-for="(item, index) in barberLayers.folded.overflowPriorities"
+                  :key="`overflow-priority-${index}`"
+                >
+                  {{ item }}
+                </li>
+              </ol>
+            </section>
+            <section v-if="barberLayers.folded.overflowAvoids.length">
+              <h3>更多不要</h3>
+              <ul>
+                <li
+                  v-for="(item, index) in barberLayers.folded.overflowAvoids"
+                  :key="`overflow-avoid-${index}`"
+                >
+                  {{ item }}
+                </li>
+              </ul>
+            </section>
+          </div>
+        </template>
+        <dl
+          v-else
+          class="brief-preview__sections"
+        >
           <div><dt>整体</dt><dd>{{ overall || '待填写' }}</dd></div>
           <div><dt>顶部</dt><dd>{{ top || '待填写' }}</dd></div>
           <div><dt>刘海</dt><dd>{{ fringe || '待填写' }}</dd></div>
@@ -653,7 +761,7 @@ onBeforeUnmount(() => {
       </details>
       <footer>
         <b>请现场确认</b>
-        <p>请结合真实发质、发量与头型，再决定最终长度和层次。</p>
+        <p>{{ isBarberMode && barberConfirmLine ? barberConfirmLine.replace('请现场确认：', '') : '请结合真实发质、发量与头型，再决定最终长度和层次。' }}</p>
       </footer>
     </article>
   </section>

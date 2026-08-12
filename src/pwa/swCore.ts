@@ -19,14 +19,15 @@ interface ResponseLike {
   clone?: () => unknown
 }
 
+// 方法签名（而非属性箭头函数）刻意保持双变，让真实 Cache/fetch 与测试替身都能结构匹配。
 interface CacheLike {
-  match: (key: string) => Promise<unknown>
-  put: (key: string, value: unknown) => Promise<void>
+  match(key: string): Promise<unknown>
+  put(key: string, value: unknown): Promise<void>
 }
 
 interface CacheStorageLike {
-  keys: () => Promise<string[]>
-  delete: (name: string) => Promise<boolean>
+  keys(): Promise<string[]>
+  delete(name: string): Promise<boolean>
 }
 
 const CACHE_FIRST_PATTERN = /^\/(assets|brand|demo)\//

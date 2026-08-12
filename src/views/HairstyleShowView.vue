@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 
 import { curatedHairstyles } from '../features/hairstyle-library/curatedCatalog'
 import { useHairstyleLibraryStore } from '../features/hairstyle-library/libraryStore'
+import { useScreenWakeLock } from '../ui/useScreenWakeLock'
 
 const route = useRoute()
 const store = useHairstyleLibraryStore()
@@ -15,14 +16,13 @@ const curatedStyle = computed(() => isPrivate.value ? undefined : curatedHairsty
 const privateReference = computed(() => isPrivate.value ? store.getReference(id.value) : undefined)
 const privateImageUrl = ref<string | null>(null)
 const imageExpanded = ref(false)
-const wakeLockActive = ref(false)
+const { active: wakeLockActive, toggle: toggleWakeLock } = useScreenWakeLock()
 const regionLabels = {
   fringe: '刘海',
   top: '顶部',
   sides: '两侧',
   back: '后脑',
 } as const
-let wakeLockSentinel: { release: () => Promise<void> } | null = null
 const activeImageSource = computed(() => curatedStyle.value?.coverImage ?? privateImageUrl.value ?? '')
 const activeImageAlt = computed(() => curatedStyle.value?.imageAlt ?? (
   privateReference.value ? `${privateReference.value.name}的私人参考` : '发型参考大图'
@@ -56,25 +56,6 @@ watchEffect(() => {
 
 const loadLibrary = () => store.load()
 
-const toggleWakeLock = async () => {
-  if (wakeLockSentinel) {
-    await wakeLockSentinel.release()
-    wakeLockSentinel = null
-    wakeLockActive.value = false
-    return
-  }
-  const wakeLock = (navigator as Navigator & {
-    wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void> }> }
-  }).wakeLock
-  if (!wakeLock) return
-  try {
-    wakeLockSentinel = await wakeLock.request('screen')
-    wakeLockActive.value = true
-  } catch {
-    wakeLockActive.value = false
-  }
-}
-
 onMounted(() => {
   if (isPrivate.value) {
     void loadLibrary()
@@ -82,8 +63,6 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   releasePrivateImage()
-  void wakeLockSentinel?.release()
-  wakeLockSentinel = null
 })
 </script>
 

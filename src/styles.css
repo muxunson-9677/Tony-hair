@@ -1993,6 +1993,7 @@ button:focus-visible {
 }
 
 .brief-preview > img,
+.brief-preview .brief-stage img,
 .brief-preview__image-missing {
   display: block;
   width: 100%;
@@ -2000,6 +2001,36 @@ button:focus-visible {
   margin-top: 20px;
   object-fit: cover;
   object-position: center 28%;
+}
+
+.brief-stage {
+  margin: 0;
+}
+
+.brief-stage__switcher {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(23, 21, 18, 0.06);
+}
+
+.brief-stage__switcher button {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.brief-stage__switcher .brief-stage__tab--active {
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(22, 35, 57, 0.14);
 }
 
 .brief-preview__image-missing {
@@ -5746,6 +5777,7 @@ a:focus-visible {
   }
 
   .brief-preview > img,
+  .brief-preview .brief-stage img,
   .brief-preview__image-missing {
     max-height: 118mm;
     object-fit: cover;
@@ -5994,6 +6026,7 @@ a:focus-visible {
   }
 
   .brief-view--barber .brief-preview > img,
+  .brief-view--barber .brief-preview .brief-stage img,
   .brief-view--barber .brief-preview__image-missing {
     max-height: 34svh;
     margin-top: 14px;
