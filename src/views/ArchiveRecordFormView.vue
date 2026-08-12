@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { pageTitle } from '../config/brand'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -15,6 +15,8 @@ import {
 } from '../features/images/prepareLocalImage'
 import { editableRecordPhotoStages, initialRecordDecision } from '../features/archive/recordExperience'
 import { setPendingRecordAttribution } from '../features/archive/recordAttribution'
+import RegionMarkAnnotator from '../features/archive/components/RegionMarkAnnotator.vue'
+import type { RegionMark } from '../features/archive/types'
 import { tactileDirective as vTactile } from '../ui/tactile'
 
 type PhotoStage = HaircutPhoto['stage']
@@ -155,6 +157,8 @@ const setPhoto = async (stage: PhotoStage, event: Event) => {
     }
     const previewUrl = URL.createObjectURL(prepared.blob)
     replacementPhotosByStage[stage] = {
+      // 预先分配 id，保证区域标注在保存前就能锚定到这张照片。
+      id: crypto.randomUUID(),
       stage,
       image: prepared.blob,
       width: prepared.width,
@@ -199,6 +203,35 @@ const existingPhotoLabel = (stage: PhotoStage) => (
     ? `已保留：${managedPhotoStages.find((item) => item.stage === stage)?.label ?? stage}照片`
     : ''
 )
+
+// ②B 区域打标：锚定在剪后照片上，可选步骤。
+const regionMarks = ref<RegionMark[]>([])
+const existingAfterPhoto = computed(() => existingPhotos.value.find(({ stage }) => stage === 'after'))
+const existingAfterPhotoUrl = ref('')
+watch(existingAfterPhoto, (photo) => {
+  if (existingAfterPhotoUrl.value) {
+    URL.revokeObjectURL(existingAfterPhotoUrl.value)
+  }
+  existingAfterPhotoUrl.value = photo ? URL.createObjectURL(photo.image) : ''
+}, { immediate: true })
+
+const afterPhotoTarget = computed(() => {
+  const replacement = replacementPhotosByStage.after
+  const state = photoPreparationByStage.after
+  if (replacement && state?.status === 'ready') {
+    return { url: state.previewUrl, id: replacement.id }
+  }
+  const existing = existingAfterPhoto.value
+  return existing && existingAfterPhotoUrl.value
+    ? { url: existingAfterPhotoUrl.value, id: existing.id }
+    : null
+})
+const showRegionAnnotator = computed(() => (
+  (form.outcome === 'adjust' || form.outcome === 'avoid') && afterPhotoTarget.value !== null
+))
+const marksLostAnchor = computed(() => regionMarks.value.some((mark) => (
+  mark.photoId && mark.photoId !== afterPhotoTarget.value?.id
+)))
 
 const submit = async () => {
   localError.value = null
@@ -261,6 +294,7 @@ const submit = async () => {
     outcome: form.outcome as 'repeat' | 'adjust' | 'avoid',
     avoidRules,
     adjustmentNotes,
+    regionMarks: form.outcome === 'repeat' ? undefined : regionMarks.value,
     photos,
   })
   if (saved) {
@@ -311,6 +345,9 @@ onMounted(async () => {
       form.adjustmentNotes[index] = rule
     })
   }
+  if (record.outcome !== 'repeat') {
+    regionMarks.value = [...(record.regionMarks ?? [])]
+  }
   existingPhotos.value = [...store.photosByRecordId[record.id] ?? []]
   document.title = pageTitle('编辑剪后记录')
   initializing.value = false
@@ -319,6 +356,9 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   unmounted = true
   managedPhotoStages.forEach(({ stage }) => releasePhotoPreview(stage))
+  if (existingAfterPhotoUrl.value) {
+    URL.revokeObjectURL(existingAfterPhotoUrl.value)
+  }
 })
 </script>
 
@@ -503,6 +543,31 @@ onBeforeUnmount(() => {
           >
         </label>
       </div>
+
+      <section
+        v-if="showRegionAnnotator && afterPhotoTarget"
+        class="record-region-marks"
+        aria-labelledby="region-marks-title"
+      >
+        <h2 id="region-marks-title">
+          哪里出了问题？（可选）
+        </h2>
+        <p
+          v-if="marksLostAnchor"
+          class="record-region-marks__anchor-note"
+          role="status"
+        >
+          剪后照片已更换：之前的标注会保留文字说明，但不再显示在新照片上。
+        </p>
+        <RegionMarkAnnotator
+          :photo-url="afterPhotoTarget.url"
+          photo-alt="剪后照片"
+          :marks="regionMarks"
+          :photo-id="afterPhotoTarget.id"
+          :disabled="store.saving"
+          @update:marks="regionMarks = $event"
+        />
+      </section>
 
       <details
         class="record-extra-details record-basic-details"

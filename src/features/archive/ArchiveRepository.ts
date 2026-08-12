@@ -476,6 +476,7 @@ const PLAN_MEMORY_SOURCES = new Set([
   'adjustment_note',
   'avoid_rule',
   'brief_priority',
+  'region_mark',
 ])
 const PLAN_MEMORY_TEXT_LIMIT = 160
 const PLAN_MEMORY_GROUP_LIMIT = 3

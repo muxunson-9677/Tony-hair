@@ -10,6 +10,7 @@ import {
 } from '../features/archive/candidateSources'
 import { archiveDemoCandidates } from '../features/archive/demoCandidates'
 import { resolveCandidateDecisionSummary } from '../features/archive/candidateDecisionSummary'
+import { DIRECTION_LABELS, REGION_LABELS } from '../features/archive/regionMarks'
 import { isValidPlanCandidateCount } from '../features/archive/types'
 import type { Candidate } from '../features/archive/types'
 import { shouldDiscardPollDraftOnArchiveDeletion } from '../features/polls/archivePollDeletion'
@@ -299,6 +300,25 @@ onBeforeUnmount(() => {
             </li>
           </ul>
         </div>
+      </section>
+
+      <section
+        v-if="plan.regionRequests?.length"
+        class="plan-region-requests"
+        aria-labelledby="plan-region-requests-title"
+      >
+        <h2 id="plan-region-requests-title">
+          本次区域要求
+        </h2>
+        <ul>
+          <li
+            v-for="request in plan.regionRequests"
+            :key="request.region"
+          >
+            <b>{{ REGION_LABELS[request.region] }}</b>
+            <span>{{ DIRECTION_LABELS[request.direction] }}</span>
+          </li>
+        </ul>
       </section>
 
       <ol

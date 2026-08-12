@@ -25,13 +25,24 @@ import {
 import { isValidPlanCandidateCount } from '../features/archive/types'
 import type {
   Candidate,
+  HairRegion,
   HaircutPhoto,
   HaircutPlan,
   HaircutRecord,
   PlanMemoryItem,
   PlanMemoryKind,
   PlanMemorySource,
+  PlanRegionRequest,
+  RegionRequestDirection,
 } from '../features/archive/types'
+import {
+  DIRECTION_LABELS,
+  HAIR_REGIONS,
+  REGION_LABELS,
+  REGION_REQUEST_DIRECTIONS,
+  describeRegionConflict,
+  detectRegionConflicts,
+} from '../features/archive/regionMarks'
 import {
   buildPlanMemorySuggestions,
   swapAvoidSuggestion,
@@ -93,6 +104,10 @@ const candidateSourceDisclosure = ref<HTMLDetailsElement | null>(null)
 const memoryKeep = ref<MemoryEntryDraft[]>([])
 const memoryAvoid = ref<MemoryEntryDraft[]>([])
 const memoryOverflow = ref<MemoryEntryDraft[]>([])
+const regionRequests = ref<PlanRegionRequest[]>([])
+// 只在编辑回填时展开一次；不用 regionRequests.length 反应式绑定，
+// 否则用户取消最后一个选择时面板会突然收起。
+const regionRequestsOpen = ref(false)
 let memoryUiKey = 0
 let referenceRequest = 0
 let routeRequest = 0
@@ -393,6 +408,25 @@ const removeMemory = (group: 'keep' | 'avoid', index: number) => {
   list.value.splice(index, 1)
 }
 
+// ②B：本次区域要求。每区域一个方向，可点选取消。
+const requestedDirection = (region: HairRegion) => (
+  regionRequests.value.find((request) => request.region === region)?.direction
+)
+
+const toggleRegionDirection = (region: HairRegion, direction: RegionRequestDirection) => {
+  if (store.saving) {
+    return
+  }
+  const existing = requestedDirection(region)
+  const rest = regionRequests.value.filter((request) => request.region !== region)
+  regionRequests.value = existing === direction ? rest : [...rest, { region, direction }]
+}
+
+// 确定性冲突：只比对结构化的「区域×问题类型」，不做任何文本语义判断。
+const regionConflicts = computed(() => (
+  detectRegionConflicts(regionRequests.value, store.records)
+))
+
 const swapMemoryAvoid = (overflowIndex: number, avoidIndex: number) => {
   if (store.saving) {
     return
@@ -473,6 +507,7 @@ const submit = async () => {
     mode: form.mode,
     status: form.status,
     candidates: selectedCandidates.value.map(toCandidateDraft),
+    regionRequests: regionRequests.value,
     memories: [...memoryKeep.value, ...memoryAvoid.value].map((draft) => ({
       id: draft.id,
       kind: draft.kind,
@@ -543,6 +578,8 @@ const hydrateEditingPlan = () => {
   form.mode = plan.mode
   form.status = plan.status === 'ready' ? 'ready' : 'draft'
   selectedCandidates.value = existingCandidates.map(toSelectedCandidate)
+  regionRequests.value = [...(plan.regionRequests ?? [])]
+  regionRequestsOpen.value = regionRequests.value.length > 0
   hydratePlanMemoriesFromSnapshot(plan.id)
   rebuildPreviewUrls()
   document.title = pageTitle('调整下次剪法')
@@ -849,6 +886,69 @@ onBeforeUnmount(() => {
         @remove="removeMemory"
         @swap="swapMemoryAvoid"
       />
+
+      <details
+        class="region-requests"
+        :open="regionRequestsOpen"
+      >
+        <summary v-tactile>
+          <span>本次区域要求（可选）</span>
+          <small>逐个区域说清这次要怎么动，会和过去的打标对一遍</small>
+        </summary>
+        <div
+          class="region-requests__body"
+          aria-label="本次区域要求"
+        >
+          <div
+            v-for="region in HAIR_REGIONS"
+            :key="region"
+            class="region-requests__row"
+          >
+            <span class="region-requests__region">{{ REGION_LABELS[region] }}</span>
+            <div
+              class="region-requests__chips"
+              role="group"
+              :aria-label="`${REGION_LABELS[region]}的本次要求`"
+            >
+              <button
+                v-for="direction in REGION_REQUEST_DIRECTIONS"
+                :key="direction"
+                v-tactile
+                type="button"
+                class="region-requests__chip"
+                :aria-pressed="requestedDirection(region) === direction"
+                :disabled="store.saving"
+                @click="toggleRegionDirection(region, direction)"
+              >
+                {{ DIRECTION_LABELS[direction] }}
+              </button>
+            </div>
+          </div>
+
+          <div
+            v-if="regionConflicts.length > 0"
+            class="region-requests__conflicts"
+            role="alert"
+          >
+            <b>和过去的打标对不上</b>
+            <ul>
+              <li
+                v-for="conflict in regionConflicts"
+                :key="`${conflict.region}:${conflict.direction}`"
+              >
+                <span>{{ describeRegionConflict(conflict) }}</span>
+                <RouterLink
+                  v-tactile
+                  :to="`/archive/records/${conflict.markRecordId}`"
+                >
+                  查看当时的记录
+                </RouterLink>
+              </li>
+            </ul>
+            <small>只是提醒，最终由你决定，保存不受影响。</small>
+          </div>
+        </div>
+      </details>
 
       <section
         v-if="selectedCandidates.length > 0"

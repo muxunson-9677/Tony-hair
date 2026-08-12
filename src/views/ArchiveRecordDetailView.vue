@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
 import { consumePendingRecordAttribution } from '../features/archive/recordAttribution'
+import { regionMarkSummary } from '../features/archive/regionMarks'
 import type { HaircutPhoto } from '../features/archive/types'
 import { tactileDirective as vTactile } from '../ui/tactile'
 
@@ -35,6 +36,48 @@ const legacyPhotos = computed(() => photos.value.filter(({ id }) => (
   !comparisonPhotos.value.some((photo) => photo.id === id)
 )))
 const plan = computed(() => store.plans.find(({ id }) => id === record.value?.planId))
+
+// ②B：目标图 / 剪后图 / 标注 三图并排。
+const regionMarks = computed(() => {
+  const current = record.value
+  return current && current.outcome !== 'repeat' ? current.regionMarks ?? [] : []
+})
+const afterPhoto = computed(() => (
+  photos.value.find(({ stage }) => stage === 'after')
+    ?? photos.value.find(({ stage }) => stage === 'styled')
+    ?? photos.value.find(({ stage }) => stage === 'unstyled')
+))
+const anchoredMarks = computed(() => regionMarks.value
+  .map((mark, index) => ({ mark, number: index + 1 }))
+  .filter(({ mark }) => mark.photoId && mark.photoId === afterPhoto.value?.id))
+const targetCandidate = computed(() => {
+  const planId = record.value?.planId
+  if (!planId) {
+    return undefined
+  }
+  const brief = store.briefsByPlanId[planId]
+  if (!brief?.targetCandidateId) {
+    return undefined
+  }
+  return (store.candidatesByPlanId[planId] ?? []).find(({ id }) => id === brief.targetCandidateId)
+})
+const targetImageUrl = ref('')
+watch(targetCandidate, (candidate) => {
+  if (targetImageUrl.value.startsWith('blob:')) {
+    URL.revokeObjectURL(targetImageUrl.value)
+  }
+  targetImageUrl.value = candidate?.demoImagePath
+    ?? (candidate?.referenceImage ? URL.createObjectURL(candidate.referenceImage) : '')
+}, { immediate: true })
+const showTriptych = computed(() => (
+  record.value !== undefined
+  && record.value.outcome !== 'repeat'
+  && regionMarks.value.length > 0
+))
+const dotStyle = (x: number, y: number) => ({
+  left: `${(x * 100).toFixed(2)}%`,
+  top: `${(y * 100).toFixed(2)}%`,
+})
 const recordAvoidRules = computed(() => store.avoidRules.filter((rule) => (
   rule.recordId === recordId.value && rule.active
 )))
@@ -76,7 +119,12 @@ onMounted(async () => {
     document.title = pageTitle(`${record.value.styleName}｜剪后记录`)
   }
 })
-onBeforeUnmount(revokePhotoUrls)
+onBeforeUnmount(() => {
+  revokePhotoUrls()
+  if (targetImageUrl.value.startsWith('blob:')) {
+    URL.revokeObjectURL(targetImageUrl.value)
+  }
+})
 </script>
 
 <template>
@@ -185,6 +233,89 @@ onBeforeUnmount(revokePhotoUrls)
           <figcaption>{{ stageLabels[photo.stage] }}</figcaption>
         </figure>
       </div>
+
+      <section
+        v-if="showTriptych"
+        class="record-triptych"
+        aria-labelledby="record-triptych-title"
+      >
+        <p class="section-index">
+          问题区域存档
+        </p>
+        <h2 id="record-triptych-title">
+          当时想剪的 · 实际剪成的 · 哪里出了问题
+        </h2>
+        <div class="record-triptych__grid">
+          <figure class="record-triptych__panel">
+            <img
+              v-if="targetImageUrl"
+              :src="targetImageUrl"
+              :alt="`${record.styleName}的目标参考图`"
+            >
+            <div
+              v-else
+              class="record-triptych__placeholder"
+            >
+              没有关联目标图
+            </div>
+            <figcaption>当时想剪的</figcaption>
+          </figure>
+          <figure class="record-triptych__panel">
+            <img
+              v-if="afterPhoto"
+              :src="photoUrls[afterPhoto.id]"
+              :alt="`${record.styleName}的剪后照片`"
+            >
+            <div
+              v-else
+              class="record-triptych__placeholder"
+            >
+              没有剪后照片
+            </div>
+            <figcaption>实际剪成的</figcaption>
+          </figure>
+          <figure class="record-triptych__panel record-triptych__panel--marks">
+            <div
+              v-if="afterPhoto && anchoredMarks.length > 0"
+              class="record-triptych__annotated"
+            >
+              <img
+                :src="photoUrls[afterPhoto.id]"
+                :alt="`${record.styleName}的问题区域标注图`"
+              >
+              <span
+                v-for="({ mark, number }) in anchoredMarks"
+                :key="mark.id"
+                class="region-annotator__dot"
+                :style="dotStyle(mark.x, mark.y)"
+                aria-hidden="true"
+              >{{ number }}</span>
+            </div>
+            <div
+              v-else
+              class="record-triptych__placeholder"
+            >
+              标注照片已更换，仅保留文字说明
+            </div>
+            <figcaption>哪里出了问题</figcaption>
+          </figure>
+        </div>
+        <ol
+          class="record-triptych__legend"
+          aria-label="问题区域清单"
+        >
+          <li
+            v-for="(mark, index) in regionMarks"
+            :key="mark.id"
+          >
+            <span
+              class="region-annotator__list-index"
+              aria-hidden="true"
+            >{{ index + 1 }}</span>
+            {{ regionMarkSummary(mark) }}
+          </li>
+        </ol>
+      </section>
 
       <details
         v-if="legacyPhotos.length"

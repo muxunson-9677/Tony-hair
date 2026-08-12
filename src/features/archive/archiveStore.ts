@@ -429,8 +429,11 @@ export const createArchiveStore = (
       const existingCandidates = candidatesByPlanId.value[planId] ?? []
       const existingMemories = planMemoryByPlanId.value[planId] ?? []
       // regionRequests 未提供时保留原值，提供空数组则视为清空。
+      // map 成普通对象：Vue reactive 代理无法通过 IndexedDB 的 structuredClone。
       const regionRequests: readonly PlanRegionRequest[] | undefined = draft.regionRequests
-        ? (draft.regionRequests.length > 0 ? draft.regionRequests : undefined)
+        ? (draft.regionRequests.length > 0
+          ? draft.regionRequests.map(({ region, direction }) => ({ region, direction }))
+          : undefined)
         : existingPlan?.regionRequests
       const plan: HaircutPlan = {
         id: planId,
