@@ -5,6 +5,7 @@ import { useArchiveStore } from '../features/archive/archiveStore'
 import type { HaircutPhoto } from '../features/archive/types'
 import { curatedHairstyles } from '../features/hairstyle-library/curatedCatalog'
 import { useHairstyleLibraryStore } from '../features/hairstyle-library/libraryStore'
+import { daysSinceLastHaircut, selectRepeatThumbnailPhoto } from '../features/home/homeMemory'
 import { resolveHomeAction, resolveHomeEntrances } from '../features/home/resolveHomeAction'
 import { resolveHomeFavorite } from '../features/home/resolveHomeFavorite'
 import { useLocalDayClock } from '../features/home/useLocalDayClock'
@@ -66,6 +67,29 @@ const secondaryEntrances = computed(() => homeEntrances.value.filter(({ to }) =>
   to !== homeAction.value.to
 )))
 
+// 补充 1：距上次理发天数（已建档且有记录时才显示），满意记录优先配剪后缩略图。
+const daysSinceCut = computed(() => (
+  store.profile ? daysSinceLastHaircut(latestRecord.value?.date, currentTime.value) : null
+))
+const repeatThumbnailPhoto = computed(() => (
+  daysSinceCut.value === null
+    ? undefined
+    : selectRepeatThumbnailPhoto(store.records, store.photosByRecordId)
+))
+const repeatThumbnailUrl = ref<string | null>(null)
+
+// 补充 1：当前活动计划带有记忆快照时，入口处提示已带入的经验条数。
+const activePlanMemories = computed(() => {
+  const activePlan = store.plans.find(({ profileId, status }) => (
+    profileId === store.profile?.id && (status === 'draft' || status === 'ready')
+  ))
+  if (!activePlan) {
+    return null
+  }
+  const count = (store.planMemoryByPlanId[activePlan.id] ?? []).length
+  return count > 0 ? { planId: activePlan.id, count } : null
+})
+
 const actionContext = computed(() => {
   switch (homeAction.value.kind) {
     case 'choose_plan':
@@ -97,6 +121,13 @@ watch(latestPhoto, (photo) => {
   historyPhotoUrl.value = photo ? URL.createObjectURL(photo.image) : null
 }, { immediate: true })
 
+watch(repeatThumbnailPhoto, (photo) => {
+  if (repeatThumbnailUrl.value) {
+    URL.revokeObjectURL(repeatThumbnailUrl.value)
+  }
+  repeatThumbnailUrl.value = photo ? URL.createObjectURL(photo.image) : null
+}, { immediate: true })
+
 onMounted(() => {
   store.load()
   libraryStore.load()
@@ -104,6 +135,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (historyPhotoUrl.value) {
     URL.revokeObjectURL(historyPhotoUrl.value)
+  }
+  if (repeatThumbnailUrl.value) {
+    URL.revokeObjectURL(repeatThumbnailUrl.value)
   }
 })
 </script>
@@ -159,6 +193,18 @@ onBeforeUnmount(() => {
           v-else
           class="home-decision"
         >
+          <p
+            v-if="daysSinceCut !== null"
+            class="home-days-since"
+            data-testid="home-days-since"
+          >
+            <img
+              v-if="repeatThumbnailUrl"
+              :src="repeatThumbnailUrl"
+              alt="上次满意发型的剪后照片"
+            >
+            <span>距离上次理发 {{ daysSinceCut }} 天</span>
+          </p>
           <p>{{ actionContext }}</p>
           <RouterLink
             v-tactile
@@ -168,6 +214,15 @@ onBeforeUnmount(() => {
           >
             <span>{{ homeAction.label }}</span>
             <AppIcon name="check" />
+          </RouterLink>
+          <RouterLink
+            v-if="activePlanMemories"
+            v-tactile
+            class="home-memory-link"
+            data-testid="home-memory-link"
+            :to="`/archive/plans/${activePlanMemories.planId}`"
+          >
+            已带上 {{ activePlanMemories.count }} 条你的经验
           </RouterLink>
           <nav
             v-if="secondaryEntrances.length"

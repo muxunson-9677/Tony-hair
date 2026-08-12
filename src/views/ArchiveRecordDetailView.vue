@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
+import { consumePendingRecordAttribution } from '../features/archive/recordAttribution'
 import type { HaircutPhoto } from '../features/archive/types'
 import { tactileDirective as vTactile } from '../ui/tactile'
 
@@ -40,6 +41,7 @@ const recordStandardStyles = computed(() => store.standardStyles.filter((style) 
   style.recordId === recordId.value && style.active
 )))
 const photoUrls = ref<Record<string, string>>({})
+const attributionMessage = ref<string | null>(null)
 
 const revokePhotoUrls = () => {
   Object.values(photoUrls.value).forEach((url) => URL.revokeObjectURL(url))
@@ -67,6 +69,7 @@ const deleteRecord = async () => {
 }
 
 onMounted(async () => {
+  attributionMessage.value = consumePendingRecordAttribution(recordId.value)
   await store.load()
   if (record.value) {
     document.title = `${record.value.styleName}｜剪后记录｜咋剪发`
@@ -129,6 +132,14 @@ onBeforeUnmount(revokePhotoUrls)
     </div>
 
     <template v-else>
+      <p
+        v-if="attributionMessage"
+        class="record-attribution-note"
+        role="status"
+      >
+        {{ attributionMessage }}
+      </p>
+
       <header class="record-detail-header">
         <p class="eyebrow">
           这次剪完的真实结果 · 仅保存在本机

@@ -13,6 +13,7 @@ import {
   type PreparedLocalImage,
 } from '../features/images/prepareLocalImage'
 import { editableRecordPhotoStages, initialRecordDecision } from '../features/archive/recordExperience'
+import { setPendingRecordAttribution } from '../features/archive/recordAttribution'
 import { tactileDirective as vTactile } from '../ui/tactile'
 
 type PhotoStage = HaircutPhoto['stage']
@@ -262,6 +263,7 @@ const submit = async () => {
     photos,
   })
   if (saved) {
+    setPendingRecordAttribution(saved.record.id, saved.record.outcome)
     await router.push(`/archive/records/${saved.record.id}`)
   }
 }
