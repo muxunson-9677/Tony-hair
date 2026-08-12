@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, watchEffect } from 'vue'
+import { pageTitle } from '../config/brand'
 import { useRoute } from 'vue-router'
 
 import StyleActionDock from '../features/hairstyle-library/components/StyleActionDock.vue'
@@ -48,8 +49,8 @@ watchEffect(() => {
     return
   }
   document.title = style.value
-    ? `${style.value.name}｜咋剪发`
-    : '发型不可用｜咋剪发'
+    ? pageTitle(`${style.value.name}`)
+    : pageTitle('发型不可用')
 })
 
 const loadLibrary = () => Promise.all([store.load(), archiveStore.load()])

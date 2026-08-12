@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { pageTitle } from '../config/brand'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -544,7 +545,7 @@ const hydrateEditingPlan = () => {
   selectedCandidates.value = existingCandidates.map(toSelectedCandidate)
   hydratePlanMemoriesFromSnapshot(plan.id)
   rebuildPreviewUrls()
-  document.title = '调整下次剪法｜咋剪发'
+  document.title = pageTitle('调整下次剪法')
 }
 
 const initializeForRoute = async () => {

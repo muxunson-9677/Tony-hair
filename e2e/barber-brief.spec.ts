@@ -91,7 +91,7 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
 
     await expect(page.getByRole('link', { name: '准备给理发师看的内容' })).toBeVisible({ timeout: 5_000 })
     await page.getByRole('link', { name: '准备给理发师看的内容' }).click()
-    await expect(page.getByRole('heading', { level: 1, name: '创建理发师沟通卡' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: '创建Tony卡' })).toBeVisible()
     await page.getByLabel('目标候选：纹理短碎发').check()
     await page.getByText('需要修改时展开').click()
     await page.getByLabel('整体').fill('整体保持轻盈轮廓')
@@ -104,13 +104,13 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
     await page.getByLabel('绝对不要 1', { exact: true }).fill('不要推白')
     await page.getByLabel('整体').scrollIntoViewIfNeeded()
     await page.screenshot({ path: testInfo.outputPath('brief-editor-390x844.png') })
-    await page.getByRole('button', { name: '保存沟通卡' }).click()
+    await page.getByRole('button', { name: '保存Tony卡' }).click()
 
-    await expect(page.getByRole('heading', { level: 1, name: '编辑理发师沟通卡' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: '编辑Tony卡' })).toBeVisible()
     await page.reload()
     await page.getByText('需要修改时展开').click()
     await expect(page.getByLabel('整体')).toHaveValue('整体保持轻盈轮廓')
-    const refreshedPreview = page.getByRole('region', { name: '理发师沟通卡预览' })
+    const refreshedPreview = page.getByRole('region', { name: 'Tony卡预览' })
     await expect(refreshedPreview).toContainText('请现场确认')
     await refreshedPreview.scrollIntoViewIfNeeded()
     await page.screenshot({ path: testInfo.outputPath('brief-preview-390x844.png') })
@@ -120,7 +120,7 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
     const download = await downloadPromise
     const exportedPath = testInfo.outputPath('barber-brief-export.png')
     await download.saveAs(exportedPath)
-    expect(download.suggestedFilename()).toMatch(/^咋剪发-.*\.png$/)
+    expect(download.suggestedFilename()).toMatch(/^Tony宝-.*\.png$/)
     expect((await stat(exportedPath)).size).toBeGreaterThan(0)
 
     await page.evaluate(() => {
@@ -130,7 +130,7 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
       }
       browser.print = () => browser.sessionStorage.setItem('__brief_print_called__', 'true')
     })
-    await page.getByRole('button', { name: '打印沟通卡' }).click()
+    await page.getByRole('button', { name: '打印Tony卡' }).click()
     expect(await page.evaluate(() => {
       const browser = globalThis as unknown as {
         sessionStorage: { getItem(key: string): string | null }
@@ -140,12 +140,12 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
     await page.emulateMedia({ media: 'print' })
     await expect(page.getByRole('navigation', { name: '主导航' })).toBeHidden()
     await expect(page.locator('.brief-screen-only')).toBeHidden()
-    await expect(page.getByRole('region', { name: '理发师沟通卡预览' })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Tony卡预览' })).toBeVisible()
     await page.emulateMedia({ media: 'screen' })
 
     await page.getByLabel('整体').fill('编辑后的整体要求')
     await page.getByRole('button', { name: '保存修改' }).click()
-    await expect(page.getByRole('region', { name: '理发师沟通卡预览' })).toContainText('编辑后的整体要求')
+    await expect(page.getByRole('region', { name: 'Tony卡预览' })).toContainText('编辑后的整体要求')
 
     for (const viewport of [
       { width: 360, height: 800 },
@@ -185,7 +185,7 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
     }
 
     page.once('dialog', (dialog) => dialog.accept())
-    await page.getByRole('button', { name: '删除沟通卡' }).click()
+    await page.getByRole('button', { name: '删除Tony卡' }).click()
     await expect(page.getByRole('heading', { level: 1, name: '夏末短发计划' })).toBeVisible()
     await expect(page.getByRole('link', { name: '准备给理发师看的内容' })).toBeVisible()
     await expect(page.getByRole('img', { name: /纹理短碎发/ })).toBeVisible()

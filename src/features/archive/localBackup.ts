@@ -107,7 +107,7 @@ const parseBackup = (content: string): BackupPayload => {
   try {
     parsed = JSON.parse(content)
   } catch {
-    throw new Error('这不是有效的咋剪发备份文件。')
+    throw new Error('这不是有效的Tony宝备份文件。')
   }
   if (
     !parsed
@@ -115,7 +115,7 @@ const parseBackup = (content: string): BackupPayload => {
     || (parsed as { format?: unknown }).format !== BACKUP_FORMAT
     || (parsed as { version?: unknown }).version !== BACKUP_VERSION
   ) {
-    throw new Error('这不是受支持的咋剪发备份文件。')
+    throw new Error('这不是受支持的Tony宝备份文件。')
   }
   const tables = (parsed as { tables?: unknown }).tables
   if (!tables || typeof tables !== 'object') {

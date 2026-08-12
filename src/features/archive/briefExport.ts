@@ -1,3 +1,5 @@
+import { BARBER_CARD_NAME, PRODUCT_NAME } from '../../config/brand'
+
 export interface BriefExportContent {
   readonly planTitle: string
   readonly candidateName: string
@@ -110,7 +112,7 @@ export const createBriefExportLayout = (
     }
   }
 
-  addLine('咋剪发 · 理发师沟通卡', '700 28px sans-serif', ACCENT, 52)
+  addLine(`${PRODUCT_NAME} · ${BARBER_CARD_NAME}`, '700 28px sans-serif', ACCENT, 52)
   addWrapped(content.planTitle, '900 64px sans-serif', INK, 76)
   addWrapped(`目标方案 · ${content.candidateName}`, '700 32px sans-serif', WARM_GRAY, 46)
   y += 28
@@ -187,7 +189,7 @@ export const isLocalBriefImageSource = (source: string, pageUrl: string) => {
 
 const assertLocalImageSource = (source: string) => {
   if (!isLocalBriefImageSource(source, window.location.href)) {
-    throw new Error('沟通卡只允许导出当前设备或本站图片')
+    throw new Error('Tony卡只允许导出当前设备或本站图片')
   }
 }
 
@@ -280,7 +282,7 @@ const safeFilenamePart = (value: string) => (
     .replace(/-+/g, '-')
     .replace(/^[ .-]+|[ .-]+$/g, '')
     .slice(0, 48)
-  || '沟通卡'
+  || 'Tony卡'
 )
 
 export const exportBriefPng = async (
@@ -325,7 +327,7 @@ export const exportBriefPng = async (
   }
 
   const blob = await canvasToPng(canvas)
-  const filename = `咋剪发-${safeFilenamePart(content.planTitle)}-${safeFilenamePart(content.candidateName)}.png`
+  const filename = `${PRODUCT_NAME}-${safeFilenamePart(content.planTitle)}-${safeFilenamePart(content.candidateName)}.png`
   const objectUrl = dependencies.createObjectURL(blob)
   let anchor: HTMLAnchorElement | undefined
   try {

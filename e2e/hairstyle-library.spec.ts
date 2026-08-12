@@ -380,7 +380,7 @@ const fillBrief = async (page: Page, targetName: string) => {
   await page.getByLabel('后脑').fill('后脑连接自然')
   await page.getByLabel('最在意 1', { exact: true }).fill('两侧不要炸')
   await page.getByLabel('绝对不要 1', { exact: true }).fill('不要推白')
-  await page.getByRole('button', { name: '保存沟通卡' }).click()
+  await page.getByRole('button', { name: '保存Tony卡' }).click()
 }
 
 test.beforeEach(async ({ page }, testInfo) => {
@@ -940,7 +940,7 @@ test('keeps a processed private reference local while its mixed-plan snapshot su
   await page.getByRole('link', { name: '准备给理发师看的内容' }).click()
   await fillBrief(page, '耳侧长度参考')
   const briefPath = new URL(page.url()).pathname
-  await expect(page.getByRole('region', { name: '理发师沟通卡预览' })).toContainText('耳侧长度参考')
+  await expect(page.getByRole('region', { name: 'Tony卡预览' })).toContainText('耳侧长度参考')
   await captureSettled(page, testInfo, 'mixed-brief-390x844.png', { width: 390, height: 844 })
 
   await page.goto(referencePath)
@@ -954,7 +954,7 @@ test('keeps a processed private reference local while its mixed-plan snapshot su
   await expect(page.getByRole('img', { name: '耳侧长度参考本地候选图' })).toBeVisible()
   await expect(page.getByRole('img', { name: '齐颌短鲍伯预制示例' })).toBeVisible()
   await page.goto(briefPath)
-  await expect(page.getByRole('region', { name: '理发师沟通卡预览' })).toContainText('耳侧长度参考')
+  await expect(page.getByRole('region', { name: 'Tony卡预览' })).toContainText('耳侧长度参考')
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: '导出 PNG' }).click()
   const download = await downloadPromise
@@ -1018,7 +1018,7 @@ test('creates a one-snapshot repeat plan and its communication card from an acti
   await expect(page.getByText('01 · 真实剪后记录', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: '准备给理发师看的内容' }).click()
   await fillBrief(page, '上次满意短发')
-  await expect(page.getByRole('region', { name: '理发师沟通卡预览' })).toContainText('上次满意短发')
+  await expect(page.getByRole('region', { name: 'Tony卡预览' })).toContainText('上次满意短发')
   await captureSettled(page, testInfo, 'repeat-brief-390x844.png', { width: 390, height: 844 })
   await captureSettled(page, testInfo, 'repeat-brief-1440x900.png', { width: 1440, height: 900 })
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { pageTitle } from '../config/brand'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
@@ -146,9 +147,9 @@ const save = async () => {
     return
   }
   hydrate()
-  message.value = '沟通卡已保存在当前设备。'
+  message.value = 'Tony卡已保存在当前设备，到店直接打开。'
   messageTone.value = 'success'
-  document.title = `编辑理发师沟通卡｜咋剪发`
+  document.title = pageTitle(`编辑Tony卡`)
 }
 
 const exportPng = async () => {
@@ -203,7 +204,7 @@ const deleteBrief = async () => {
   if (
     !savedBrief.value
     || !currentPlan
-    || !window.confirm(`确定删除“${currentPlan.title}”的沟通卡吗？计划与候选仍会保留。`)
+    || !window.confirm(`确定删除“${currentPlan.title}”的Tony卡吗？计划与候选仍会保留。`)
   ) {
     return
   }
@@ -224,8 +225,8 @@ onMounted(async () => {
   hydrated.value = true
   if (plan.value) {
     document.title = isBarberMode.value
-      ? '给理发师看｜咋剪发'
-      : `${savedBrief.value ? '编辑' : '创建'}理发师沟通卡｜咋剪发`
+      ? pageTitle('给理发师看')
+      : pageTitle(`${savedBrief.value ? '编辑' : '创建'}Tony卡`)
   }
 })
 onBeforeUnmount(() => {
@@ -253,19 +254,19 @@ onBeforeUnmount(() => {
 
       <div v-if="store.loading || !hydrated">
         <h1 id="brief-state-title">
-          理发师沟通卡
+          Tony卡
         </h1>
         <p
           class="archive-loading"
           role="status"
         >
-          正在读取本地沟通卡…
+          正在读取本地Tony卡…
         </p>
       </div>
 
       <div v-else-if="store.error && !message">
         <h1 id="brief-state-title">
-          暂时无法读取沟通卡
+          暂时无法读取Tony卡
         </h1>
         <p
           class="form-alert"
@@ -297,7 +298,7 @@ onBeforeUnmount(() => {
         class="archive-empty archive-empty--inner"
       >
         <h1 id="brief-title">
-          这个计划不能创建沟通卡
+          这个计划不能创建Tony卡
         </h1>
         <p>{{ plan.mode === 'repeat' ? '复刻计划需要保留 1 个标准发型快照。' : '探索计划需要保留 2—4 个候选。' }}旧数据不会被删除，请先返回计划确认。</p>
       </div>
@@ -308,7 +309,7 @@ onBeforeUnmount(() => {
             给理发师看的话 · 仅保存在本机
           </p>
           <h1 id="brief-title">
-            <span class="visually-hidden">{{ savedBrief ? '编辑理发师沟通卡' : '创建理发师沟通卡' }}</span>
+            <span class="visually-hidden">{{ savedBrief ? '编辑Tony卡' : '创建Tony卡' }}</span>
             <span aria-hidden="true">给理发师看</span>
           </h1>
           <p>{{ plan.title }} · 主图、最在意和绝对不要，十秒说清。</p>
@@ -319,14 +320,14 @@ onBeforeUnmount(() => {
           aria-label="本地存储说明"
         >
           <b>仅保存在当前设备</b>
-          <p>不上传、不创建账号、不同步。清理浏览器数据、无痕模式或更换设备，都可能让沟通卡丢失。</p>
+          <p>不上传、不创建账号、不同步。清理浏览器数据、无痕模式或更换设备，都可能让Tony卡丢失。</p>
         </aside>
 
         <p
           v-if="legacyTargetMissing"
           class="legacy-brief-note"
         >
-          旧版沟通卡未记录目标候选，已预选计划中的第一项；保存后才会更新。
+          旧版Tony卡未记录目标候选，已预选计划中的第一项；保存后才会更新。
         </p>
 
         <p
@@ -516,7 +517,7 @@ onBeforeUnmount(() => {
             v-tactile
             class="submit-button"
             type="submit"
-            :aria-label="savedBrief ? '保存修改' : '保存沟通卡'"
+            :aria-label="savedBrief ? '保存修改' : '保存Tony卡'"
             :disabled="store.saving"
           >
             {{ savedBrief ? '保存修改' : '准备好给理发师看' }}
@@ -545,7 +546,7 @@ onBeforeUnmount(() => {
             type="button"
             @click="printBrief"
           >
-            打印沟通卡
+            打印Tony卡
           </button>
         </div>
 
@@ -557,7 +558,7 @@ onBeforeUnmount(() => {
           :disabled="store.saving"
           @click="deleteBrief"
         >
-          删除沟通卡
+          删除Tony卡
         </button>
       </template>
     </div>
@@ -587,10 +588,10 @@ onBeforeUnmount(() => {
       v-if="plan && hasValidCandidateCount && (!isBarberMode || savedBrief)"
       class="brief-preview"
       role="region"
-      aria-label="理发师沟通卡预览"
+      aria-label="Tony卡预览"
     >
       <header class="brief-preview__header">
-        <p>咋剪发 · 给理发师看</p>
+        <p>Tony宝 · 给理发师看</p>
         <h2>{{ plan.title }}</h2>
         <span>目标方案 · {{ targetCandidate?.name ?? '请选择' }}</span>
         <span v-if="backupCandidate">备选 · {{ backupCandidate.name }}</span>

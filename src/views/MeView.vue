@@ -34,7 +34,7 @@ const exportData = async () => {
     downloadUrl = URL.createObjectURL(new Blob([content], { type: 'application/json' }))
     const link = document.createElement('a')
     link.href = downloadUrl
-    link.download = `咋剪发-本机备份-${new Date().toISOString().slice(0, 10)}.json`
+    link.download = `Tony宝-本机备份-${new Date().toISOString().slice(0, 10)}.json`
     document.body.append(link)
     link.click()
     link.remove()

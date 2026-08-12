@@ -202,7 +202,7 @@ test('runs real same-origin MediaPipe under strict CSP and exports only a flat l
   expect(flatBytes.byteLength).toBeLessThanOrEqual(1_500_000)
   expect(flatBytes.includes(Buffer.from(PRIVATE_SOURCE_MARKER))).toBe(false)
   expect(flatBytes.includes(Buffer.from('Exif\0\0', 'binary'))).toBe(false)
-  expect(download.suggestedFilename()).toMatch(/^咋剪发-隐私遮罩-\d{4}-\d{2}-\d{2}\.(webp|jpg)$/)
+  expect(download.suggestedFilename()).toMatch(/^Tony宝-隐私遮罩-\d{4}-\d{2}-\d{2}\.(webp|jpg)$/)
 
   expectPrivacyLocalOnly(traffic, origin, [
     Buffer.from(PRIVATE_SOURCE_MARKER),

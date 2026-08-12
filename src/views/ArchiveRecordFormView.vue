@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { pageTitle } from '../config/brand'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -311,7 +312,7 @@ onMounted(async () => {
     })
   }
   existingPhotos.value = [...store.photosByRecordId[record.id] ?? []]
-  document.title = '编辑剪后记录｜咋剪发'
+  document.title = pageTitle('编辑剪后记录')
   initializing.value = false
 })
 

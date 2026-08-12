@@ -532,7 +532,7 @@ export const createArchiveStore = (
     const currentProfile = profile.value
     const plan = plans.value.find(({ id }) => id === planId)
     if (!currentProfile || !plan || plan.profileId !== currentProfile.id) {
-      error.value = '没有找到要保存沟通卡的计划。'
+      error.value = '没有找到要保存Tony卡的计划。'
       return null
     }
     const candidates = candidatesByPlanId.value[planId] ?? []

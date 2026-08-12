@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
+import { pageTitle } from '../config/brand'
 import { useRoute, useRouter } from 'vue-router'
 
 import { buildArchivePlanReturnPath } from '../features/archive/archiveReturnPath'
@@ -46,8 +47,8 @@ watchEffect(() => {
     return
   }
   document.title = reference.value
-    ? `${reference.value.name}｜咋剪发`
-    : '私人参考｜咋剪发'
+    ? pageTitle(`${reference.value.name}`)
+    : pageTitle('私人参考')
 })
 
 const loadLibrary = () => store.load()

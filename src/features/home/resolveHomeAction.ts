@@ -144,7 +144,7 @@ export const resolveHomeAction = (input: HomeActionInput): HomeAction => {
     ) {
       return {
         kind: 'open_ready_brief',
-        label: '打开理发师沟通卡',
+        label: '打开Tony卡',
         to: `/archive/plans/${activePlan.id}/brief`,
       }
     }
@@ -169,7 +169,7 @@ export const resolveHomeAction = (input: HomeActionInput): HomeAction => {
       return input.briefsByPlanId[activePlan.id]
         ? {
             kind: 'open_brief',
-            label: '打开沟通卡',
+            label: '打开Tony卡',
             to: `/archive/plans/${activePlan.id}/brief`,
           }
         : {

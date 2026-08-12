@@ -20,7 +20,7 @@ const releaseDownload = () => {
 const downloadFlattened = (result: MaskExportResult) => {
   releaseDownload()
   const objectUrl = URL.createObjectURL(result.blob)
-  const filename = `咋剪发-隐私遮罩-${new Date().toISOString().slice(0, 10)}.${result.mimeType === 'image/webp' ? 'webp' : 'jpg'}`
+  const filename = `Tony宝-隐私遮罩-${new Date().toISOString().slice(0, 10)}.${result.mimeType === 'image/webp' ? 'webp' : 'jpg'}`
   downloadUrl.value = objectUrl
   downloadFilename.value = filename
   const link = document.createElement('a')

@@ -109,7 +109,7 @@ describe('archive routes and forms', () => {
     expect(screen.getByRole('link', { name: '返回档案' }).getAttribute('href')).toBe('/archive')
     expect(screen.queryByRole('navigation', { name: '主导航' })).toBeNull()
     expect(document.querySelector('#main-content')?.classList.contains('app-main--without-nav')).toBe(true)
-    await waitFor(() => expect(document.title).toBe('建立发型档案｜咋剪发'))
+    await waitFor(() => expect(document.title).toBe('建立发型档案｜Tony宝'))
   })
 
   test('shows a storage load error before the missing-profile plan state', async () => {
@@ -157,7 +157,7 @@ describe('archive routes and forms', () => {
     expect(await screen.findByRole('region', { name: '下一步' })).toBeTruthy()
     expect(screen.getByRole('link', { name: '准备下次怎么剪' }).getAttribute('data-tactile')).toBe('true')
     expect(screen.getByRole('link', { name: '记录这次理发' }).getAttribute('data-tactile')).toBe('true')
-    expect(screen.queryByRole('heading', { name: '还没有沟通卡' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: '还没有Tony卡' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '标准发型' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '避雷规则' })).toBeNull()
     expect(screen.queryByText(/还没有剪后记录/)).toBeNull()
@@ -483,7 +483,7 @@ describe('archive routes and forms', () => {
     await renderAt('/archive/plans/missing/brief')
     const errorHeading = await screen.findByRole('heading', {
       level: 1,
-      name: '暂时无法读取沟通卡',
+      name: '暂时无法读取Tony卡',
     })
     expect(errorHeading.closest('section')?.getAttribute('aria-labelledby')).toBe(errorHeading.id)
 
@@ -520,7 +520,7 @@ describe('archive routes and forms', () => {
     expect(screen.getByText('微卷 · 细发丝 · 发量适中')).toBeTruthy()
     expect(screen.getByRole('region', { name: '下一步' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: '最近剪后记录' })).toBeNull()
-    expect(screen.queryByRole('heading', { name: '还没有沟通卡' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: '还没有Tony卡' })).toBeNull()
 
     await fireEvent.click(screen.getByRole('link', { name: '编辑档案' }))
     await fireEvent.update(await screen.findByLabelText('称呼'), '林同学')
@@ -651,7 +651,7 @@ describe('archive routes and forms', () => {
       height: 2200,
     })
     await router.push(`/archive/plans/${planId}/brief`)
-    expect(await screen.findByRole('heading', { level: 1, name: '创建理发师沟通卡' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: '创建Tony卡' })).toBeTruthy()
     await fireEvent.update(screen.getByLabelText('整体'), '按快照复刻整体轮廓')
     await fireEvent.update(screen.getByLabelText('顶部'), '保留顶部长度')
     await fireEvent.update(screen.getByLabelText('刘海'), '自然向前')
@@ -660,8 +660,8 @@ describe('archive routes and forms', () => {
     await fireEvent.update(screen.getByLabelText('后脑'), '贴合收干净')
     await fireEvent.update(screen.getByLabelText('最在意 1'), '轮廓一致')
     await fireEvent.update(screen.getByLabelText('绝对不要 1'), '不要打薄')
-    await fireEvent.click(screen.getByRole('button', { name: '保存沟通卡' }))
-    expect((await screen.findByRole('status')).textContent).toContain('沟通卡已保存在当前设备。')
+    await fireEvent.click(screen.getByRole('button', { name: '保存Tony卡' }))
+    expect((await screen.findByRole('status')).textContent).toContain('Tony卡已保存在当前设备，到店直接打开。')
     expect(await defaultArchiveRepository.getBrief(planId)).toMatchObject({
       targetCandidateId: savedSnapshot?.id,
     })
@@ -718,7 +718,7 @@ describe('archive routes and forms', () => {
     await router.push(`/archive/plans/${planId}/brief`)
     expect(await screen.findByRole('heading', {
       level: 1,
-      name: '创建理发师沟通卡',
+      name: '创建Tony卡',
     })).toBeTruthy()
     await fireEvent.update(screen.getByLabelText('整体'), '按私人参考保留整体轮廓')
     await fireEvent.update(screen.getByLabelText('顶部'), '顶部保留层次')
@@ -728,7 +728,7 @@ describe('archive routes and forms', () => {
     await fireEvent.update(screen.getByLabelText('后脑'), '贴合收干净')
     await fireEvent.update(screen.getByLabelText('最在意 1'), '轮廓一致')
     await fireEvent.update(screen.getByLabelText('绝对不要 1'), '不要打薄')
-    await fireEvent.click(screen.getByRole('button', { name: '保存沟通卡' }))
+    await fireEvent.click(screen.getByRole('button', { name: '保存Tony卡' }))
     expect(await defaultArchiveRepository.getBrief(planId)).toMatchObject({
       targetCandidateId: privateCandidate?.id,
     })
@@ -837,7 +837,7 @@ describe('archive routes and forms', () => {
       height: 2200,
     })
     await router.push(`/archive/plans/${planId}/brief`)
-    await screen.findByRole('heading', { level: 1, name: '创建理发师沟通卡' })
+    await screen.findByRole('heading', { level: 1, name: '创建Tony卡' })
     await fireEvent.click(screen.getByLabelText('目标候选：我的参考图 1'))
     await fireEvent.click(screen.getByRole('button', { name: '导出 PNG' }))
     const exportedSource = exportPng.mock.calls[0]?.[0].imageSource
@@ -925,8 +925,8 @@ describe('archive routes and forms', () => {
     const mainCandidateAction = screen.getByRole('link', { name: '选“纹理短碎发”为主方案' })
     expect(mainCandidateAction.getAttribute('data-tactile')).toBe('true')
     await fireEvent.click(mainCandidateAction)
-    expect(await screen.findByRole('heading', { level: 1, name: '创建理发师沟通卡' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '保存沟通卡' }).getAttribute('data-tactile')).toBe('true')
+    expect(await screen.findByRole('heading', { level: 1, name: '创建Tony卡' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '保存Tony卡' }).getAttribute('data-tactile')).toBe('true')
     expect(screen.getByRole('button', { name: '导出 PNG' }).getAttribute('data-tactile')).toBe('true')
     expect(screen.getByRole('link', { name: '返回计划' }).getAttribute('href')).toBe(`/archive/plans/${plan.id}`)
     expect(screen.queryByRole('navigation', { name: '主导航' })).toBeNull()
@@ -953,12 +953,12 @@ describe('archive routes and forms', () => {
     await fireEvent.click(screen.getByRole('button', { name: '删除最在意 2' }))
     expect(screen.queryByLabelText('最在意 3')).toBeNull()
     await fireEvent.update(screen.getByLabelText('绝对不要 1'), '不要推白')
-    await fireEvent.click(screen.getByRole('button', { name: '保存沟通卡' }))
+    await fireEvent.click(screen.getByRole('button', { name: '保存Tony卡' }))
 
-    expect(await screen.findByRole('heading', { level: 1, name: '编辑理发师沟通卡' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: '编辑Tony卡' })).toBeTruthy()
     expect((await defaultArchiveRepository.getBrief(plan.id))?.targetCandidateId).toBe('brief-candidate-2')
     expect((await defaultArchiveRepository.getBrief(plan.id))?.backupCandidateId).toBe('brief-candidate-1')
-    const preview = screen.getByRole('region', { name: '理发师沟通卡预览' })
+    const preview = screen.getByRole('region', { name: 'Tony卡预览' })
     expect(within(preview).getByText(plainText)).toBeTruthy()
     expect(await within(preview).findByRole('img', { name: /纹理短碎发/ })).toBeTruthy()
     expect(within(preview).getByText('备选 · 齐颌短鲍伯')).toBeTruthy()
@@ -968,8 +968,8 @@ describe('archive routes and forms', () => {
     await fireEvent.click(screen.getByRole('link', { name: '到店打开' }))
     expect(await screen.findByRole('navigation', { name: '理发现场操作' })).toBeTruthy()
     expect(screen.queryByRole('navigation', { name: '主导航' })).toBeNull()
-    expect(screen.queryByRole('heading', { level: 1, name: '编辑理发师沟通卡' })).toBeNull()
-    const barberPreview = screen.getByRole('region', { name: '理发师沟通卡预览' })
+    expect(screen.queryByRole('heading', { level: 1, name: '编辑Tony卡' })).toBeNull()
+    const barberPreview = screen.getByRole('region', { name: 'Tony卡预览' })
     const prioritiesHeading = within(barberPreview).getByRole('heading', { name: '最在意' })
     const regionalDetails = within(barberPreview).getByText('查看顶部、刘海和侧后细节').closest('details')
     expect(regionalDetails?.open).toBe(false)
@@ -986,7 +986,7 @@ describe('archive routes and forms', () => {
     expect(await screen.findByDisplayValue(plainText)).toBeTruthy()
 
     const print = vi.spyOn(window, 'print').mockImplementation(() => undefined)
-    await fireEvent.click(screen.getByRole('button', { name: '打印沟通卡' }))
+    await fireEvent.click(screen.getByRole('button', { name: '打印Tony卡' }))
     expect(print).toHaveBeenCalledOnce()
 
     vi.spyOn(briefExport, 'exportBriefPng').mockRejectedValueOnce(new Error('canvas blocked'))
@@ -999,18 +999,18 @@ describe('archive routes and forms', () => {
     )
     await fireEvent.update(screen.getByLabelText('整体'), '不应持久化的修改')
     await fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
-    const editHeading = await screen.findByRole('heading', { level: 1, name: '编辑理发师沟通卡' })
+    const editHeading = await screen.findByRole('heading', { level: 1, name: '编辑Tony卡' })
     expect(editHeading.closest('section')?.getAttribute('aria-labelledby')).toBe(editHeading.id)
 
     await fireEvent.update(screen.getByLabelText('整体'), '编辑后的整体要求')
     await fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
-    expect(within(screen.getByRole('region', { name: '理发师沟通卡预览' })).getByText('编辑后的整体要求')).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: 'Tony卡预览' })).getByText('编辑后的整体要求')).toBeTruthy()
     await waitFor(async () => {
       expect((await defaultArchiveRepository.getBrief(plan.id))?.overall).toBe('编辑后的整体要求')
     })
 
     const confirmDelete = vi.spyOn(window, 'confirm').mockReturnValue(true)
-    await fireEvent.click(screen.getByRole('button', { name: '删除沟通卡' }))
+    await fireEvent.click(screen.getByRole('button', { name: '删除Tony卡' }))
     expect(confirmDelete).toHaveBeenCalled()
     await waitFor(() => expect(router.currentRoute.value.path).toBe(`/archive/plans/${plan.id}`))
     expect(await defaultArchiveRepository.getBrief(plan.id)).toBeUndefined()
@@ -1062,11 +1062,11 @@ describe('archive routes and forms', () => {
     expect(within(legacyBriefLink).queryByText('旧候选 1')).toBeNull()
 
     await router.push(`/archive/plans/${plan.id}/brief`)
-    expect(await screen.findByRole('heading', { level: 1, name: '编辑理发师沟通卡' })).toBeTruthy()
-    expect(screen.getByText('旧版沟通卡未记录目标候选，已预选计划中的第一项；保存后才会更新。')).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: '编辑Tony卡' })).toBeTruthy()
+    expect(screen.getByText('旧版Tony卡未记录目标候选，已预选计划中的第一项；保存后才会更新。')).toBeTruthy()
     expect(await screen.findByDisplayValue('旧版整体要求')).toBeTruthy()
     expect((await screen.findAllByText('旧版整体要求')).length).toBeGreaterThan(0)
-    expect(screen.queryByText(/没有.*沟通卡/)).toBeNull()
+    expect(screen.queryByText(/没有.*Tony卡/)).toBeNull()
   })
 
   test('keeps legacy-source and completed plans read-only instead of replacing their candidates', async () => {

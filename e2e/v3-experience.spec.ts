@@ -71,7 +71,7 @@ test('completes the V3 choose, compare, barber, and adjustment journey on a phon
     await page.getByRole('link', { name: '准备给理发师看的内容' }).click()
     await page.getByLabel(`目标候选：${recommendedNames[0]}`).check()
     await page.getByLabel('备选方案').selectOption({ label: recommendedNames[1] })
-    await page.getByRole('button', { name: '保存沟通卡' }).click()
+    await page.getByRole('button', { name: '保存Tony卡' }).click()
     await expect(page.getByText(`备选 · ${recommendedNames[1]}`)).toBeVisible()
     await page.getByRole('link', { name: '到店打开' }).click()
     await expect(page).toHaveURL(/\/brief\/show$/)

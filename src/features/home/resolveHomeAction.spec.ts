@@ -177,7 +177,7 @@ describe('resolveHomeAction', () => {
       briefsByPlanId: { 'plan-1': brief() },
     })).toEqual({
       kind: 'open_brief',
-      label: '打开沟通卡',
+      label: '打开Tony卡',
       to: '/archive/plans/plan-1/brief',
     })
   })
@@ -201,7 +201,7 @@ describe('resolveHomeAction', () => {
       briefsByPlanId: { 'plan-1': brief() },
     })).toEqual({
       kind: 'open_brief',
-      label: '打开沟通卡',
+      label: '打开Tony卡',
       to: '/archive/plans/plan-1/brief',
     })
 
@@ -232,7 +232,7 @@ describe('resolveHomeAction', () => {
         candidatesByPlanId: { 'plan-1': [] },
       })).toEqual({
         kind: 'open_ready_brief',
-        label: '打开理发师沟通卡',
+        label: '打开Tony卡',
         to: '/archive/plans/plan-1/brief',
       })
     }

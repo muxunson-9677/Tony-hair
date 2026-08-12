@@ -102,7 +102,7 @@ describe('brief PNG export', () => {
     const result = await exportBriefPng(content, dependencies)
 
     expect(result.blob).toBe(png)
-    expect(result.filename).toBe('咋剪发-夏末-短发-计划-纹理短碎发.png')
+    expect(result.filename).toBe('Tony宝-夏末-短发-计划-纹理短碎发.png')
     expect(canvas.width).toBe(1440)
     expect(context.drawImage).toHaveBeenCalled()
     expect(drawnText.join('')).toContain(content.absoluteAvoids[1])

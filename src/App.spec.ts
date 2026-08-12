@@ -83,8 +83,8 @@ describe('app shell', () => {
     const lockup = screen.getByTestId('brand-lockup')
     const logo = lockup.querySelector<HTMLImageElement>('img[alt=""]')
     expect(logo?.getAttribute('src')).toBe('/brand/zajianfa-scissors-512.png')
-    expect(screen.getByRole('heading', { level: 1, name: '咋剪发' })).toBeTruthy()
-    expect(screen.getByText('剪前看看，剪时说清，剪后记住')).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'Tony宝' })).toBeTruthy()
+    expect(screen.getByText('剪前帮你定，剪时替你说，剪后帮你记')).toBeTruthy()
     expect((await screen.findByRole('link', { name: '先认识一下我的头发' })).getAttribute('href'))
       .toBe('/archive/profile')
     expect(screen.getAllByTestId('home-primary-action')).toHaveLength(1)
@@ -169,7 +169,7 @@ describe('app shell', () => {
     const main = document.querySelector<HTMLElement>('#main-content')
     const homeLink = screen.getByRole('link', { name: '首页' })
 
-    await waitFor(() => expect(document.title).toBe('咋剪发'))
+    await waitFor(() => expect(document.title).toBe('Tony宝'))
     expect(main?.getAttribute('tabindex')).toBe('-1')
 
     homeLink.focus()
@@ -178,7 +178,7 @@ describe('app shell', () => {
     await router.push('/styles')
 
     await waitFor(() => {
-      expect(document.title).toBe('找发型｜咋剪发')
+      expect(document.title).toBe('找发型｜Tony宝')
       expect(document.activeElement).toBe(main)
     })
   })

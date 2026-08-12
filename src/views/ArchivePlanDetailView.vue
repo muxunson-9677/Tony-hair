@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
+import { pageTitle } from '../config/brand'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
@@ -122,7 +123,7 @@ onMounted(async () => {
   if (!viewActive) return
   buildCandidateUrls()
   if (plan.value) {
-    document.title = `${plan.value.title}｜咋剪发`
+    document.title = pageTitle(`${plan.value.title}`)
   }
 })
 onBeforeUnmount(() => {

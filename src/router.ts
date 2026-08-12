@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory, type RouterHistory } from 'vue-router'
 
+import { pageTitle } from './config/brand'
+
 import ArchiveView from './views/ArchiveView.vue'
 import ArchivePlanDetailView from './views/ArchivePlanDetailView.vue'
 import ArchiveBriefView from './views/ArchiveBriefView.vue'
@@ -26,43 +28,43 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         path: '/',
         name: 'home',
         component: HomeView,
-        meta: { title: '咋剪发', wideLayout: true },
+        meta: { title: pageTitle(), wideLayout: true },
       },
       {
         path: '/try',
         name: 'try',
         component: TryView,
-        meta: { title: '示例方向对比｜咋剪发' },
+        meta: { title: pageTitle('示例方向对比') },
       },
       {
         path: '/styles',
         name: 'styles',
         component: HairstyleLibraryView,
-        meta: { title: '找发型｜咋剪发', wideLayout: true },
+        meta: { title: pageTitle('找发型'), wideLayout: true },
       },
       {
         path: '/styles/favorites',
         name: 'styles-favorites',
         component: HairstyleLibraryView,
-        meta: { title: '我的收藏｜咋剪发', wideLayout: true },
+        meta: { title: pageTitle('我的收藏'), wideLayout: true },
       },
       {
         path: '/styles/references',
         name: 'styles-references',
         component: HairstyleLibraryView,
-        meta: { title: '我的参考｜咋剪发', wideLayout: true },
+        meta: { title: pageTitle('我的参考'), wideLayout: true },
       },
       {
         path: '/styles/references/new',
         name: 'style-reference-new',
         component: HairstyleReferenceFormView,
-        meta: { title: '添加私人参考｜咋剪发', wideLayout: true, hideBottomNav: true },
+        meta: { title: pageTitle('添加私人参考'), wideLayout: true, hideBottomNav: true },
       },
       {
         path: '/styles/references/:id/edit',
         name: 'style-reference-edit',
         component: HairstyleReferenceFormView,
-        meta: { title: '编辑私人参考｜咋剪发', wideLayout: true, hideBottomNav: true },
+        meta: { title: pageTitle('编辑私人参考'), wideLayout: true, hideBottomNav: true },
       },
       {
         path: '/styles/references/:id/show',
@@ -74,13 +76,13 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         path: '/styles/references/:id',
         name: 'style-reference-detail',
         component: HairstyleReferenceDetailView,
-        meta: { title: '私人参考｜咋剪发', wideLayout: true, hideBottomNav: true },
+        meta: { title: pageTitle('私人参考'), wideLayout: true, hideBottomNav: true },
       },
       {
         path: '/styles/catalog/:id',
         name: 'style-detail',
         component: HairstyleDetailView,
-        meta: { title: '发型详情｜咋剪发', wideLayout: true, hideBottomNav: true },
+        meta: { title: pageTitle('发型详情'), wideLayout: true, hideBottomNav: true },
       },
       {
         path: '/styles/catalog/:id/show',
@@ -92,79 +94,79 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         path: '/archive',
         name: 'archive',
         component: ArchiveView,
-        meta: { title: '档案｜咋剪发' },
+        meta: { title: pageTitle('档案') },
       },
       {
         path: '/archive/profile',
         name: 'archive-profile',
         component: ArchiveProfileView,
-        meta: { title: '建立发型档案｜咋剪发', hideBottomNav: true },
+        meta: { title: pageTitle('建立发型档案'), hideBottomNav: true },
       },
       {
         path: '/archive/plans/new',
         name: 'archive-plan-new',
         component: ArchivePlanFormView,
-        meta: { title: '准备下次怎么剪｜咋剪发', hideBottomNav: true },
+        meta: { title: pageTitle('准备下次怎么剪'), hideBottomNav: true },
       },
       {
         path: '/archive/plans/:id/edit',
         name: 'archive-plan-edit',
         component: ArchivePlanFormView,
-        meta: { title: '调整下次剪法｜咋剪发', hideBottomNav: true },
+        meta: { title: pageTitle('调整下次剪法'), hideBottomNav: true },
       },
       {
         path: '/archive/plans/:id/brief',
         name: 'archive-plan-brief',
         component: ArchiveBriefView,
-        meta: { title: '理发师沟通卡｜咋剪发', hideBottomNav: true },
+        meta: { title: pageTitle('Tony卡'), hideBottomNav: true },
       },
       {
         path: '/archive/plans/:id/brief/show',
         name: 'archive-plan-brief-show',
         component: ArchiveBriefView,
-        meta: { title: '给理发师看｜咋剪发', hideBottomNav: true, wideLayout: true },
+        meta: { title: pageTitle('给理发师看'), hideBottomNav: true, wideLayout: true },
       },
       {
         path: '/archive/plans/:id',
         name: 'archive-plan-detail',
         component: ArchivePlanDetailView,
-        meta: { title: '下次怎么剪｜咋剪发', hideBottomNav: true },
+        meta: { title: pageTitle('下次怎么剪'), hideBottomNav: true },
       },
       {
         path: '/archive/records/new',
         name: 'archive-record-new',
         component: ArchiveRecordFormView,
-        meta: { title: '记录这次理发｜咋剪发', hideBottomNav: true },
+        meta: { title: pageTitle('记录这次理发'), hideBottomNav: true },
       },
       {
         path: '/archive/records/:id/edit',
         name: 'archive-record-edit',
         component: ArchiveRecordFormView,
-        meta: { title: '编辑剪后记录｜咋剪发', hideBottomNav: true },
+        meta: { title: pageTitle('编辑剪后记录'), hideBottomNav: true },
       },
       {
         path: '/archive/records/:id',
         name: 'archive-record-detail',
         component: ArchiveRecordDetailView,
-        meta: { title: '剪后记录｜咋剪发', hideBottomNav: true },
+        meta: { title: pageTitle('剪后记录'), hideBottomNav: true },
       },
       {
         path: '/me',
         name: 'me',
         component: MeView,
-        meta: { title: '我的｜咋剪发' },
+        meta: { title: pageTitle('我的') },
       },
       {
         path: '/privacy/mask',
         name: 'privacy-mask',
         component: PrivacyMaskView,
-        meta: { title: '隐私遮罩｜咋剪发', hideBottomNav: true },
+        meta: { title: pageTitle('隐私遮罩'), hideBottomNav: true },
       },
       {
         path: '/:pathMatch(.*)*',
         name: 'not-found',
         component: NotFoundView,
-        meta: { title: '页面没找到｜咋剪发' },
+        meta: { title: pageTitle('页面没找到') },
       },
     ],
   })

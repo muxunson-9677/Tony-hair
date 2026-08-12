@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { pageTitle } from '../config/brand'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -118,7 +119,7 @@ const populateForm = () => {
     form.preferenceNotes = profile.preferenceNotes
     form.profilePhotos = [...profile.profilePhotos ?? []]
     refreshProfilePhotoUrls()
-    document.title = '编辑发型档案｜咋剪发'
+    document.title = pageTitle('编辑发型档案')
   }
 }
 

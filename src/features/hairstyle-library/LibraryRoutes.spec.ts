@@ -103,7 +103,7 @@ describe('hairstyle library routes', () => {
     await renderAt('/styles/catalog/lin-bob')
     expect(await screen.findByRole('heading', { level: 1, name: '齐颌短鲍伯' })).toBeTruthy()
     expect(screen.queryByRole('navigation', { name: '主导航' })).toBeNull()
-    await waitFor(() => expect(document.title).toBe('齐颌短鲍伯｜咋剪发'))
+    await waitFor(() => expect(document.title).toBe('齐颌短鲍伯｜Tony宝'))
   })
 
   test('shows six image-first styles and combines search, goal and maintenance filters', async () => {
@@ -329,20 +329,20 @@ describe('hairstyle library routes', () => {
 
   test('restores the catalog title when leaving a valid detail route', async () => {
     const { router } = await renderAt('/styles/catalog/lin-bob')
-    await waitFor(() => expect(document.title).toBe('齐颌短鲍伯｜咋剪发'))
+    await waitFor(() => expect(document.title).toBe('齐颌短鲍伯｜Tony宝'))
 
     await router.push('/styles')
 
-    await waitFor(() => expect(document.title).toBe('找发型｜咋剪发'))
+    await waitFor(() => expect(document.title).toBe('找发型｜Tony宝'))
   })
 
   test('restores the home title when leaving an unavailable detail route', async () => {
     const { router } = await renderAt('/styles/catalog/not-a-real-style')
-    await waitFor(() => expect(document.title).toBe('发型不可用｜咋剪发'))
+    await waitFor(() => expect(document.title).toBe('发型不可用｜Tony宝'))
 
     await router.push('/')
 
-    await waitFor(() => expect(document.title).toBe('咋剪发'))
+    await waitFor(() => expect(document.title).toBe('Tony宝'))
   })
 
   test('uploads only prepared bytes without requiring a hair profile, then opens the saved detail', async () => {

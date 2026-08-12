@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { pageTitle } from '../config/brand'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
@@ -72,7 +73,7 @@ onMounted(async () => {
   attributionMessage.value = consumePendingRecordAttribution(recordId.value)
   await store.load()
   if (record.value) {
-    document.title = `${record.value.styleName}｜剪后记录｜咋剪发`
+    document.title = pageTitle(`${record.value.styleName}｜剪后记录`)
   }
 })
 onBeforeUnmount(revokePhotoUrls)

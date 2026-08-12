@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 
+import { PRODUCT_NAME } from '../config/brand'
 import AppIcon from '../ui/AppIcon.vue'
 import { tactileDirective as vTactile } from '../ui/tactile'
 
@@ -39,14 +40,14 @@ const isItemActive = (to: string) => (
           v-tactile
           class="bottom-nav__brand"
           :href="href"
-          aria-label="咋剪发首页"
+          :aria-label="`${PRODUCT_NAME}首页`"
           @click="navigate"
         >
           <img
             :src="'/brand/zajianfa-scissors-512.png'"
             alt=""
           >
-          <span>咋剪发</span>
+          <span>{{ PRODUCT_NAME }}</span>
         </a>
       </RouterLink>
       <RouterLink

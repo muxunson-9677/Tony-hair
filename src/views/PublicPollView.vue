@@ -168,7 +168,7 @@ onMounted(loadPoll)
     <template v-else-if="poll">
       <header class="public-poll-header">
         <p class="eyebrow">
-          咋剪发 · 好友投票
+          Tony宝 · 好友投票
         </p>
         <h1>{{ poll.title }}</h1>
         <p>看发型本身，选你觉得最适合的一张。</p>

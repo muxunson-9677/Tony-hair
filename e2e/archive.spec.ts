@@ -334,16 +334,16 @@ test('mixes prepared, past-record, and demo candidates without sending private b
   await page.getByLabel('后脑').fill('后脑连接自然')
   await page.getByLabel('最在意 1', { exact: true }).fill('两侧不要炸')
   await page.getByLabel('绝对不要 1', { exact: true }).fill('不要推白')
-  await page.getByRole('button', { name: '保存沟通卡' }).click()
+  await page.getByRole('button', { name: '保存Tony卡' }).click()
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: '导出 PNG' }).click()
   const download = await downloadPromise
-  expect(download.suggestedFilename()).toMatch(/^咋剪发-.*\.png$/)
+  expect(download.suggestedFilename()).toMatch(/^Tony宝-.*\.png$/)
   await page.getByLabel('目标候选：清爽短碎发').check()
   const pastDownloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: '导出 PNG' }).click()
   const pastDownload = await pastDownloadPromise
-  expect(pastDownload.suggestedFilename()).toMatch(/^咋剪发-.*\.png$/)
+  expect(pastDownload.suggestedFilename()).toMatch(/^Tony宝-.*\.png$/)
 
   const databaseName = databaseNames.get(testInfo.testId)
   expect(databaseName).toBeTruthy()

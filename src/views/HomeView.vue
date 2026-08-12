@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import { PRODUCT_NAME, PRODUCT_PROMISE_SHORT } from '../config/brand'
 import { useArchiveStore } from '../features/archive/archiveStore'
 import type { HaircutPhoto } from '../features/archive/types'
 import { curatedHairstyles } from '../features/hairstyle-library/curatedCatalog'
@@ -164,11 +165,11 @@ onBeforeUnmount(() => {
             id="home-title"
             class="brand-title"
           >
-            咋剪发
+            {{ PRODUCT_NAME }}
           </h1>
         </div>
         <p class="brand-promise">
-          剪前看看，剪时说清，剪后记住
+          {{ PRODUCT_PROMISE_SHORT }}
         </p>
         <p class="home-hero__intro">
           {{ store.profile ? '这次想怎么剪？我会带着你的真实情况继续。' : '先让我认识你的头发，之后每次会越来越省事。' }}
