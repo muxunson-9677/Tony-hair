@@ -163,6 +163,45 @@ describe('archive routes and forms', () => {
     expect(screen.queryByText(/还没有剪后记录/)).toBeNull()
   })
 
+  test('turns stored profile facts and photos into a personal archive summary', async () => {
+    const profilePhoto = new NodeBlob(['front-photo'], { type: 'image/webp' }) as unknown as Blob
+    await defaultArchiveRepository.createProfile({
+      ...existingProfile,
+      hairTexture: 'straight',
+      genderIdentity: 'woman',
+      presentationPreference: 'androgynous',
+      profilePhotos: [{
+        id: 'profile-front',
+        angle: 'front',
+        image: profilePhoto,
+        width: 900,
+        height: 1200,
+        bytes: profilePhoto.size,
+        processedAt: '2026-08-12T00:00:00.000Z',
+      }],
+    })
+
+    await renderAt('/archive')
+
+    const wall = await screen.findByRole('group', { name: '阿青的头发照片墙' })
+    expect(within(wall).getByRole('img', { name: '我的头发正面照片' })).toBeTruthy()
+    expect(within(wall).getByText('正面')).toBeTruthy()
+    expect(screen.getByText('性别：女')).toBeTruthy()
+    expect(screen.getByText('更喜欢中性呈现')).toBeTruthy()
+    expect(screen.getByText('已保存正面照；以后可以再补侧面、后脑。')).toBeTruthy()
+    expect(screen.getByText('直发 · 细发丝 · 发量适中')).toBeTruthy()
+  })
+
+  test('gives a photo-less legacy profile one clear personalisation action', async () => {
+    await defaultArchiveRepository.createProfile(existingProfile)
+
+    await renderAt('/archive')
+
+    expect(await screen.findByText('先补一张正面照，让档案一眼就是你的。')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '添加我的头发照片' }).getAttribute('href'))
+      .toBe('/archive/profile')
+  })
+
   test('returns through a canonical add pointer after creating a profile without creating a half-plan', async () => {
     const router = await renderAt('/archive/plans/new?add=catalog:lin-bob')
 
@@ -478,7 +517,7 @@ describe('archive routes and forms', () => {
 
     await waitFor(() => expect(router.currentRoute.value.path).toBe('/archive'))
     expect(await screen.findByRole('heading', { level: 2, name: '小林的发型档案' })).toBeTruthy()
-    expect(screen.getByText('微卷 · 细 · 发量适中')).toBeTruthy()
+    expect(screen.getByText('微卷 · 细发丝 · 发量适中')).toBeTruthy()
     expect(screen.getByRole('region', { name: '下一步' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: '最近剪后记录' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '还没有沟通卡' })).toBeNull()
@@ -1367,23 +1406,29 @@ describe('archive routes and forms', () => {
       .toBeTruthy()
   })
 
-  test('puts the two photos first and keeps optional haircut details collapsed', async () => {
+  test('puts the two photos first and separates salon from deeper optional details', async () => {
     await defaultArchiveRepository.createProfile(existingProfile)
     await renderAt('/archive/records/new')
 
     const dateInput = await screen.findByLabelText('理发日期')
     const photoFieldset = screen.getByText('剪前 / 剪后 · 至少一张').closest('fieldset')
-    const detailsSummary = screen.getByText('补充本次信息')
-    const details = detailsSummary.closest('details')
+    const salonSummary = screen.getByText('在哪剪的（可选）')
+    const salonDetails = salonSummary.closest('details')
+    const moreSummary = screen.getByText('更多记录（可选）')
+    const moreDetails = moreSummary.closest('details')
 
     expect(photoFieldset).toBeTruthy()
     expect(Boolean(
       photoFieldset
       && (photoFieldset.compareDocumentPosition(dateInput) & Node.DOCUMENT_POSITION_FOLLOWING),
     )).toBe(true)
-    expect(details).toBeTruthy()
-    expect(details?.hasAttribute('open')).toBe(false)
-    expect(details?.contains(screen.getByLabelText('店铺', { exact: true }))).toBe(true)
+    expect(salonDetails).toBeTruthy()
+    expect(salonDetails?.hasAttribute('open')).toBe(false)
+    expect(salonDetails?.contains(screen.getByLabelText('店铺', { exact: true }))).toBe(true)
+    expect(salonDetails?.contains(screen.getByLabelText('店铺位置（可选）'))).toBe(true)
+    expect(moreDetails).toBeTruthy()
+    expect(moreDetails?.hasAttribute('open')).toBe(false)
+    expect(moreDetails?.contains(screen.getByLabelText('价格（元）'))).toBe(true)
     expect(screen.getByText('选择剪前照片')).toBeTruthy()
     expect(screen.getByText('选择剪后照片')).toBeTruthy()
     expect(screen.getByRole('radio', { name: '就这样' })).toBeTruthy()

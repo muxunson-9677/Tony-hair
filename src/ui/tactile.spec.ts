@@ -108,6 +108,33 @@ describe('tactileDirective', () => {
     expect(cancel).toHaveBeenCalledTimes(1)
   })
 
+  test('suppresses the native click when a press is released outside its hit slop', () => {
+    const button = document.createElement('button')
+    Object.defineProperty(button, 'getBoundingClientRect', {
+      value: () => ({
+        x: 0,
+        y: 0,
+        top: 0,
+        right: 44,
+        bottom: 44,
+        left: 0,
+        width: 44,
+        height: 44,
+        toJSON: () => ({}),
+      }),
+    })
+    const click = vi.fn()
+    button.addEventListener('click', click)
+    mountDirective(button)
+
+    button.dispatchEvent(pointer('pointerdown', { clientX: 20, clientY: 20 }))
+    button.dispatchEvent(pointer('pointermove', { clientX: 90, clientY: 20 }))
+    button.dispatchEvent(pointer('pointerup', { clientX: 90, clientY: 20 }))
+    button.click()
+
+    expect(click).not.toHaveBeenCalled()
+  })
+
   test('does not animate disabled controls and removes listeners on unmount', () => {
     const button = document.createElement('button')
     button.disabled = true

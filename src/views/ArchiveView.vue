@@ -3,6 +3,13 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
 import type { HairProfile, HaircutPlan } from '../features/archive/types'
+import {
+  buildKnownProfileTraits,
+  describeProfilePhotoCoverage,
+  genderIdentityLabel,
+  presentationPreferenceLabel,
+} from '../features/archive/profileExperience'
+import AppIcon from '../ui/AppIcon.vue'
 import { tactileDirective as vTactile } from '../ui/tactile'
 
 const store = useArchiveStore()
@@ -16,6 +23,18 @@ const availableProfilePhotos = computed(() => [
   const url = profilePhotoUrls.value[item.angle]
   return url ? [{ ...item, url }] : []
 }))
+const knownProfileTraits = computed(() => (
+  store.profile ? buildKnownProfileTraits(store.profile) : []
+))
+const profilePhotoCoverage = computed(() => describeProfilePhotoCoverage(
+  store.profile?.profilePhotos ?? [],
+))
+const profilePresentation = computed(() => (
+  store.profile ? presentationPreferenceLabel(store.profile) : ''
+))
+const profileGender = computed(() => (
+  store.profile ? genderIdentityLabel(store.profile) : null
+))
 const savedBriefs = computed(() => store.plans.flatMap((plan) => {
   const brief = store.briefsByPlanId[plan.id]
   if (!brief) {
@@ -52,25 +71,6 @@ const latestComparison = computed(() => {
   return [before, after].filter((photo): photo is NonNullable<typeof photo> => Boolean(photo))
 })
 
-const textureLabels: Record<HairProfile['hairTexture'], string> = {
-  straight: '直发',
-  wavy: '微卷',
-  curly: '卷发',
-  coily: '强卷',
-  unsure: '发质待确认',
-}
-const thicknessLabels: Record<HairProfile['strandThickness'], string> = {
-  fine: '细',
-  medium: '适中',
-  coarse: '粗',
-  unsure: '粗细待确认',
-}
-const densityLabels: Record<HairProfile['density'], string> = {
-  low: '发量少',
-  medium: '发量适中',
-  high: '发量多',
-  unsure: '发量待确认',
-}
 const washLabels: Record<HairProfile['washFrequency'], string> = {
   daily: '每天洗发',
   every_other_day: '隔天洗发',
@@ -199,14 +199,34 @@ onBeforeUnmount(() => {
             'profile-photo-wall',
             { 'profile-photo-wall--single': availableProfilePhotos.length === 1 },
           ]"
-          aria-label="我的头发照片"
+          role="group"
+          :aria-label="`${store.profile.name}的头发照片墙`"
         >
-          <img
+          <figure
             v-for="photo in availableProfilePhotos"
             :key="photo.angle"
-            :src="photo.url"
-            :alt="`我的头发${photo.label}照片`"
           >
+            <img
+              :src="photo.url"
+              :alt="`我的头发${photo.label}照片`"
+            >
+            <figcaption>{{ photo.label }}</figcaption>
+          </figure>
+        </div>
+        <div
+          v-else
+          class="profile-photo-wall-empty"
+        >
+          <span aria-hidden="true">
+            <AppIcon name="photo" />
+          </span>
+          <p>{{ profilePhotoCoverage.message }}</p>
+          <RouterLink
+            v-tactile
+            to="/archive/profile"
+          >
+            添加我的头发照片
+          </RouterLink>
         </div>
         <div>
           <p class="section-index">
@@ -215,10 +235,21 @@ onBeforeUnmount(() => {
           <h2 id="profile-summary-title">
             {{ store.profile.name }}的发型档案
           </h2>
-          <p class="profile-summary__traits">
-            {{ textureLabels[store.profile.hairTexture] }} ·
-            {{ thicknessLabels[store.profile.strandThickness] }} ·
-            {{ densityLabels[store.profile.density] }}
+          <div class="profile-summary__identity">
+            <span v-if="profileGender">性别：{{ profileGender }}</span>
+            <span>{{ profilePresentation }}</span>
+          </div>
+          <p
+            v-if="knownProfileTraits.length"
+            class="profile-summary__traits"
+          >
+            {{ knownProfileTraits.join(' · ') }}
+          </p>
+          <p
+            v-else
+            class="profile-summary__traits"
+          >
+            头发条件还没有确认
           </p>
           <p class="profile-summary__routine">
             日常打理 {{ store.profile.stylingMinutes ?? '未填写' }} 分钟 ·
@@ -226,6 +257,12 @@ onBeforeUnmount(() => {
           </p>
           <p v-if="store.profile.preferenceNotes">
             {{ store.profile.preferenceNotes }}
+          </p>
+          <p
+            v-if="availableProfilePhotos.length"
+            class="profile-summary__photo-status"
+          >
+            {{ profilePhotoCoverage.message }}
           </p>
         </div>
         <RouterLink

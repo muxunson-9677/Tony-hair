@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
 import type { HaircutPhoto } from '../features/archive/types'
+import { tactileDirective as vTactile } from '../ui/tactile'
 
 const stageLabels: Record<HaircutPhoto['stage'], string> = {
   before: '剪前',
@@ -80,6 +81,7 @@ onBeforeUnmount(revokePhotoUrls)
     :aria-labelledby="store.loading || store.error ? 'record-detail-state-title' : record ? 'record-detail-title' : 'record-detail-missing-title'"
   >
     <RouterLink
+      v-tactile
       class="back-link"
       to="/archive"
     >
@@ -137,12 +139,14 @@ onBeforeUnmount(revokePhotoUrls)
         <p>{{ record.date }} · 满意度 <strong>{{ record.satisfaction }} / 5</strong></p>
         <div class="detail-actions">
           <RouterLink
+            v-tactile
             class="text-link"
             :to="`/archive/records/${record.id}/edit`"
           >
             编辑记录
           </RouterLink>
           <button
+            v-tactile
             class="danger-text-button"
             type="button"
             :disabled="store.saving"
@@ -242,7 +246,9 @@ onBeforeUnmount(revokePhotoUrls)
       </section>
 
       <details class="record-detail-more">
-        <summary>查看本次店铺与备注</summary>
+        <summary v-tactile>
+          查看本次店铺与备注
+        </summary>
         <dl class="record-metadata">
           <div v-if="plan">
             <dt>关联计划</dt><dd>{{ plan.title }}</dd>

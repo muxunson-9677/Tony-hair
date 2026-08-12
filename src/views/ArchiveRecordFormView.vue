@@ -319,6 +319,7 @@ onBeforeUnmount(() => {
     aria-labelledby="record-form-title"
   >
     <RouterLink
+      v-tactile
       class="back-link"
       :to="isEditing ? `/archive/records/${recordId}` : '/archive'"
     >
@@ -396,6 +397,7 @@ onBeforeUnmount(() => {
         <label
           v-for="item in photoStages"
           :key="item.stage"
+          v-tactile
         >
           <span>{{ item.label }}照片</span>
           <small v-if="existingPhotoLabel(item.stage)">{{ existingPhotoLabel(item.stage) }}</small>
@@ -468,7 +470,7 @@ onBeforeUnmount(() => {
 
       <fieldset class="record-outcome">
         <legend>下次还这么剪吗？</legend>
-        <label>
+        <label v-tactile>
           <input
             v-model="form.outcome"
             type="radio"
@@ -476,7 +478,7 @@ onBeforeUnmount(() => {
           >
           就这样
         </label>
-        <label>
+        <label v-tactile>
           <input
             v-model="form.outcome"
             type="radio"
@@ -484,7 +486,7 @@ onBeforeUnmount(() => {
           >
           有一点要改
         </label>
-        <label>
+        <label v-tactile>
           <input
             v-model="form.outcome"
             type="radio"
@@ -531,28 +533,12 @@ onBeforeUnmount(() => {
         </label>
       </div>
 
-      <details class="record-extra-details">
+      <details class="record-extra-details record-salon-details">
         <summary v-tactile>
-          <span>补充本次信息</span>
-          <small>店铺、位置、理发师、价格和备注</small>
+          <span>在哪剪的（可选）</span>
+          <small>记下店铺、位置和理发师，下次更容易找到</small>
         </summary>
         <div class="record-extra-details__body">
-          <label>
-            <span>关联计划（可选）</span>
-            <select
-              v-model="form.planId"
-              name="planId"
-            >
-              <option value="">不关联计划</option>
-              <option
-                v-for="plan in store.plans"
-                :key="plan.id"
-                :value="plan.id"
-              >
-                {{ plan.title }}
-              </option>
-            </select>
-          </label>
           <div class="form-grid">
             <label>
               <span>店铺</span>
@@ -579,6 +565,33 @@ onBeforeUnmount(() => {
                 maxlength="80"
               >
             </label>
+          </div>
+        </div>
+      </details>
+
+      <details class="record-extra-details">
+        <summary v-tactile>
+          <span>更多记录（可选）</span>
+          <small>关联计划、服务、价格、耗时和备注</small>
+        </summary>
+        <div class="record-extra-details__body">
+          <label>
+            <span>关联计划（可选）</span>
+            <select
+              v-model="form.planId"
+              name="planId"
+            >
+              <option value="">不关联计划</option>
+              <option
+                v-for="plan in store.plans"
+                :key="plan.id"
+                :value="plan.id"
+              >
+                {{ plan.title }}
+              </option>
+            </select>
+          </label>
+          <div class="form-grid">
             <label>
               <span>服务</span>
               <input

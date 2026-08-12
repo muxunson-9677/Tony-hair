@@ -15,6 +15,8 @@ interface TactileState {
   activePointerId: number | null
   bounds: DOMRect | null
   releaseAnimation: Animation | null
+  suppressNextClick: boolean
+  suppressionTimer: number | null
 }
 
 const cleanupByElement = new WeakMap<HTMLElement, () => void>()
@@ -66,6 +68,18 @@ export const tactileDirective: ObjectDirective<HTMLElement, boolean | undefined>
       activePointerId: null,
       bounds: null,
       releaseAnimation: null,
+      suppressNextClick: false,
+      suppressionTimer: null,
+    }
+
+    const onClick = (event: MouseEvent) => {
+      if (!state.suppressNextClick) return
+
+      state.suppressNextClick = false
+      if (state.suppressionTimer !== null) window.clearTimeout(state.suppressionTimer)
+      state.suppressionTimer = null
+      event.preventDefault()
+      event.stopImmediatePropagation()
     }
 
     const onPointerDown = (event: PointerEvent) => {
@@ -95,6 +109,14 @@ export const tactileDirective: ObjectDirective<HTMLElement, boolean | undefined>
 
       const commits = element.dataset.pressing === 'true'
       element.releasePointerCapture?.(event.pointerId)
+      if (!commits) {
+        state.suppressNextClick = true
+        if (state.suppressionTimer !== null) window.clearTimeout(state.suppressionTimer)
+        state.suppressionTimer = window.setTimeout(() => {
+          state.suppressNextClick = false
+          state.suppressionTimer = null
+        })
+      }
       clearPress(element, state, commits)
     }
 
@@ -113,9 +135,11 @@ export const tactileDirective: ObjectDirective<HTMLElement, boolean | undefined>
     element.addEventListener('pointerup', onPointerUp)
     element.addEventListener('pointercancel', onPointerCancel)
     element.addEventListener('lostpointercapture', onLostPointerCapture)
+    element.addEventListener('click', onClick, true)
 
     cleanupByElement.set(element, () => {
       state.releaseAnimation?.cancel()
+      if (state.suppressionTimer !== null) window.clearTimeout(state.suppressionTimer)
       delete element.dataset.tactile
       delete element.dataset.pressing
       element.removeEventListener('pointerdown', onPointerDown)
@@ -123,6 +147,7 @@ export const tactileDirective: ObjectDirective<HTMLElement, boolean | undefined>
       element.removeEventListener('pointerup', onPointerUp)
       element.removeEventListener('pointercancel', onPointerCancel)
       element.removeEventListener('lostpointercapture', onLostPointerCapture)
+      element.removeEventListener('click', onClick, true)
     })
   },
   unmounted(element) {

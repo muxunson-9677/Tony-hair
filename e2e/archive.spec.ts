@@ -22,6 +22,10 @@ const openPlanDetails = async (page: Page) => {
   }
 }
 
+const waitForSettledRoute = async (page: Page) => {
+  await expect(page.locator('.route-enter-active, .route-leave-active')).toHaveCount(0)
+}
+
 const createOrientationSixJpeg = async (page: Page) => {
   const jpegBytes = await page.evaluate(async () => {
     const canvas = document.createElement('canvas')
@@ -590,16 +594,23 @@ test('builds a personal photo passport and keeps the haircut record mobile-first
     path.resolve('public/demo/persona-ran-sidepart.webp'),
   )
   await expect(page.getByRole('img', { name: '我的头发正面照片' })).toBeVisible()
+  await waitForSettledRoute(page)
   await page.screenshot({ path: testInfo.outputPath('profile-passport-390x844.png'), fullPage: true })
   await page.getByRole('button', { name: '保存档案' }).click()
 
   await expect(page.getByRole('heading', { level: 2, name: '小林的发型档案' })).toBeVisible()
   await expect(page.getByRole('img', { name: '我的头发正面照片' })).toBeVisible()
+  await expect(page.getByText('性别：女')).toBeVisible()
+  await expect(page.getByText('更喜欢中性呈现')).toBeVisible()
+  await expect(page.getByText('已保存正面照；以后可以再补侧面、后脑。')).toBeVisible()
+  await expect(page.getByRole('group', { name: '小林的头发照片墙' })).toBeVisible()
+  await waitForSettledRoute(page)
   await page.screenshot({ path: testInfo.outputPath('archive-photo-wall-390x844.png'), fullPage: true })
 
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '找发型' }).click()
   await expect(page.getByText(/已根据 小林 的发质、偏好和打理时间在本机排序/)).toBeVisible()
   await expect(page.locator('.hairstyle-tile__match').first()).toContainText('为你推荐：')
+  await waitForSettledRoute(page)
   await page.screenshot({ path: testInfo.outputPath('personalized-library-390x844.png'), fullPage: true })
 
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '档案' }).click()
@@ -611,12 +622,31 @@ test('builds a personal photo passport and keeps the haircut record mobile-first
   await expect(page.getByText('洗后照片')).toHaveCount(0)
   await expect(page.getByText('第 7 天照片')).toHaveCount(0)
   await expect(page.getByLabel('店铺位置（可选）')).toBeHidden()
-  await page.getByText('补充本次信息', { exact: true }).click()
+  await page.getByText('在哪剪的（可选）', { exact: true }).click()
   await expect(page.getByLabel('店铺位置（可选）')).toBeVisible()
+  await expect(page.getByText('更多记录（可选）', { exact: true })).toBeVisible()
   await expect(page.getByLabel('满意度')).toHaveValue('')
   await expect(page.getByLabel('就这样')).not.toBeChecked()
   await expect(page.getByLabel('有一点要改')).not.toBeChecked()
   await expect(page.getByLabel('别再这样')).not.toBeChecked()
+  await expect(page.getByLabel('就这样').locator('..')).toHaveAttribute('data-tactile', 'true')
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await waitForSettledRoute(page)
   await page.screenshot({ path: testInfo.outputPath('record-before-after-390x844.png'), fullPage: true })
+
+  await page.goto('/archive')
+  for (const width of [360, 430]) {
+    await page.setViewportSize({ width, height: 844 })
+    await waitForSettledRoute(page)
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    const navigation = page.getByRole('navigation', { name: '主导航' })
+    await expect(navigation).toBeVisible()
+    const navigationBox = await navigation.boundingBox()
+    expect(navigationBox?.y).toBeGreaterThanOrEqual(0)
+    expect((navigationBox?.y ?? 0) + (navigationBox?.height ?? 0)).toBeLessThanOrEqual(844)
+    await page.screenshot({
+      path: testInfo.outputPath(`archive-photo-wall-${width}x844.png`),
+      fullPage: false,
+    })
+  }
 })
