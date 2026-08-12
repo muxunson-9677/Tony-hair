@@ -133,7 +133,7 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
 
   await expect(page).toHaveURL(/\/archive$/)
   await expect(page.getByRole('heading', { level: 2, name: '小林的发型档案' })).toBeVisible()
-  await page.getByRole('link', { name: '新建发型计划' }).click()
+  await page.getByRole('link', { name: '准备下次怎么剪' }).click()
 
   await openPlanDetails(page)
   await page.getByLabel('计划标题').fill('夏末短发计划')
@@ -155,7 +155,9 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
   await page.getByRole('link', { name: '记录这次理发' }).click()
 
   await expect(page.getByRole('heading', { level: 1, name: '记录这次理发' })).toBeVisible()
-  await page.getByText('补充本次信息', { exact: true }).click()
+  await page.getByText('日期、名称和满意度', { exact: true }).click()
+  await page.getByText('在哪剪的（可选）', { exact: true }).click()
+  await page.getByText('更多记录（可选）', { exact: true }).click()
   await page.getByLabel('关联计划（可选）').selectOption({ label: '夏末短发计划' })
   await page.getByLabel('理发日期').fill('2026-08-20')
   await page.getByLabel('发型名').fill('纹理短碎发')
@@ -177,14 +179,14 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
   await page.getByText('查看本次店铺与备注').click()
   await expect(page.getByText('静安区南京西路 688 号')).toBeVisible()
   await expect(page.getByText('已存为标准发型')).toBeVisible()
-  await expect(page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '档案' }))
-    .toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('navigation', { name: '主导航' })).toHaveCount(0)
   await page.screenshot({ path: testInfo.outputPath('record-detail-390x844.png'), fullPage: true })
 
   await page.reload()
   await expect(page.getByRole('heading', { level: 1, name: '纹理短碎发' })).toBeVisible()
   await expect(page.getByRole('img', { name: '纹理短碎发的剪后照片' })).toBeVisible()
 
+  await page.getByRole('link', { name: '返回档案' }).click()
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '首页' }).click()
   await expect(page.getByRole('link', { name: '查看上次发型：纹理短碎发' })).toBeVisible()
   await expect(page.getByText('上次发型 · 纹理短碎发')).toBeVisible()
@@ -283,6 +285,7 @@ test('mixes prepared, past-record, and demo candidates without sending private b
   await page.getByRole('button', { name: '保存档案' }).click()
 
   await page.getByRole('link', { name: '记录这次理发' }).click()
+  await page.getByText('日期、名称和满意度', { exact: true }).click()
   await page.getByLabel('理发日期').fill('2026-08-19')
   await page.getByLabel('发型名').fill('清爽短碎发')
   await page.getByLabel('满意度').selectOption('5')
@@ -295,7 +298,7 @@ test('mixes prepared, past-record, and demo candidates without sending private b
   await page.getByRole('button', { name: '保存剪后记录' }).click()
 
   await page.getByRole('link', { name: '返回档案' }).click()
-  await page.getByRole('link', { name: '新建发型计划' }).click()
+  await page.getByRole('link', { name: '准备下次怎么剪' }).click()
   await page.getByLabel('本地参考图').setInputFiles({
     name: 'candidate-private.jpg',
     mimeType: 'image/jpeg',
@@ -320,7 +323,7 @@ test('mixes prepared, past-record, and demo candidates without sending private b
   await page.reload()
   await expect(page.getByRole('img', { name: '我的参考图 1本地候选图' })).toBeVisible()
   await expect(page.getByRole('img', { name: '清爽短碎发本地候选图' })).toBeVisible()
-  await page.getByRole('link', { name: '创建沟通卡' }).click()
+  await page.getByRole('link', { name: '准备给理发师看的内容' }).click()
   await page.getByLabel('目标候选：我的参考图 1').check()
   await page.getByText('需要修改时展开').click()
   await page.getByLabel('整体').fill('整体保留轻盈轮廓')
@@ -434,6 +437,7 @@ test('prepares an orientation-6 JPEG locally before saving and never sends sourc
   await page.getByLabel('洗发频率').selectOption('daily')
   await page.getByRole('button', { name: '保存档案' }).click()
   await page.getByRole('link', { name: '记录这次理发' }).click()
+  await page.getByText('日期、名称和满意度', { exact: true }).click()
   await page.getByLabel('理发日期').fill('2026-08-10')
   await page.getByLabel('发型名').fill('方向纠正测试')
   await page.getByLabel('剪后照片').setInputFiles({

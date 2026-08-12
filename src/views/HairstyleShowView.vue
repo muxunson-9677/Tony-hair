@@ -118,7 +118,7 @@ onBeforeUnmount(() => {
     <article class="style-show-copy">
       <header>
         <p class="eyebrow">
-          CURATED STYLE · BARBER VIEW
+          精选方向 · 给理发师看
         </p>
         <h1 id="style-show-title">
           {{ curatedStyle.name }}
@@ -230,7 +230,7 @@ onBeforeUnmount(() => {
     <article class="style-show-copy style-show-copy--private">
       <header>
         <p class="eyebrow">
-          PRIVATE REFERENCE · THIS DEVICE
+          我的参考图 · 给理发师看
         </p>
         <h1 id="private-style-show-title">
           {{ privateReference.name }}

@@ -79,7 +79,7 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
     await page.getByLabel('洗发频率').selectOption('every_other_day')
     await page.getByRole('button', { name: '保存档案' }).click()
 
-    await page.getByRole('link', { name: '新建发型计划' }).click()
+    await page.getByRole('link', { name: '准备下次怎么剪' }).click()
     await openPlanDetails(page)
     await page.getByLabel('计划标题').fill('夏末短发计划')
     await page.getByLabel('计划日期').fill('2026-08-22')
@@ -89,8 +89,8 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
     await page.getByRole('button', { name: '加入候选：纹理短碎发' }).click()
     await page.getByRole('button', { name: '保存计划' }).click()
 
-    await expect(page.getByRole('link', { name: '创建沟通卡' })).toBeVisible({ timeout: 5_000 })
-    await page.getByRole('link', { name: '创建沟通卡' }).click()
+    await expect(page.getByRole('link', { name: '准备给理发师看的内容' })).toBeVisible({ timeout: 5_000 })
+    await page.getByRole('link', { name: '准备给理发师看的内容' }).click()
     await expect(page.getByRole('heading', { level: 1, name: '创建理发师沟通卡' })).toBeVisible()
     await page.getByLabel('目标候选：纹理短碎发').check()
     await page.getByText('需要修改时展开').click()
@@ -187,7 +187,7 @@ test('creates, refreshes, exports, prints, edits, and deletes a barber brief wit
     page.once('dialog', (dialog) => dialog.accept())
     await page.getByRole('button', { name: '删除沟通卡' }).click()
     await expect(page.getByRole('heading', { level: 1, name: '夏末短发计划' })).toBeVisible()
-    await expect(page.getByRole('link', { name: '创建沟通卡' })).toBeVisible()
+    await expect(page.getByRole('link', { name: '准备给理发师看的内容' })).toBeVisible()
     await expect(page.getByRole('img', { name: /纹理短碎发/ })).toBeVisible()
     expect(externalRequests).toEqual([])
   } finally {

@@ -238,7 +238,7 @@ onBeforeUnmount(() => {
           decoding="async"
         >
         <span class="home-visual__index">
-          {{ favoriteStyle ? 'SAVED STYLE · LOCAL' : 'CURATED 06 · AI DEMO' }}
+          {{ favoriteStyle ? '我的收藏 · 仅保存在本机' : '精选方向 · 预制示例' }}
         </span>
         <span class="home-visual__caption">
           {{ homeVisualStyle.name }} · {{ favoriteStyle ? '我的收藏' : '先看现实取舍' }}

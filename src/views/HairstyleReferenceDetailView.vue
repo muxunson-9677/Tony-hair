@@ -106,7 +106,7 @@ onBeforeUnmount(releaseImage)
     <article class="style-reference-detail-copy">
       <header>
         <p class="eyebrow">
-          PRIVATE REFERENCE · THIS DEVICE
+          我的私人参考 · 仅保存在本机
         </p>
         <h1 id="reference-detail-title">
           {{ reference.name }}

@@ -5908,6 +5908,106 @@ a:focus-visible {
   box-shadow: none;
 }
 
+.brief-preview__regional-details:not(.brief-barber-details) > .brief-preview__sections {
+  margin-top: 20px;
+}
+
+.brief-barber-details {
+  margin-top: 16px;
+  overflow: hidden;
+  border: 1px solid #dfe4eb;
+  border-radius: 18px;
+  background: #f7f9fc;
+}
+
+.brief-barber-details > summary {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 15px;
+  cursor: pointer;
+  list-style: none;
+  color: #222833;
+  font-size: .84rem;
+  font-weight: 760;
+}
+
+.brief-barber-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.brief-barber-details > summary::after {
+  content: '⌄';
+  color: #707987;
+  font-size: 1.05rem;
+  transition: transform 180ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.brief-barber-details[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.brief-barber-details > summary small {
+  margin-left: auto;
+  color: #737c8a;
+  font-size: .69rem;
+  font-weight: 560;
+}
+
+.brief-barber-details > .brief-preview__sections {
+  margin: 0;
+  border-width: 1px 0 0;
+  border-radius: 0;
+}
+
+@media (max-width: 520px) {
+  .brief-view--barber .brief-preview {
+    padding: 18px 16px 92px;
+  }
+
+  .brief-view--barber .brief-preview__header {
+    padding-bottom: 14px;
+  }
+
+  .brief-view--barber .brief-preview__header h2 {
+    margin-top: 7px;
+    font-size: clamp(1.65rem, 8.5vw, 2.2rem);
+  }
+
+  .brief-view--barber .brief-preview__header span {
+    margin-top: 7px;
+  }
+
+  .brief-view--barber .brief-preview > img,
+  .brief-view--barber .brief-preview__image-missing {
+    max-height: 34svh;
+    margin-top: 14px;
+    object-fit: contain;
+    background: #f1f4f8;
+  }
+
+  .brief-view--barber .brief-preview__lists {
+    gap: 14px;
+    padding: 17px 0;
+  }
+
+  .brief-view--barber .brief-preview footer {
+    padding-top: 16px;
+  }
+}
+
+@media print {
+  .brief-barber-details > summary {
+    display: none;
+  }
+
+  .brief-barber-details > .brief-preview__sections {
+    display: grid;
+  }
+}
+
 .record-outcome {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

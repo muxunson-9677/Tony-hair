@@ -220,7 +220,7 @@ onBeforeUnmount(() => {
 
     <header class="inner-header">
       <p class="eyebrow">
-        PROFILE · LOCAL ONLY
+        我的头发信息 · 仅保存在本机
       </p>
       <h1
         id="profile-form-title"

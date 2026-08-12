@@ -140,7 +140,7 @@ onBeforeUnmount(() => {
   >
     <header class="archive-header">
       <p class="eyebrow">
-        YOUR CUT NOTES · 03
+        你的理发记忆 · 仅保存在本机
       </p>
       <h1 id="archive-title">
         档案
@@ -296,7 +296,7 @@ onBeforeUnmount(() => {
             v-tactile
             to="/archive/plans/new"
           >
-            新建发型计划
+            准备下次怎么剪
           </RouterLink>
           <RouterLink
             v-tactile
@@ -355,10 +355,10 @@ onBeforeUnmount(() => {
         <div class="archive-section-heading">
           <div>
             <p class="section-index">
-              04 / 发型计划
+              04 / 下次怎么剪
             </p>
             <h2 id="archive-plans-title">
-              最近计划
+              准备中的剪法
             </h2>
           </div>
           <RouterLink
@@ -366,7 +366,7 @@ onBeforeUnmount(() => {
             class="text-link"
             to="/archive/plans/new"
           >
-            新建发型计划
+            准备下次怎么剪
           </RouterLink>
         </div>
         <ol
@@ -452,10 +452,10 @@ onBeforeUnmount(() => {
         aria-labelledby="archive-standard-title"
       >
         <p class="section-index">
-          05 / 可复刻
+          05 / 下次照着剪
         </p>
         <h2 id="archive-standard-title">
-          标准发型
+          满意的剪法
         </h2>
         <ul class="guidance-list">
           <li
@@ -473,10 +473,10 @@ onBeforeUnmount(() => {
         aria-labelledby="archive-avoid-title"
       >
         <p class="section-index">
-          06 / 要避开
+          06 / 下次要避开
         </p>
         <h2 id="archive-avoid-title">
-          避雷规则
+          别再这样剪
         </h2>
         <ul class="guidance-list guidance-list--avoid">
           <li
@@ -494,10 +494,10 @@ onBeforeUnmount(() => {
         aria-labelledby="archive-brief-title"
       >
         <p class="section-index">
-          07 / 沟通卡
+          07 / 到店沟通
         </p>
         <h2 id="archive-brief-title">
-          已保存 {{ savedBriefs.length }} 张沟通卡
+          给理发师看的内容 · {{ savedBriefs.length }} 份
         </h2>
         <ol
           class="brief-list"
@@ -509,7 +509,7 @@ onBeforeUnmount(() => {
             <RouterLink
               v-tactile
               :to="`/archive/plans/${item.plan.id}/brief`"
-              :aria-label="`${item.plan.title} · ${item.candidateLabel} · 查看沟通卡`"
+              :aria-label="`${item.plan.title} · ${item.candidateLabel} · 给理发师看`"
             >
               <img
                 v-if="item.candidate?.demoImagePath"

@@ -297,7 +297,7 @@ onBeforeUnmount(() => {
       <template v-else>
         <header class="inner-header brief-header">
           <p class="eyebrow">
-            BARBER BRIEF · LOCAL
+            给理发师看的话 · 仅保存在本机
           </p>
           <h1 id="brief-title">
             <span class="visually-hidden">{{ savedBrief ? '编辑理发师沟通卡' : '创建理发师沟通卡' }}</span>
@@ -582,7 +582,7 @@ onBeforeUnmount(() => {
       aria-label="理发师沟通卡预览"
     >
       <header class="brief-preview__header">
-        <p>咋剪发 · BARBER BRIEF</p>
+        <p>咋剪发 · 给理发师看</p>
         <h2>{{ plan.title }}</h2>
         <span>目标方案 · {{ targetCandidate?.name ?? '请选择' }}</span>
         <span v-if="backupCandidate">备选 · {{ backupCandidate.name }}</span>
@@ -598,14 +598,6 @@ onBeforeUnmount(() => {
       >
         目标候选暂无可显示图片
       </div>
-      <dl class="brief-preview__sections">
-        <div><dt>整体</dt><dd>{{ overall || '待填写' }}</dd></div>
-        <div><dt>顶部</dt><dd>{{ top || '待填写' }}</dd></div>
-        <div><dt>刘海</dt><dd>{{ fringe || '待填写' }}</dd></div>
-        <div><dt>两侧</dt><dd>{{ sides || '待填写' }}</dd></div>
-        <div><dt>鬓角</dt><dd>{{ sideburns || '待填写' }}</dd></div>
-        <div><dt>后脑</dt><dd>{{ back || '待填写' }}</dd></div>
-      </dl>
       <div class="brief-preview__lists">
         <section>
           <h3>最在意</h3>
@@ -630,6 +622,26 @@ onBeforeUnmount(() => {
           </ul>
         </section>
       </div>
+      <details
+        :open="!isBarberMode"
+        :class="['brief-preview__regional-details', { 'brief-barber-details': isBarberMode }]"
+      >
+        <summary
+          v-if="isBarberMode"
+          v-tactile
+        >
+          <span>查看顶部、刘海和侧后细节</span>
+          <small>需要时再展开</small>
+        </summary>
+        <dl class="brief-preview__sections">
+          <div><dt>整体</dt><dd>{{ overall || '待填写' }}</dd></div>
+          <div><dt>顶部</dt><dd>{{ top || '待填写' }}</dd></div>
+          <div><dt>刘海</dt><dd>{{ fringe || '待填写' }}</dd></div>
+          <div><dt>两侧</dt><dd>{{ sides || '待填写' }}</dd></div>
+          <div><dt>鬓角</dt><dd>{{ sideburns || '待填写' }}</dd></div>
+          <div><dt>后脑</dt><dd>{{ back || '待填写' }}</dd></div>
+        </dl>
+      </details>
       <footer>
         <b>请现场确认</b>
         <p>请结合真实发质、发量与头型，再决定最终长度和层次。</p>

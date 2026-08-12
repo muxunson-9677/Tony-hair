@@ -68,7 +68,7 @@ function selectAdjustment(adjustment: (typeof adjustments)[number]) {
 
     <header class="try-header">
       <p class="eyebrow">
-        TRY A DIRECTION · 02
+        预制方向对比 · 不是个人效果预测
       </p>
       <h1 id="try-title">
         示例方向对比

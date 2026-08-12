@@ -104,12 +104,12 @@ const candidateImageSource = (candidate: Candidate) => (
 
 const candidateSourceLabel = (candidate: Candidate) => {
   if (candidate.source === 'user_reference') {
-    return 'OWN · 当前设备参考图'
+    return '我的参考图'
   }
   if (candidate.source === 'past_record') {
-    return 'PAST · 真实剪后记录'
+    return '真实剪后记录'
   }
-  return 'DEMO · 示例体验'
+  return '预制示例 · 非 AI 生成'
 }
 
 onMounted(async () => {
@@ -144,7 +144,7 @@ onBeforeUnmount(() => {
       v-if="store.loading"
     >
       <h1 id="plan-detail-state-title">
-        发型计划详情
+        正在读取下次剪法
       </h1>
       <p
         class="archive-loading"
@@ -188,7 +188,7 @@ onBeforeUnmount(() => {
     <template v-else>
       <header class="plan-detail-header">
         <p class="eyebrow">
-          PLAN DETAIL · LOCAL
+          这次准备怎么剪 · 仅保存在本机
         </p>
         <h1 id="plan-detail-title">
           {{ plan.title }}
@@ -197,9 +197,9 @@ onBeforeUnmount(() => {
         <div class="detail-actions">
           <RouterLink
             v-tactile
-            class="text-link"
+            class="plan-primary-action"
             :to="`/archive/plans/${plan.id}/brief`"
-            :aria-label="brief ? '查看沟通卡' : '创建沟通卡'"
+            :aria-label="brief ? '给理发师看' : '准备给理发师看的内容'"
           >
             {{ brief ? '给理发师看' : '准备给理发师看' }}
           </RouterLink>
@@ -209,13 +209,13 @@ onBeforeUnmount(() => {
             class="text-link"
             :to="`/archive/plans/${plan.id}/edit`"
           >
-            编辑计划
+            调整这次剪法
           </RouterLink>
           <p
             v-else
             class="detail-readonly"
           >
-            旧来源候选或已完成计划暂时只读
+            旧来源或已完成的剪法暂时不能修改
           </p>
           <button
             v-tactile
@@ -248,7 +248,7 @@ onBeforeUnmount(() => {
 
       <ol
         class="candidate-detail-list"
-        aria-label="计划候选"
+        aria-label="这次比较的方向"
       >
         <li
           v-for="candidate in candidates"

@@ -8,7 +8,7 @@ import { tactileDirective as vTactile } from '../ui/tactile'
 
 const tools = [
   { to: '/archive/profile', icon: 'me', tone: 'coral', title: '头发档案', detail: '发质、发量、打理时间与明确偏好' },
-  { to: '/archive', icon: 'archive', tone: 'purple', title: '理发档案', detail: '计划、沟通卡、剪后记录与复刻依据' },
+  { to: '/archive', icon: 'archive', tone: 'purple', title: '理发档案', detail: '下次剪法、给理发师看的话和剪后照片' },
   { to: '/privacy/mask', icon: 'eye', tone: 'blue', title: '照片遮罩', detail: '本机定位与手动确认，导出新的单层图片' },
 ] as const
 
@@ -81,7 +81,7 @@ onBeforeUnmount(releaseDownload)
   >
     <header class="me-header">
       <p class="eyebrow">
-        YOUR DEVICE · PRIVATE
+        你的本机内容 · 不创建账号
       </p>
       <h1 id="me-title">
         我的

@@ -104,13 +104,13 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         path: '/archive/plans/new',
         name: 'archive-plan-new',
         component: ArchivePlanFormView,
-        meta: { title: '新建发型计划｜咋剪发', hideBottomNav: true },
+        meta: { title: '准备下次怎么剪｜咋剪发', hideBottomNav: true },
       },
       {
         path: '/archive/plans/:id/edit',
         name: 'archive-plan-edit',
         component: ArchivePlanFormView,
-        meta: { title: '编辑发型计划｜咋剪发', hideBottomNav: true },
+        meta: { title: '调整下次剪法｜咋剪发', hideBottomNav: true },
       },
       {
         path: '/archive/plans/:id/brief',
@@ -128,7 +128,7 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         path: '/archive/plans/:id',
         name: 'archive-plan-detail',
         component: ArchivePlanDetailView,
-        meta: { title: '发型计划｜咋剪发' },
+        meta: { title: '下次怎么剪｜咋剪发', hideBottomNav: true },
       },
       {
         path: '/archive/records/new',
@@ -146,7 +146,7 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         path: '/archive/records/:id',
         name: 'archive-record-detail',
         component: ArchiveRecordDetailView,
-        meta: { title: '剪后记录｜咋剪发' },
+        meta: { title: '剪后记录｜咋剪发', hideBottomNav: true },
       },
       {
         path: '/me',

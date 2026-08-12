@@ -82,6 +82,12 @@ const form = reactive({
   adjustmentNotes: ['', '', ''],
 })
 
+const applyOutcomeDefault = (outcome: 'repeat' | 'adjust' | 'avoid') => {
+  if (!form.satisfaction) {
+    form.satisfaction = outcome === 'repeat' ? '5' : outcome === 'adjust' ? '3' : '1'
+  }
+}
+
 const parseYuan = (value: string): number | undefined | null => {
   const normalized = value.trim()
   if (!normalized) {
@@ -328,7 +334,7 @@ onBeforeUnmount(() => {
 
     <header class="inner-header">
       <p class="eyebrow">
-        AFTER CUT · LOCAL ONLY
+        剪后记一下 · 仅保存在本机
       </p>
       <h1 id="record-form-title">
         {{ isEditing ? '编辑剪后记录' : '记录这次理发' }}
@@ -427,47 +433,6 @@ onBeforeUnmount(() => {
         </label>
       </fieldset>
 
-      <div class="form-grid record-form__essentials">
-        <label>
-          <span>理发日期</span>
-          <input
-            v-model="form.date"
-            name="date"
-            type="date"
-            required
-          >
-        </label>
-        <label>
-          <span>发型名</span>
-          <input
-            v-model="form.styleName"
-            name="styleName"
-            maxlength="80"
-            placeholder="可不填，系统会按日期命名"
-          >
-        </label>
-        <label>
-          <span>满意度</span>
-          <select
-            v-model="form.satisfaction"
-            name="satisfaction"
-            required
-          >
-            <option
-              value=""
-              disabled
-            >请打分</option>
-            <option
-              v-for="score in 5"
-              :key="score"
-              :value="String(score)"
-            >
-              {{ score }} / 5
-            </option>
-          </select>
-        </label>
-      </div>
-
       <fieldset class="record-outcome">
         <legend>下次还这么剪吗？</legend>
         <label v-tactile>
@@ -475,6 +440,7 @@ onBeforeUnmount(() => {
             v-model="form.outcome"
             type="radio"
             value="repeat"
+            @change="applyOutcomeDefault('repeat')"
           >
           就这样
         </label>
@@ -483,6 +449,7 @@ onBeforeUnmount(() => {
             v-model="form.outcome"
             type="radio"
             value="adjust"
+            @change="applyOutcomeDefault('adjust')"
           >
           有一点要改
         </label>
@@ -491,6 +458,7 @@ onBeforeUnmount(() => {
             v-model="form.outcome"
             type="radio"
             value="avoid"
+            @change="applyOutcomeDefault('avoid')"
           >
           别再这样
         </label>
@@ -532,6 +500,58 @@ onBeforeUnmount(() => {
           >
         </label>
       </div>
+
+      <details
+        class="record-extra-details record-basic-details"
+        :open="isEditing"
+      >
+        <summary v-tactile>
+          <span>日期、名称和满意度</span>
+          <small>今天已自动填好，发型名可以不写</small>
+        </summary>
+        <div class="record-extra-details__body">
+          <div class="form-grid record-form__essentials">
+            <label>
+              <span>理发日期</span>
+              <input
+                v-model="form.date"
+                name="date"
+                type="date"
+                required
+              >
+            </label>
+            <label>
+              <span>发型名</span>
+              <input
+                v-model="form.styleName"
+                name="styleName"
+                maxlength="80"
+                placeholder="可不填，系统会按日期命名"
+              >
+            </label>
+            <label>
+              <span>满意度</span>
+              <select
+                v-model="form.satisfaction"
+                name="satisfaction"
+                required
+              >
+                <option
+                  value=""
+                  disabled
+                >请打分</option>
+                <option
+                  v-for="score in 5"
+                  :key="score"
+                  :value="String(score)"
+                >
+                  {{ score }} / 5
+                </option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </details>
 
       <details class="record-extra-details record-salon-details">
         <summary v-tactile>

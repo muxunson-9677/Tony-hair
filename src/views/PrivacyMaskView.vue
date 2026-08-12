@@ -51,7 +51,7 @@ onBeforeUnmount(releaseDownload)
         ← 返回我的
       </RouterLink>
       <p class="eyebrow">
-        PRIVACY TOOL · LOCAL
+        本机隐私工具 · 照片不上传
       </p>
       <h1 id="privacy-mask-title">
         隐私<br>遮罩

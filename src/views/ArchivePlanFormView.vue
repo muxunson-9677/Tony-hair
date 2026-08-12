@@ -417,7 +417,7 @@ const hydrateEditingPlan = () => {
   form.status = plan.status === 'ready' ? 'ready' : 'draft'
   selectedCandidates.value = existingCandidates.map(toSelectedCandidate)
   rebuildPreviewUrls()
-  document.title = '编辑发型计划｜咋剪发'
+  document.title = '调整下次剪法｜咋剪发'
 }
 
 const initializeForRoute = async () => {
@@ -538,10 +538,10 @@ onBeforeUnmount(() => {
 
     <header class="inner-header">
       <p class="eyebrow">
-        {{ form.mode === 'repeat' ? 'REPEAT · ONE STANDARD' : 'PLAN · 2—4 DIRECTIONS' }}
+        {{ form.mode === 'repeat' ? '照上次剪 · 1 个标准发型' : '下次剪法 · 比较 2—4 个方向' }}
       </p>
       <h1 id="plan-form-title">
-        {{ isEditing ? '编辑发型计划' : '新建发型计划' }}
+        {{ isEditing ? '调整下次剪法' : '准备下次怎么剪' }}
       </h1>
       <p>自己的参考、剪后记录和预制示例可以放在一起比较。</p>
     </header>
@@ -567,7 +567,7 @@ onBeforeUnmount(() => {
       class="archive-empty archive-empty--inner"
     >
       <h2>请先建立发型档案</h2>
-      <p>计划需要归属于这台设备上的主档案。</p>
+      <p>先留下最基本的头发信息，之后选的方向才能属于你。</p>
       <p
         v-if="addNotice"
         class="form-alert"
@@ -602,7 +602,7 @@ onBeforeUnmount(() => {
       v-else-if="readOnlyReason"
       class="archive-empty archive-empty--inner"
     >
-      <h2>此计划暂时只读</h2>
+      <h2>这份下次剪法暂时不能修改</h2>
       <p>{{ readOnlyReason }}</p>
       <RouterLink
         v-tactile

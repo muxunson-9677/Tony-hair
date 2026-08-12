@@ -937,7 +937,7 @@ test('keeps a processed private reference local while its mixed-plan snapshot su
   await expect(page.getByRole('img', { name: '齐颌短鲍伯预制示例' })).toBeVisible()
   await expect(page.getByText(/两侧想保留：耳侧长度要盖住一半耳朵/u)).toBeVisible()
   const planPath = new URL(page.url()).pathname
-  await page.getByRole('link', { name: '创建沟通卡' }).click()
+  await page.getByRole('link', { name: '准备给理发师看的内容' }).click()
   await fillBrief(page, '耳侧长度参考')
   const briefPath = new URL(page.url()).pathname
   await expect(page.getByRole('region', { name: '理发师沟通卡预览' })).toContainText('耳侧长度参考')
@@ -992,6 +992,7 @@ test('creates a one-snapshot repeat plan and its communication card from an acti
   await page.goto('/archive/profile')
   await fillProfile(page, '复刻测试')
   await page.getByRole('link', { name: '记录这次理发' }).click()
+  await page.getByText('日期、名称和满意度', { exact: true }).click()
   await page.getByLabel('理发日期').fill('2026-08-20')
   await page.getByLabel('发型名').fill('上次满意短发')
   await page.getByLabel('满意度').selectOption('5')
@@ -1001,7 +1002,7 @@ test('creates a one-snapshot repeat plan and its communication card from an acti
   await expect(page.getByText('已存为标准发型')).toBeVisible()
 
   await page.getByRole('link', { name: '返回档案' }).click()
-  await page.getByRole('link', { name: '新建发型计划' }).click()
+  await page.getByRole('link', { name: '准备下次怎么剪' }).click()
   await openPlanDetails(page)
   await page.getByLabel('复刻标准发型').check()
   await page.getByRole('button', { name: '选择标准发型：上次满意短发' }).click()
@@ -1013,9 +1014,9 @@ test('creates a one-snapshot repeat plan and its communication card from an acti
 
   await expect(page.getByRole('heading', { level: 1, name: '复刻上次满意短发' })).toBeVisible()
   await expect(page.getByRole('img', { name: '上次满意短发本地候选图' })).toBeVisible()
-  await expect(page.getByRole('list', { name: '计划候选' }).getByRole('listitem')).toHaveCount(1)
-  await expect(page.getByText('01 · PAST · 真实剪后记录', { exact: true })).toBeVisible()
-  await page.getByRole('link', { name: '创建沟通卡' }).click()
+  await expect(page.getByRole('list', { name: '这次比较的方向' }).getByRole('listitem')).toHaveCount(1)
+  await expect(page.getByText('01 · 真实剪后记录', { exact: true })).toBeVisible()
+  await page.getByRole('link', { name: '准备给理发师看的内容' }).click()
   await fillBrief(page, '上次满意短发')
   await expect(page.getByRole('region', { name: '理发师沟通卡预览' })).toContainText('上次满意短发')
   await captureSettled(page, testInfo, 'repeat-brief-390x844.png', { width: 390, height: 844 })

@@ -260,7 +260,9 @@ describe('app shell', () => {
   test.each([
     '/archive/profile',
     '/archive/plans/new',
+    '/archive/plans/missing',
     '/archive/records/new',
+    '/archive/records/missing',
     '/archive/plans/missing/brief',
   ])('keeps the immersive task at %s free of the fixed main navigation', async (path) => {
     await renderAt(path)

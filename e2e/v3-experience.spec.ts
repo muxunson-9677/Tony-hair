@@ -4,6 +4,10 @@ import { expect, test } from '@playwright/test'
 
 const TEST_DB_SESSION_KEY = '__zajianfa_e2e_archive_db__'
 
+const waitForSettledRoute = async (page: import('@playwright/test').Page) => {
+  await expect(page.locator('.route-enter-active, .route-leave-active')).toHaveCount(0)
+}
+
 test('completes the V3 choose, compare, barber, and adjustment journey on a phone', async ({ context, page }, testInfo) => {
   test.setTimeout(60_000)
   const databaseName = `zajianfa-v3-${Date.now()}-${crypto.randomUUID()}`
@@ -64,7 +68,7 @@ test('completes the V3 choose, compare, barber, and adjustment journey on a phon
     })).toBe(true)
     await page.screenshot({ path: testInfo.outputPath('v3-compare-390x844.png'), fullPage: true })
 
-    await page.getByRole('link', { name: '创建沟通卡' }).click()
+    await page.getByRole('link', { name: '准备给理发师看的内容' }).click()
     await page.getByLabel(`目标候选：${recommendedNames[0]}`).check()
     await page.getByLabel('备选方案').selectOption({ label: recommendedNames[1] })
     await page.getByRole('button', { name: '保存沟通卡' }).click()
@@ -75,17 +79,23 @@ test('completes the V3 choose, compare, barber, and adjustment journey on a phon
     await expect(page.getByRole('navigation', { name: '理发现场操作' })).toBeVisible()
     await expect(page.getByRole('button', { name: '保存修改' })).toHaveCount(0)
     await expect(page.getByText(`备选 · ${recommendedNames[1]}`)).toBeVisible()
+    await expect(page.getByRole('heading', { name: '最在意' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '绝对不要' })).toBeVisible()
+    await expect(page.getByText('查看顶部、刘海和侧后细节')).toBeVisible()
+    await expect(page.locator('.brief-barber-details')).not.toHaveAttribute('open', '')
+    await waitForSettledRoute(page)
     await page.screenshot({ path: testInfo.outputPath('v3-barber-390x844.png'), fullPage: true })
 
     await page.goto('/archive/records/new')
+    await page.getByText('日期、名称和满意度', { exact: true }).click()
     await page.getByLabel('理发日期').fill('2026-08-12')
     await page.getByLabel('发型名').fill('第一次验证短发')
-    await page.getByLabel('满意度').selectOption('4')
     await page.getByLabel('剪后照片').setInputFiles('public/demo/persona-ran-sidepart.webp')
     await page.getByLabel('有一点要改').check()
     await page.getByLabel('下次调整 1').fill('两侧再保留半厘米')
-    await page.getByText('补充本次信息', { exact: true }).click()
+    await page.getByText('在哪剪的（可选）', { exact: true }).click()
     await page.getByLabel('店铺位置（可选）').fill('上海市静安区南京西路')
+    await waitForSettledRoute(page)
     await page.screenshot({ path: testInfo.outputPath('v3-record-adjust-390x844.png'), fullPage: true })
     await page.getByRole('button', { name: '保存剪后记录' }).click()
     await expect(page.getByText('下次我会记得这些调整')).toBeVisible()

@@ -131,7 +131,7 @@ onBeforeUnmount(revokePhotoUrls)
     <template v-else>
       <header class="record-detail-header">
         <p class="eyebrow">
-          CUT RESULT · LOCAL
+          这次剪完的真实结果 · 仅保存在本机
         </p>
         <h1 id="record-detail-title">
           {{ record.styleName }}

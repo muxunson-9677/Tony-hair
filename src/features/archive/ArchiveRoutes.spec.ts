@@ -155,7 +155,7 @@ describe('archive routes and forms', () => {
     await renderAt('/archive')
 
     expect(await screen.findByRole('region', { name: '下一步' })).toBeTruthy()
-    expect(screen.getByRole('link', { name: '新建发型计划' }).getAttribute('data-tactile')).toBe('true')
+    expect(screen.getByRole('link', { name: '准备下次怎么剪' }).getAttribute('data-tactile')).toBe('true')
     expect(screen.getByRole('link', { name: '记录这次理发' }).getAttribute('data-tactile')).toBe('true')
     expect(screen.queryByRole('heading', { name: '还没有沟通卡' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '标准发型' })).toBeNull()
@@ -473,7 +473,7 @@ describe('archive routes and forms', () => {
 
     await renderAt(`/archive/plans/${emptyRepeatPlan.id}`)
 
-    expect(await screen.findByRole('link', { name: '编辑计划' })).toBeTruthy()
+    expect(await screen.findByRole('link', { name: '调整这次剪法' })).toBeTruthy()
   })
 
   test('gives brief loading and missing states real h1 headings', async () => {
@@ -539,7 +539,7 @@ describe('archive routes and forms', () => {
     await defaultArchiveRepository.createProfile(existingProfile)
     const router = await renderAt('/archive/plans/new')
 
-    expect(await screen.findByRole('heading', { level: 1, name: '新建发型计划' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: '准备下次怎么剪' })).toBeTruthy()
     expect(await screen.findByText(/示例体验/)).toBeTruthy()
     expect(screen.getByText(/非用户生成/)).toBeTruthy()
     expect(screen.getByLabelText('本地参考图')).toBeTruthy()
@@ -567,7 +567,7 @@ describe('archive routes and forms', () => {
     expect(screen.getByRole('img', { name: /纹理短碎发/ })).toBeTruthy()
     expect(screen.queryByRole('link', { name: '发起好友投票' })).toBeNull()
 
-    await fireEvent.click(screen.getByRole('link', { name: '编辑计划' }))
+    await fireEvent.click(screen.getByRole('link', { name: '调整这次剪法' }))
     await fireEvent.update(await screen.findByLabelText('计划标题'), '更新后的夏末计划')
     expect(await screen.findByText('已选择 2 / 4')).toBeTruthy()
     await fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
@@ -642,7 +642,7 @@ describe('archive routes and forms', () => {
     await router.push(`/archive/plans/${planId}`)
     expect(await screen.findByRole('heading', { level: 1, name: '照上次再剪' })).toBeTruthy()
     expect(await screen.findByRole('img', { name: /可复刻短碎发.*本地候选图/ })).toBeTruthy()
-    expect(screen.getByRole('link', { name: '编辑计划' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '调整这次剪法' })).toBeTruthy()
 
     const exportPng = vi.spyOn(briefExport, 'exportBriefPng').mockResolvedValue({
       blob: new NodeBlob(['png'], { type: 'image/png' }) as unknown as Blob,
@@ -815,12 +815,12 @@ describe('archive routes and forms', () => {
     await waitFor(() => {
       expect(URL.createObjectURL).toHaveBeenCalledWith(preparedBlob)
       expect(URL.createObjectURL).toHaveBeenCalledWith(sourcePhoto)
-      const candidateList = screen.getByRole('list', { name: '计划候选' })
+      const candidateList = screen.getByRole('list', { name: '这次比较的方向' })
       expect(within(candidateList).getAllByRole('img')).toHaveLength(3)
     })
     const originalIds = saved.map(({ id }) => id)
 
-    await fireEvent.click(screen.getByRole('link', { name: '编辑计划' }))
+    await fireEvent.click(screen.getByRole('link', { name: '调整这次剪法' }))
     expect(await screen.findByText('已选择 3 / 4')).toBeTruthy()
     await fireEvent.update(screen.getByLabelText('计划标题'), '保留候选标识的计划')
     await fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
@@ -919,7 +919,9 @@ describe('archive routes and forms', () => {
     await defaultArchiveRepository.savePlanWithCandidates(plan, candidates)
     const router = await renderAt(`/archive/plans/${plan.id}`)
 
-    expect((await screen.findByRole('link', { name: '创建沟通卡' })).getAttribute('data-tactile')).toBe('true')
+    const createBrief = await screen.findByRole('link', { name: '准备给理发师看的内容' })
+    expect(createBrief.getAttribute('data-tactile')).toBe('true')
+    expect(createBrief.classList).toContain('plan-primary-action')
     const mainCandidateAction = screen.getByRole('link', { name: '选“纹理短碎发”为主方案' })
     expect(mainCandidateAction.getAttribute('data-tactile')).toBe('true')
     await fireEvent.click(mainCandidateAction)
@@ -967,15 +969,19 @@ describe('archive routes and forms', () => {
     expect(await screen.findByRole('navigation', { name: '理发现场操作' })).toBeTruthy()
     expect(screen.queryByRole('navigation', { name: '主导航' })).toBeNull()
     expect(screen.queryByRole('heading', { level: 1, name: '编辑理发师沟通卡' })).toBeNull()
-    expect(screen.getByRole('region', { name: '理发师沟通卡预览' })).toBeTruthy()
+    const barberPreview = screen.getByRole('region', { name: '理发师沟通卡预览' })
+    const prioritiesHeading = within(barberPreview).getByRole('heading', { name: '最在意' })
+    const regionalDetails = within(barberPreview).getByText('查看顶部、刘海和侧后细节').closest('details')
+    expect(regionalDetails?.open).toBe(false)
+    expect(prioritiesHeading.compareDocumentPosition(regionalDetails as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByRole('button', { name: '保存图片备用' })).toBeTruthy()
     await router.push(`/archive/plans/${plan.id}/brief`)
 
     await router.push('/archive')
-    expect(await screen.findByRole('heading', { name: '已保存 1 张沟通卡' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '给理发师看的内容 · 1 份' })).toBeTruthy()
     expect(screen.getByRole('link', { name: /夏末短发计划.*纹理短碎发/ })).toBeTruthy()
     await router.push(`/archive/plans/${plan.id}`)
-    expect(await screen.findByRole('link', { name: '查看沟通卡' })).toBeTruthy()
+    expect(await screen.findByRole('link', { name: '给理发师看' })).toBeTruthy()
     await router.push(`/archive/plans/${plan.id}/brief`)
     expect(await screen.findByDisplayValue(plainText)).toBeTruthy()
 
@@ -1050,7 +1056,7 @@ describe('archive routes and forms', () => {
 
     const router = await renderAt('/archive')
     const legacyBriefLink = await screen.findByRole('link', {
-      name: '旧版计划 · 旧版未记录目标候选 · 查看沟通卡',
+      name: '旧版计划 · 旧版未记录目标候选 · 给理发师看',
     })
     expect(within(legacyBriefLink).getByText('旧版未记录目标候选')).toBeTruthy()
     expect(within(legacyBriefLink).queryByText('旧候选 1')).toBeNull()
@@ -1113,10 +1119,10 @@ describe('archive routes and forms', () => {
     ])
     const router = await renderAt(`/archive/plans/${legacyPlan.id}`)
 
-    expect(await screen.findByText('旧来源候选或已完成计划暂时只读')).toBeTruthy()
-    expect(screen.queryByRole('link', { name: '编辑计划' })).toBeNull()
+    expect(await screen.findByText('旧来源或已完成的剪法暂时不能修改')).toBeTruthy()
+    expect(screen.queryByRole('link', { name: '调整这次剪法' })).toBeNull()
     await router.push(`/archive/plans/${legacyPlan.id}/edit`)
-    expect(await screen.findByRole('heading', { level: 2, name: '此计划暂时只读' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 2, name: '这份下次剪法暂时不能修改' })).toBeTruthy()
     expect(screen.getByText(/避免编辑时丢失来源/)).toBeTruthy()
     expect(await defaultArchiveRepository.listCandidates(legacyPlan.id)).toEqual(legacyCandidates)
 
@@ -1174,8 +1180,8 @@ describe('archive routes and forms', () => {
     })
 
     const router = await renderAt(`/archive/plans/${hybridPlan.id}`)
-    expect(await screen.findByText('旧来源候选或已完成计划暂时只读')).toBeTruthy()
-    expect(screen.queryByRole('link', { name: '编辑计划' })).toBeNull()
+    expect(await screen.findByText('旧来源或已完成的剪法暂时不能修改')).toBeTruthy()
+    expect(screen.queryByRole('link', { name: '调整这次剪法' })).toBeNull()
     await router.push(`/archive/plans/${hybridPlan.id}/brief`)
     expect(await screen.findByRole('img', { name: '混合预制图候选图' })).toHaveProperty(
       'src',
@@ -1406,22 +1412,34 @@ describe('archive routes and forms', () => {
       .toBeTruthy()
   })
 
-  test('puts the two photos first and separates salon from deeper optional details', async () => {
+  test('puts photos and the next-cut decision before metadata, then separates optional details', async () => {
     await defaultArchiveRepository.createProfile(existingProfile)
     await renderAt('/archive/records/new')
 
     const dateInput = await screen.findByLabelText('理发日期')
     const photoFieldset = screen.getByText('剪前 / 剪后 · 至少一张').closest('fieldset')
+    const outcomeFieldset = screen.getByText('下次还这么剪吗？').closest('fieldset')
+    const basicSummary = screen.getByText('日期、名称和满意度').closest('summary')
+    const basicDetails = basicSummary?.closest('details')
     const salonSummary = screen.getByText('在哪剪的（可选）')
     const salonDetails = salonSummary.closest('details')
     const moreSummary = screen.getByText('更多记录（可选）')
     const moreDetails = moreSummary.closest('details')
 
     expect(photoFieldset).toBeTruthy()
+    expect(outcomeFieldset).toBeTruthy()
     expect(Boolean(
       photoFieldset
-      && (photoFieldset.compareDocumentPosition(dateInput) & Node.DOCUMENT_POSITION_FOLLOWING),
+      && outcomeFieldset
+      && (photoFieldset.compareDocumentPosition(outcomeFieldset) & Node.DOCUMENT_POSITION_FOLLOWING),
     )).toBe(true)
+    expect(Boolean(
+      outcomeFieldset
+      && basicDetails
+      && (outcomeFieldset.compareDocumentPosition(basicDetails) & Node.DOCUMENT_POSITION_FOLLOWING),
+    )).toBe(true)
+    expect(basicDetails?.hasAttribute('open')).toBe(false)
+    expect(basicDetails?.contains(dateInput)).toBe(true)
     expect(salonDetails).toBeTruthy()
     expect(salonDetails?.hasAttribute('open')).toBe(false)
     expect(salonDetails?.contains(screen.getByLabelText('店铺', { exact: true }))).toBe(true)
@@ -1435,6 +1453,7 @@ describe('archive routes and forms', () => {
     expect(screen.getByRole('radio', { name: '有一点要改' })).toBeTruthy()
     expect(screen.getByRole('radio', { name: '别再这样' })).toBeTruthy()
     await fireEvent.click(screen.getByRole('radio', { name: '有一点要改' }))
+    expect((screen.getByLabelText('满意度') as HTMLSelectElement).value).toBe('3')
     expect(screen.getByLabelText('下次调整 1')).toBeTruthy()
   })
 
@@ -1471,7 +1490,7 @@ describe('archive routes and forms', () => {
     await defaultArchiveRepository.createProfile(existingProfile)
     await renderAt('/archive/plans/new')
 
-    expect(await screen.findByRole('heading', { name: '新建发型计划' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '准备下次怎么剪' })).toBeTruthy()
     expect(screen.queryByText('先回答一件事')).toBeNull()
     expect(await screen.findByText('选择第一个候选')).toBeTruthy()
   })
@@ -1680,7 +1699,7 @@ describe('archive routes and forms', () => {
 
     const router = await renderAt('/archive')
     expect(await screen.findByRole('link', { name: /清爽短碎发/ })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: '标准发型' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '满意的剪法' })).toBeTruthy()
     expect(screen.getAllByText('清爽短碎发').length).toBeGreaterThan(0)
     expect(screen.queryByText('还没有避雷规则。')).toBeNull()
 

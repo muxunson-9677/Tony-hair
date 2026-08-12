@@ -278,7 +278,7 @@ onBeforeUnmount(() => {
 
     <header v-if="!unavailable">
       <p class="eyebrow">
-        PRIVATE · ON THIS DEVICE
+        我的私人参考 · 仅保存在本机
       </p>
       <h1 id="reference-form-title">
         {{ heading }}
@@ -313,7 +313,7 @@ onBeforeUnmount(() => {
       class="style-terminal style-terminal--embedded"
     >
       <p class="eyebrow">
-        PRIVATE REFERENCE · UNAVAILABLE
+        私人参考 · 当前无法读取
       </p>
       <h1 id="reference-form-unavailable-title">
         这份私人参考找不到了

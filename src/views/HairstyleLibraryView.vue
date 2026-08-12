@@ -220,7 +220,7 @@ onBeforeUnmount(releaseReferenceUrls)
     <header class="style-library-header">
       <div>
         <p class="eyebrow">
-          {{ showingReferences ? 'PRIVATE · THIS DEVICE' : 'CURATED · LOCAL FAVORITES' }}
+          {{ showingReferences ? '我的私人参考 · 仅保存在本机' : '少量精选方向 · 收藏仅保存在本机' }}
         </p>
         <h1 :id="titleId">
           {{ heading }}

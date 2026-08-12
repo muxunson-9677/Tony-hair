@@ -282,7 +282,7 @@
 
 .profile-photo-wall-empty a {
   display: inline-grid;
-  min-height: 44px;
+  min-height: 46px;
   place-items: center;
   padding: 10px 16px;
   border-radius: 14px;
@@ -754,6 +754,20 @@
   box-shadow: 0 8px 18px rgba(52, 120, 246, .2);
 }
 
+.plan-primary-action {
+  display: inline-grid;
+  min-height: 45px;
+  place-items: center;
+  padding: 10px 16px;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(180deg, #4387fa, #2f70e9);
+  box-shadow: 0 9px 19px rgba(44, 108, 220, .22), inset 0 1px 0 rgba(255, 255, 255, .35);
+  font-size: .82rem;
+  font-weight: 760;
+  text-decoration: none;
+}
+
 .candidate-main-badge {
   color: #16663e !important;
   background: #e8f8ef;
@@ -1134,6 +1148,19 @@
   border-radius: 16px;
   background: #fff;
   box-shadow: 0 8px 18px rgba(35, 47, 65, .07), inset 0 1px 0 #fff;
+}
+
+.record-outcome label:has(input:checked) {
+  border-color: rgba(52, 120, 246, .42);
+  color: #174f9e;
+  background: #edf5ff;
+  box-shadow: 0 10px 22px rgba(52, 120, 246, .14), inset 0 0 0 1px rgba(52, 120, 246, .12);
+}
+
+.record-basic-details {
+  border-color: rgba(124, 136, 154, .15);
+  background: #f8fafc;
+  box-shadow: none;
 }
 
 .hairstyle-tile__match {

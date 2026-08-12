@@ -82,7 +82,7 @@ onMounted(loadLibrary)
     <article class="style-detail-copy">
       <header>
         <p class="eyebrow">
-          CURATED STYLE · FRONT VIEW
+          精选发型方向 · 当前只有正面参考
         </p>
         <h1 id="style-detail-title">
           {{ style.name }}
