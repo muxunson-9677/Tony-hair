@@ -7,9 +7,12 @@ import type { MaskTransform } from '../privacy/types'
 export const SHARE_CARD_WIDTH = 1080
 export const SHARE_CARD_HEIGHT = 1440
 
-export const SHARE_TITLE_LIMIT = 16
+// 各上限按"字符宽 × 字号 + 起点 x ≤ 画布宽"推导，防止中文画出画布外。
+export const SHARE_TITLE_LIMIT = 14
 export const SHARE_LINE_LIMIT = 22
-export const SHARE_CAPTION_LIMIT = 18
+export const SHARE_SIDE_LINE_LIMIT = 9
+export const SHARE_COLUMN_LINE_LIMIT = 11
+export const SHARE_CAPTION_LIMIT = 9
 export const SHARE_LIST_LIMIT = 3
 
 export const SHARE_BRAND_MARK = `${PRODUCT_NAME} · 本地生成`
@@ -158,6 +161,7 @@ export const buildReviewCard = (content: ReviewCardContent): ShareCardLayout => 
     .slice(0, SHARE_LIST_LIMIT)
   const hasPhoto = Boolean(content.photoKey)
   const listX = hasPhoto ? 560 : 72
+  const lineLimit = hasPhoto ? SHARE_SIDE_LINE_LIMIT : SHARE_LINE_LIMIT
   return {
     kind: 'review',
     width: SHARE_CARD_WIDTH,
@@ -177,7 +181,7 @@ export const buildReviewCard = (content: ReviewCardContent): ShareCardLayout => 
         color: content.outcome === 'avoid' ? ALERT : INK,
       },
       ...lines.map((line, index): ShareTextItem => ({
-        text: `· ${truncateShareText(line, SHARE_LINE_LIMIT)}`,
+        text: `· ${truncateShareText(line, lineLimit)}`,
         x: listX,
         y: 440 + index * 92,
         fontSize: 40,
@@ -211,6 +215,9 @@ export const buildAvoidCard = (content: AvoidCardContent): ShareCardLayout => {
   const photoDots = content.photoKey
     ? marks.map((mark, index) => ({ x: mark.x, y: mark.y, label: String(index + 1) }))
     : []
+  const hasPhoto = Boolean(content.photoKey)
+  const listX = hasPhoto ? 560 : 72
+  const lineLimit = hasPhoto ? SHARE_SIDE_LINE_LIMIT : SHARE_LINE_LIMIT
   return {
     kind: 'avoid',
     width: SHARE_CARD_WIDTH,
@@ -234,8 +241,8 @@ export const buildAvoidCard = (content: AvoidCardContent): ShareCardLayout => {
         x: 72, y: 186, fontSize: 66, fontWeight: 800, color: '#f6f4ef',
       },
       ...lines.map((line, index): ShareTextItem => ({
-        text: `${index + 1}. ${truncateShareText(line, SHARE_LINE_LIMIT)}`,
-        x: 560,
+        text: `${index + 1}. ${truncateShareText(line, lineLimit)}`,
+        x: listX,
         y: 340 + index * 92,
         fontSize: 40,
         fontWeight: 700,
@@ -267,21 +274,23 @@ export const buildBriefCard = (content: BriefCardContent): ShareCardLayout => {
     // 效果位规则：当前没有真实效果图，明示占位，不伪造 AI。
     { text: '效果位 · 期待剪后', x: 780, y: 1000, fontSize: 38, fontWeight: 760, color: SOFT, align: 'center' },
     { text: truncateShareText(`目标：${content.candidateName}`, SHARE_LINE_LIMIT), x: 72, y: 1082, fontSize: 42, fontWeight: 760, color: INK },
+    { text: '最在意', x: 72, y: 1152, fontSize: 34, fontWeight: 800, color: ACCENT },
+    { text: '绝对不要', x: 560, y: 1152, fontSize: 34, fontWeight: 800, color: ALERT },
     ...priorities.map((line, index): ShareTextItem => ({
-      text: `最在意 · ${truncateShareText(line, SHARE_CAPTION_LIMIT)}`,
+      text: `· ${truncateShareText(line, SHARE_COLUMN_LINE_LIMIT)}`,
       x: 72,
-      y: 1160 + index * 66,
-      fontSize: 36,
+      y: 1210 + index * 58,
+      fontSize: 34,
       fontWeight: 640,
-      color: ACCENT,
+      color: INK,
     })),
     ...avoids.map((line, index): ShareTextItem => ({
-      text: `不要 · ${truncateShareText(line, SHARE_CAPTION_LIMIT)}`,
+      text: `· ${truncateShareText(line, SHARE_COLUMN_LINE_LIMIT)}`,
       x: 560,
-      y: 1160 + index * 66,
-      fontSize: 36,
+      y: 1210 + index * 58,
+      fontSize: 34,
       fontWeight: 640,
-      color: ALERT,
+      color: INK,
     })),
     ...brandTexts(),
   ]

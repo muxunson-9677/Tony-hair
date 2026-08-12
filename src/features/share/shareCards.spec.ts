@@ -108,6 +108,61 @@ describe('share card layouts', () => {
   })
 })
 
+describe('canvas bounds invariant', () => {
+  const estimateWidth = (text: string, fontSize: number) => Array.from(text)
+    .reduce((total, character) => total + (character.charCodeAt(0) <= 0x2ff ? 0.55 : 1), 0) * fontSize
+
+  it('never draws any text outside the 1080x1440 canvas, even with maximal content', () => {
+    const longText = '这是一段特别特别长的中文内容用来撑爆版面看看会不会画出画布外面去'
+    const marks = Array.from({ length: 5 }, (_, index) => ({
+      id: `m${index}`,
+      region: 'sides' as const,
+      issue: 'custom' as const,
+      note: longText,
+      x: 0.5,
+      y: 0.5,
+    }))
+    const layouts: ShareCardLayout[] = [
+      buildCompareCard({
+        styleName: longText, date: '2026-08-13', satisfaction: 1,
+        beforeKey: 'b', afterKey: 'a',
+      }),
+      buildReviewCard({
+        styleName: longText, date: '2026-08-13', satisfaction: 1, outcome: 'adjust',
+        lines: [longText, longText, longText], photoKey: 'after',
+      }),
+      buildReviewCard({
+        styleName: longText, date: '2026-08-13', satisfaction: 1, outcome: 'avoid',
+        lines: [longText],
+      }),
+      buildAvoidCard({
+        styleName: longText, date: '2026-08-13', avoidLines: [longText, longText],
+        regionMarks: marks, photoKey: 'after',
+      }),
+      buildBriefCard({
+        planTitle: longText, candidateName: longText, referenceKey: 'r',
+        topPriorities: [longText, longText, longText],
+        absoluteAvoids: [longText, longText, longText],
+      }),
+      buildChooseCard({
+        optionAName: longText, optionBName: longText, optionAKey: 'a', optionBKey: 'b',
+      }),
+    ]
+    for (const layout of layouts) {
+      for (const item of layout.texts) {
+        const width = estimateWidth(item.text, item.fontSize)
+        const align = item.align ?? 'left'
+        const left = align === 'left' ? item.x : align === 'center' ? item.x - width / 2 : item.x - width
+        const right = left + width
+        expect(left, `"${item.text}" left edge`).toBeGreaterThanOrEqual(0)
+        expect(right, `"${item.text}" right edge`).toBeLessThanOrEqual(SHARE_CARD_WIDTH)
+        expect(item.y).toBeGreaterThan(0)
+        expect(item.y).toBeLessThanOrEqual(SHARE_CARD_HEIGHT - 20)
+      }
+    }
+  })
+})
+
 describe('truncateShareText', () => {
   it('keeps short text untouched', () => {
     expect(truncateShareText('两侧不要推白', 22)).toBe('两侧不要推白')
