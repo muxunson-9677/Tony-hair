@@ -27,6 +27,10 @@ const planId = computed(() => typeof route.params.id === 'string' ? route.params
 const plan = computed(() => store.plans.find(({ id }) => id === planId.value))
 const candidates = computed(() => store.candidatesByPlanId[planId.value] ?? [])
 const brief = computed(() => store.briefsByPlanId[planId.value])
+const planMemories = computed(() => store.planMemoryByPlanId[planId.value] ?? [])
+const keepMemories = computed(() => planMemories.value.filter(({ kind }) => kind !== 'avoid'))
+const avoidMemories = computed(() => planMemories.value.filter(({ kind }) => kind === 'avoid'))
+const memorySourceExists = (recordId: string) => store.records.some(({ id }) => id === recordId)
 const candidateObjectUrls = ref<Record<string, string>>({})
 const knownDemoPaths = new Set(archiveDemoCandidates.map(({ image }) => image))
 let viewActive = false
@@ -245,6 +249,56 @@ onBeforeUnmount(() => {
         <b>示例体验 · 非用户生成</b>
         <p>标为“预制示例”的方向不是基于你的照片生成；最终能否剪出相近效果，请让理发师现场确认。</p>
       </aside>
+
+      <section
+        v-if="planMemories.length > 0"
+        class="plan-memory-summary"
+        aria-labelledby="plan-memory-summary-title"
+      >
+        <h2 id="plan-memory-summary-title">
+          本次已带入
+        </h2>
+        <div
+          v-if="keepMemories.length > 0"
+          class="plan-memory-summary__group"
+        >
+          <h3>这次继续保持</h3>
+          <ul>
+            <li
+              v-for="item in keepMemories"
+              :key="item.id"
+            >
+              <b>{{ item.text }}</b>
+              <small v-if="memorySourceExists(item.sourceRecordId)">
+                来自 {{ item.sourceRecordDate }} · {{ item.sourceLabel }}
+              </small>
+              <small v-else>
+                来自 {{ item.sourceRecordDate }} · {{ item.sourceLabel }}（原记录已删除，保留当时快照）
+              </small>
+            </li>
+          </ul>
+        </div>
+        <div
+          v-if="avoidMemories.length > 0"
+          class="plan-memory-summary__group plan-memory-summary__group--avoid"
+        >
+          <h3>这次一定避开</h3>
+          <ul>
+            <li
+              v-for="item in avoidMemories"
+              :key="item.id"
+            >
+              <b>{{ item.text }}</b>
+              <small v-if="memorySourceExists(item.sourceRecordId)">
+                来自 {{ item.sourceRecordDate }} · {{ item.sourceLabel }}
+              </small>
+              <small v-else>
+                来自 {{ item.sourceRecordDate }} · {{ item.sourceLabel }}（原记录已删除，保留当时快照）
+              </small>
+            </li>
+          </ul>
+        </div>
+      </section>
 
       <ol
         class="candidate-detail-list"

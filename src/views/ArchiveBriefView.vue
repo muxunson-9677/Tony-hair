@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { useArchiveStore } from '../features/archive/archiveStore'
 import * as briefExport from '../features/archive/briefExport'
+import { buildBriefListDefaults } from '../features/archive/briefMemory'
 import { resolveCandidateImageBlob } from '../features/archive/candidateSources'
 import { isValidPlanCandidateCount } from '../features/archive/types'
 import type { Candidate } from '../features/archive/types'
@@ -83,7 +84,14 @@ const hydrate = () => {
     : undefined
   const guide = catalogStyle?.barberGuide
   const profileNote = store.profile?.preferenceNotes.trim() ?? ''
-  const activeAvoids = store.avoidRules.filter(({ active }) => active).map(({ text }) => text)
+  // 新 Tony卡默认值：有记忆快照时只用计划确认保留的记忆；
+  // 无快照旧计划兜底回全局活动避雷合并（修订 1）。
+  const listDefaults = buildBriefListDefaults({
+    planMemoryItems: store.planMemoryByPlanId[planId.value] ?? [],
+    guideTopPriorities: guide?.topPriorities ?? [],
+    guideAbsoluteAvoids: guide?.absoluteAvoids ?? [],
+    activeAvoidTexts: store.avoidRules.filter(({ active }) => active).map(({ text }) => text),
+  })
   targetCandidateId.value = availableTarget?.id ?? ''
   backupCandidateId.value = candidates.value.some(({ id }) => id === current?.backupCandidateId)
     && current?.backupCandidateId !== availableTarget?.id
@@ -97,10 +105,10 @@ const hydrate = () => {
   back.value = current?.back ?? guide?.back ?? ''
   topPriorities.value = current?.topPriorities.length
     ? [...current.topPriorities]
-    : [...guide?.topPriorities ?? ['']].slice(0, 3)
+    : [...listDefaults.topPriorities]
   absoluteAvoids.value = current?.absoluteAvoids.length
     ? [...current.absoluteAvoids]
-    : [...new Set([...(guide?.absoluteAvoids ?? []), ...activeAvoids])].slice(0, 3)
+    : [...listDefaults.absoluteAvoids]
   if (topPriorities.value.length === 0) topPriorities.value = ['']
   if (absoluteAvoids.value.length === 0) absoluteAvoids.value = ['']
 }
