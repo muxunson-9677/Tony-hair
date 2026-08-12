@@ -17,6 +17,9 @@ import type {
   HaircutPhoto,
   HaircutPlan,
   HaircutRecord,
+  PlanMemoryItem,
+  PlanMemoryKind,
+  PlanMemorySource,
   StandardStyle,
 } from './types'
 
@@ -27,10 +30,12 @@ export interface ArchiveRepositoryPort {
   deleteProfile(profileId: string): Promise<void>
   listPlans(profileId: string): Promise<HaircutPlan[]>
   listCandidates(planId: string): Promise<Candidate[]>
+  listPlanMemoryItems(planId: string): Promise<PlanMemoryItem[]>
   savePlanWithCandidates(
     plan: HaircutPlan,
     candidates: readonly Candidate[],
-  ): Promise<{ plan: HaircutPlan, candidates: Candidate[] }>
+    memoryItems?: readonly PlanMemoryItem[],
+  ): Promise<{ plan: HaircutPlan, candidates: Candidate[], memoryItems: PlanMemoryItem[] }>
   deletePlan(planId: string): Promise<void>
   listBriefs(profileId: string): Promise<BarberBrief[]>
   getBrief(planId: string): Promise<BarberBrief | undefined>
@@ -59,6 +64,17 @@ export type CandidateDraft = Omit<Candidate, 'id' | 'planId' | 'order'> & {
   readonly id?: string
 }
 
+export interface PlanMemoryDraft {
+  readonly id?: string
+  readonly kind: PlanMemoryKind
+  readonly text: string
+  readonly originalText: string
+  readonly source: PlanMemorySource
+  readonly sourceRecordId: string
+  readonly sourceRecordDate: string
+  readonly sourceLabel: string
+}
+
 export interface HaircutPlanDraft {
   readonly id?: string
   readonly title: string
@@ -66,6 +82,7 @@ export interface HaircutPlanDraft {
   readonly mode: HaircutPlan['mode']
   readonly status: 'draft' | 'ready'
   readonly candidates: readonly CandidateDraft[]
+  readonly memories?: readonly PlanMemoryDraft[]
 }
 
 export type BarberBriefDraft = Omit<
@@ -169,6 +186,7 @@ export const createArchiveStore = (
   const profiles = ref<HairProfile[]>([])
   const plans = ref<HaircutPlan[]>([])
   const candidatesByPlanId = ref<Record<string, Candidate[]>>({})
+  const planMemoryByPlanId = ref<Record<string, PlanMemoryItem[]>>({})
   const briefsByPlanId = ref<Record<string, BarberBrief>>({})
   const records = ref<HaircutRecord[]>([])
   const photosByRecordId = ref<Record<string, HaircutPhoto[]>>({})
@@ -190,6 +208,7 @@ export const createArchiveStore = (
         profiles: loadedProfiles,
         plans: [] as HaircutPlan[],
         candidatesByPlanId: {} as Record<string, Candidate[]>,
+        planMemoryByPlanId: {} as Record<string, PlanMemoryItem[]>,
         briefsByPlanId: {} as Record<string, BarberBrief>,
         records: [] as HaircutRecord[],
         photosByRecordId: {} as Record<string, HaircutPhoto[]>,
@@ -214,6 +233,9 @@ export const createArchiveStore = (
     const candidateEntries = await Promise.all(loadedPlans.map(async ({ id }) => (
       [id, await repository.listCandidates(id)] as const
     )))
+    const memoryEntries = await Promise.all(loadedPlans.map(async ({ id }) => (
+      [id, await repository.listPlanMemoryItems(id)] as const
+    )))
     const photoEntries = await Promise.all(loadedRecords.map(async ({ id }) => (
       [id, await repository.listPhotos(id)] as const
     )))
@@ -222,6 +244,7 @@ export const createArchiveStore = (
       profiles: loadedProfiles,
       plans: loadedPlans,
       candidatesByPlanId: Object.fromEntries(candidateEntries),
+      planMemoryByPlanId: Object.fromEntries(memoryEntries.filter(([, items]) => items.length > 0)),
       briefsByPlanId: Object.fromEntries(loadedBriefs.map((brief) => [brief.planId, brief])),
       records: loadedRecords,
       photosByRecordId: Object.fromEntries(photoEntries),
@@ -234,6 +257,7 @@ export const createArchiveStore = (
     profiles.value = snapshot.profiles
     plans.value = snapshot.plans
     candidatesByPlanId.value = snapshot.candidatesByPlanId
+    planMemoryByPlanId.value = snapshot.planMemoryByPlanId
     briefsByPlanId.value = snapshot.briefsByPlanId
     records.value = snapshot.records
     photosByRecordId.value = snapshot.photosByRecordId
@@ -329,6 +353,7 @@ export const createArchiveStore = (
       profiles.value = profiles.value.filter(({ id }) => id !== profileId)
       plans.value = []
       candidatesByPlanId.value = {}
+      planMemoryByPlanId.value = {}
       briefsByPlanId.value = {}
       records.value = []
       photosByRecordId.value = {}
@@ -369,6 +394,17 @@ export const createArchiveStore = (
         : '请选择 2 到 4 个来源不重复且完整的候选。'
       return null
     }
+    const draftMemories = draft.memories
+    if (draftMemories) {
+      if (draftMemories.some(({ text }) => text.trim().length === 0)) {
+        error.value = '带入的经验不能是空白，请补充内容或删除该条。'
+        return null
+      }
+      if (draftMemories.some(({ text }) => text.length > 160)) {
+        error.value = '每条带入的经验最多 160 个字。'
+        return null
+      }
+    }
     if (saving.value) {
       return null
     }
@@ -379,6 +415,7 @@ export const createArchiveStore = (
       const timestamp = now().toISOString()
       const planId = existingPlan?.id ?? createId()
       const existingCandidates = candidatesByPlanId.value[planId] ?? []
+      const existingMemories = planMemoryByPlanId.value[planId] ?? []
       const plan: HaircutPlan = {
         id: planId,
         profileId: currentProfile.id,
@@ -411,7 +448,32 @@ export const createArchiveStore = (
         }
       })
 
-      const saved = await repository.savePlanWithCandidates(plan, candidates)
+      // memories 未提供时保留现有快照，避免旁路调用悄悄清空记忆。
+      const memoryItems: PlanMemoryItem[] = draftMemories
+        ? draftMemories.map((memory, index) => {
+          const existing = memory.id
+            ? existingMemories.find(({ id }) => id === memory.id)
+            : undefined
+          const text = memory.text.trim()
+          return {
+            id: existing?.id ?? createId(),
+            profileId: currentProfile.id,
+            planId,
+            order: index + 1,
+            kind: memory.kind,
+            text,
+            originalText: existing?.originalText ?? memory.originalText,
+            source: memory.source,
+            sourceRecordId: memory.sourceRecordId,
+            sourceRecordDate: memory.sourceRecordDate,
+            sourceLabel: memory.sourceLabel,
+            createdAt: existing?.createdAt ?? timestamp,
+            updatedAt: existing && existing.text === text ? existing.updatedAt : timestamp,
+          }
+        })
+        : existingMemories.map((memory, index) => ({ ...memory, order: index + 1 }))
+
+      const saved = await repository.savePlanWithCandidates(plan, candidates, memoryItems)
       plans.value = sortPlans([
         ...plans.value.filter(({ id }) => id !== saved.plan.id),
         saved.plan,
@@ -420,6 +482,13 @@ export const createArchiveStore = (
         ...candidatesByPlanId.value,
         [saved.plan.id]: saved.candidates,
       }
+      const nextMemories = { ...planMemoryByPlanId.value }
+      if (saved.memoryItems.length > 0) {
+        nextMemories[saved.plan.id] = saved.memoryItems
+      } else {
+        delete nextMemories[saved.plan.id]
+      }
+      planMemoryByPlanId.value = nextMemories
       return saved
     } catch (caught) {
       error.value = archiveErrorMessage(caught)
@@ -441,6 +510,9 @@ export const createArchiveStore = (
       const nextCandidates = { ...candidatesByPlanId.value }
       delete nextCandidates[planId]
       candidatesByPlanId.value = nextCandidates
+      const nextMemories = { ...planMemoryByPlanId.value }
+      delete nextMemories[planId]
+      planMemoryByPlanId.value = nextMemories
       const nextBriefs = { ...briefsByPlanId.value }
       delete nextBriefs[planId]
       briefsByPlanId.value = nextBriefs
@@ -734,6 +806,7 @@ export const createArchiveStore = (
     profile,
     plans,
     candidatesByPlanId,
+    planMemoryByPlanId,
     briefsByPlanId,
     records,
     photosByRecordId,

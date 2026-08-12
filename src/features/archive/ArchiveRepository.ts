@@ -15,6 +15,7 @@ import type {
   HaircutPlan,
   HaircutRecord,
   HaircutRecordBundle,
+  PlanMemoryItem,
   StandardStyle,
 } from './types'
 import type {
@@ -58,6 +59,10 @@ const ARCHIVE_STORES_V3 = {
   favorites: 'id, folderId, &itemKey, updatedAt',
 } as const
 
+const ARCHIVE_STORES_V4 = {
+  planMemoryItems: 'id, planId, profileId, [planId+kind], [planId+order]',
+} as const
+
 export class ZajianfaDb extends Dexie {
   profiles!: Table<HairProfile, string>
   plans!: Table<HaircutPlan, string>
@@ -70,6 +75,7 @@ export class ZajianfaDb extends Dexie {
   privateReferences!: Table<PrivateHairstyleReference, string>
   favoriteFolders!: Table<FavoriteFolder, string>
   favorites!: Table<HairstyleFavorite, string>
+  planMemoryItems!: Table<PlanMemoryItem, string>
 
   constructor(name = 'zajianfa-archive', options?: DexieOptions) {
     super(name, options)
@@ -95,6 +101,7 @@ export class ZajianfaDb extends Dexie {
       })
     })
     this.version(3).stores(ARCHIVE_STORES_V3)
+    this.version(4).stores(ARCHIVE_STORES_V4)
 
     this.profiles = this.table('profiles')
     this.plans = this.table('plans')
@@ -163,6 +170,7 @@ export class ZajianfaDb extends Dexie {
     this.privateReferences = this.table('privateReferences')
     this.favoriteFolders = this.table('favoriteFolders')
     this.favorites = this.table('favorites')
+    this.planMemoryItems = this.table('planMemoryItems')
   }
 }
 
@@ -462,6 +470,71 @@ const validatePlanCandidates = (
   }
 }
 
+const PLAN_MEMORY_KINDS = new Set(['success', 'adjustment', 'avoid'])
+const PLAN_MEMORY_SOURCES = new Set([
+  'repeat_record',
+  'adjustment_note',
+  'avoid_rule',
+  'brief_priority',
+])
+const PLAN_MEMORY_TEXT_LIMIT = 160
+const PLAN_MEMORY_GROUP_LIMIT = 3
+
+const validatePlanMemoryItems = (
+  plan: HaircutPlan,
+  items: readonly PlanMemoryItem[],
+) => {
+  const ids = new Set<string>()
+  const orders = new Set<number>()
+  let keepCount = 0
+  let avoidCount = 0
+  for (const item of items) {
+    if (item.planId !== plan.id) {
+      throw new Error('memory item must belong to the saved plan')
+    }
+    if (item.profileId !== plan.profileId) {
+      throw new Error('memory item must belong to the plan profile')
+    }
+    if (!PLAN_MEMORY_KINDS.has(item.kind)) {
+      throw new Error('memory item kind is invalid')
+    }
+    if (!PLAN_MEMORY_SOURCES.has(item.source)) {
+      throw new Error('memory item source is invalid')
+    }
+    if (item.text.trim().length === 0) {
+      throw new RangeError('memory item text must not be empty')
+    }
+    if (item.text.length > PLAN_MEMORY_TEXT_LIMIT) {
+      throw new RangeError('memory item text must not exceed 160 characters')
+    }
+    if (!Number.isInteger(item.order)) {
+      throw new RangeError('memory item order must be an integer')
+    }
+    if (orders.has(item.order)) {
+      throw new Error('memory item order must be unique within a plan')
+    }
+    if (ids.has(item.id)) {
+      throw new Error('memory item id must be unique within a plan')
+    }
+    if (!item.sourceRecordId || !item.sourceRecordDate || !item.sourceLabel) {
+      throw new Error('memory item requires a source snapshot')
+    }
+    if (!isDateValue(item.createdAt) || !isDateValue(item.updatedAt)) {
+      throw new RangeError('memory item timestamps must be valid dates')
+    }
+    if (item.kind === 'avoid') {
+      avoidCount += 1
+    } else {
+      keepCount += 1
+    }
+    ids.add(item.id)
+    orders.add(item.order)
+  }
+  if (keepCount > PLAN_MEMORY_GROUP_LIMIT || avoidCount > PLAN_MEMORY_GROUP_LIMIT) {
+    throw new RangeError('memory groups must contain at most 3 items each')
+  }
+}
+
 const validateBriefItems = (label: string, items: readonly string[]) => {
   if (
     items.length < 1
@@ -583,6 +656,7 @@ export class ArchiveRepository {
         this.db.photos,
         this.db.avoidRules,
         this.db.standardStyles,
+        this.db.planMemoryItems,
       ],
       async () => {
         const plans = await this.db.plans.where('profileId').equals(profileId).toArray()
@@ -603,6 +677,7 @@ export class ArchiveRepository {
         await this.db.briefs.where('profileId').equals(profileId).delete()
         await this.db.avoidRules.where('profileId').equals(profileId).delete()
         await this.db.standardStyles.where('profileId').equals(profileId).delete()
+        await this.db.planMemoryItems.where('profileId').equals(profileId).delete()
         await this.db.profiles.delete(profileId)
       },
     ))
@@ -611,8 +686,10 @@ export class ArchiveRepository {
   async savePlanWithCandidates(
     plan: HaircutPlan,
     candidates: readonly Candidate[],
-  ): Promise<{ plan: HaircutPlan, candidates: Candidate[] }> {
+    memoryItems: readonly PlanMemoryItem[] = [],
+  ): Promise<{ plan: HaircutPlan, candidates: Candidate[], memoryItems: PlanMemoryItem[] }> {
     validatePlanCandidates(plan, candidates)
+    validatePlanMemoryItems(plan, memoryItems)
     return this.run(() => this.db.transaction(
       'rw',
       [
@@ -622,6 +699,7 @@ export class ArchiveRepository {
         this.db.briefs,
         this.db.records,
         this.db.standardStyles,
+        this.db.planMemoryItems,
       ],
       async () => {
         if (!(await this.db.profiles.get(plan.profileId))) {
@@ -690,7 +768,11 @@ export class ArchiveRepository {
         await this.db.plans.put(plan)
         await this.db.candidates.where('planId').equals(plan.id).delete()
         await this.db.candidates.bulkAdd([...candidates])
-        return { plan, candidates: [...candidates] }
+        await this.db.planMemoryItems.where('planId').equals(plan.id).delete()
+        if (memoryItems.length > 0) {
+          await this.db.planMemoryItems.bulkAdd([...memoryItems])
+        }
+        return { plan, candidates: [...candidates], memoryItems: [...memoryItems] }
       },
     ))
   }
@@ -714,12 +796,19 @@ export class ArchiveRepository {
   deletePlan(planId: string): Promise<void> {
     return this.run(() => this.db.transaction(
       'rw',
-      [this.db.plans, this.db.candidates, this.db.briefs],
+      [this.db.plans, this.db.candidates, this.db.briefs, this.db.planMemoryItems],
       async () => {
         await this.db.candidates.where('planId').equals(planId).delete()
         await this.db.briefs.where('planId').equals(planId).delete()
+        await this.db.planMemoryItems.where('planId').equals(planId).delete()
         await this.db.plans.delete(planId)
       },
+    ))
+  }
+
+  listPlanMemoryItems(planId: string): Promise<PlanMemoryItem[]> {
+    return this.run(() => (
+      this.db.planMemoryItems.where('planId').equals(planId).sortBy('order')
     ))
   }
 

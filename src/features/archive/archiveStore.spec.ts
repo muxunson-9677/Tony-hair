@@ -18,6 +18,7 @@ import type {
   HaircutPhoto,
   HaircutPlan,
   HaircutRecord,
+  PlanMemoryItem,
   StandardStyle,
 } from './types'
 
@@ -116,6 +117,7 @@ class MemoryRepository implements ArchiveRepositoryPort {
   photos: HaircutPhoto[] = []
   avoidRules: AvoidRule[] = []
   standardStyles: StandardStyle[] = []
+  planMemoryItems: PlanMemoryItem[] = []
   nextFailure: unknown
   nextListProfilesFailure: unknown
   deferredProfiles: Promise<HairProfile[]> | null = null
@@ -172,6 +174,7 @@ class MemoryRepository implements ArchiveRepositoryPort {
     this.photos = this.photos.filter(({ recordId }) => !recordIds.has(recordId))
     this.avoidRules = this.avoidRules.filter(({ profileId: id }) => id !== profileId)
     this.standardStyles = this.standardStyles.filter(({ profileId: id }) => id !== profileId)
+    this.planMemoryItems = this.planMemoryItems.filter(({ profileId: id }) => id !== profileId)
   }
 
   async listPlans(profileId: string) {
@@ -184,7 +187,11 @@ class MemoryRepository implements ArchiveRepositoryPort {
     return this.candidates.filter(({ planId: id }) => id === planId).sort((a, b) => a.order - b.order)
   }
 
-  async savePlanWithCandidates(plan: HaircutPlan, candidates: readonly Candidate[]) {
+  async savePlanWithCandidates(
+    plan: HaircutPlan,
+    candidates: readonly Candidate[],
+    memoryItems: readonly PlanMemoryItem[] = [],
+  ) {
     this.failIfRequested()
     this.savePlanCalls += 1
     this.plans = [...this.plans.filter(({ id }) => id !== plan.id), plan]
@@ -192,7 +199,18 @@ class MemoryRepository implements ArchiveRepositoryPort {
       ...this.candidates.filter(({ planId }) => planId !== plan.id),
       ...candidates,
     ]
-    return { plan, candidates: [...candidates] }
+    this.planMemoryItems = [
+      ...this.planMemoryItems.filter(({ planId }) => planId !== plan.id),
+      ...memoryItems,
+    ]
+    return { plan, candidates: [...candidates], memoryItems: [...memoryItems] }
+  }
+
+  async listPlanMemoryItems(planId: string) {
+    this.failIfRequested()
+    return this.planMemoryItems
+      .filter(({ planId: id }) => id === planId)
+      .sort((left, right) => left.order - right.order)
   }
 
   async deletePlan(planId: string) {
@@ -200,6 +218,7 @@ class MemoryRepository implements ArchiveRepositoryPort {
     this.plans = this.plans.filter(({ id }) => id !== planId)
     this.candidates = this.candidates.filter(({ planId: id }) => id !== planId)
     this.briefs = this.briefs.filter(({ planId: id }) => id !== planId)
+    this.planMemoryItems = this.planMemoryItems.filter(({ planId: id }) => id !== planId)
   }
 
   async listBriefs(profileId: string) {

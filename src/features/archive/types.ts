@@ -169,3 +169,27 @@ export interface HaircutRecordBundle {
   readonly avoidRules: AvoidRule[]
   readonly standardStyles: StandardStyle[]
 }
+
+export type PlanMemoryKind = 'success' | 'adjustment' | 'avoid'
+
+export type PlanMemorySource =
+  | 'repeat_record'
+  | 'adjustment_note'
+  | 'avoid_rule'
+  | 'brief_priority'
+
+export interface PlanMemoryItem {
+  readonly id: string
+  readonly profileId: string
+  readonly planId: string
+  readonly order: number
+  readonly kind: PlanMemoryKind
+  readonly text: string
+  readonly originalText: string
+  readonly source: PlanMemorySource
+  readonly sourceRecordId: string
+  readonly sourceRecordDate: string
+  readonly sourceLabel: string
+  readonly createdAt: string
+  readonly updatedAt: string
+}

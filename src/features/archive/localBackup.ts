@@ -14,7 +14,11 @@ const TABLE_NAMES = [
   'privateReferences',
   'favoriteFolders',
   'favorites',
+  'planMemoryItems',
 ] as const
+
+// 旧版备份没有这些表；导入时按空表处理，不拒绝整个文件。
+const OPTIONAL_TABLE_NAMES = new Set<(typeof TABLE_NAMES)[number]>(['planMemoryItems'])
 
 interface EncodedBlob {
   readonly $blob: {
@@ -118,7 +122,11 @@ const parseBackup = (content: string): BackupPayload => {
     throw new Error('备份文件缺少本机数据。')
   }
   for (const tableName of TABLE_NAMES) {
-    if (!Array.isArray((tables as Record<string, unknown>)[tableName])) {
+    const rows = (tables as Record<string, unknown>)[tableName]
+    if (rows === undefined && OPTIONAL_TABLE_NAMES.has(tableName)) {
+      continue
+    }
+    if (!Array.isArray(rows)) {
       throw new Error('备份文件内容不完整。')
     }
   }
@@ -145,7 +153,7 @@ export const importLocalBackup = async (
 ) => {
   const payload = parseBackup(content)
   const decoded = Object.fromEntries(TABLE_NAMES.map((tableName) => (
-    [tableName, decodeValue(payload.tables[tableName], createBlob) as unknown[]]
+    [tableName, decodeValue(payload.tables[tableName] ?? [], createBlob) as unknown[]]
   ))) as Record<(typeof TABLE_NAMES)[number], unknown[]>
 
   await db.transaction('rw', TABLE_NAMES.map((tableName) => db.table(tableName)), async () => {

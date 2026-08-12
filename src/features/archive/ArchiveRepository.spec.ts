@@ -1227,8 +1227,11 @@ describe('ArchiveRepository', () => {
     expect(await repository.listAvoidRules('record-2-avoid')).toHaveLength(1)
   })
 
-  test('defines v3 archive and device-level hairstyle-library indexes', () => {
-    expect(db.verno).toBe(3)
+  test('defines v4 archive and device-level hairstyle-library indexes', () => {
+    expect(db.verno).toBe(4)
+    expect(db.planMemoryItems.schema.indexes.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(['planId', 'profileId']),
+    )
     expect(db.profiles.schema.indexes.map(({ name }) => name)).toContain('updatedAt')
     expect(db.plans.schema.indexes.map(({ name }) => name)).toEqual(
       expect.arrayContaining(['profileId', 'date', 'status', 'updatedAt']),
@@ -1356,7 +1359,8 @@ describe('ArchiveRepository', () => {
     const migratedCandidates = await upgradedRepository.listCandidates('legacy-plan')
     const migratedBrief = await upgradedRepository.getBrief('legacy-plan')
 
-    expect(upgraded.verno).toBe(3)
+    expect(upgraded.verno).toBe(4)
+    expect(await upgraded.planMemoryItems.count()).toBe(0)
     expect(await upgraded.privateReferences.count()).toBe(0)
     expect(await upgraded.favoriteFolders.count()).toBe(0)
     expect(await upgraded.favorites.count()).toBe(0)
@@ -1502,7 +1506,7 @@ describe('ArchiveRepository', () => {
     const legacyBrief = await upgradedRepository.getBrief('legacy-plan')
     const [migratedCandidate] = await upgradedRepository.listCandidates('legacy-plan')
 
-    expect(upgraded.verno).toBe(3)
+    expect(upgraded.verno).toBe(4)
     expect(await upgraded.privateReferences.count()).toBe(0)
     expect(await upgraded.favoriteFolders.count()).toBe(0)
     expect(await upgraded.favorites.count()).toBe(0)
