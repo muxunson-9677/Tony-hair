@@ -584,6 +584,14 @@ onBeforeUnmount(() => {
           >
             到店打开
           </RouterLink>
+          <RouterLink
+            v-if="savedBrief"
+            v-tactile
+            class="text-link"
+            :to="`/archive/share?plan=${planId}`"
+          >
+            分享Tony卡
+          </RouterLink>
           <button
             v-tactile
             type="button"

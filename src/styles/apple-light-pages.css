@@ -2940,3 +2940,135 @@
   gap: 10px;
   font-size: 0.92rem;
 }
+
+/* ③ 分享工作室 */
+.share-studio-view {
+  display: grid;
+  gap: 18px;
+}
+
+.share-studio-header h1 {
+  margin: 4px 0 8px;
+}
+
+.share-studio-header__hint {
+  margin: 0;
+  color: #5c6672;
+  font-size: 0.92rem;
+}
+
+.share-card-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 16px;
+}
+
+.share-card {
+  padding: 16px;
+  border: 1px solid #e1e5ea;
+  border-radius: 17px;
+  background: #fff;
+  display: grid;
+  gap: 12px;
+}
+
+.share-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.share-card__head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.share-card__privacy {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #2f73ee;
+}
+
+.share-card__reason {
+  margin: 0;
+  color: #5c6672;
+  font-size: 0.92rem;
+}
+
+.share-card__preview {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.share-card__preview img {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid #e6e2da;
+  aspect-ratio: 3 / 4;
+  object-fit: contain;
+  background: #f6f4ef;
+}
+
+.share-card__preview figcaption {
+  font-size: 0.82rem;
+  color: #5c6672;
+}
+
+.share-card__blocked,
+.share-card__failed {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 0.92rem;
+}
+
+.share-card__blocked {
+  background: #fbf1ef;
+  color: #b0342f;
+}
+
+.share-card__failed {
+  background: #f4f1e9;
+  color: #6f685e;
+}
+
+.share-card__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.share-card__generate,
+.share-card__export {
+  min-height: 45px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid #d6dbe1;
+  background: #fff;
+  color: #1d2530;
+  font-size: 0.95rem;
+  font-weight: 640;
+  cursor: pointer;
+}
+
+.share-card__export {
+  border-color: transparent;
+  background: #1d2530;
+  color: #fff;
+}
+
+.share-card__generate:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.share-card__export-note {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #2e7d32;
+}

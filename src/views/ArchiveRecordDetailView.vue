@@ -187,6 +187,12 @@ onBeforeUnmount(() => {
         role="status"
       >
         {{ attributionMessage }}
+        <RouterLink
+          class="text-link"
+          :to="`/archive/share?record=${record.id}`"
+        >
+          去做分享图
+        </RouterLink>
       </p>
 
       <header class="record-detail-header">
@@ -198,6 +204,13 @@ onBeforeUnmount(() => {
         </h1>
         <p>{{ record.date }} · 满意度 <strong>{{ record.satisfaction }} / 5</strong></p>
         <div class="detail-actions">
+          <RouterLink
+            v-tactile
+            class="text-link"
+            :to="`/archive/share?record=${record.id}`"
+          >
+            分享这次理发
+          </RouterLink>
           <RouterLink
             v-tactile
             class="text-link"

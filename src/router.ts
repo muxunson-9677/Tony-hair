@@ -18,6 +18,7 @@ import HomeView from './views/HomeView.vue'
 import MeView from './views/MeView.vue'
 import NotFoundView from './views/NotFoundView.vue'
 import PrivacyMaskView from './views/PrivacyMaskView.vue'
+import ShareStudioView from './views/ShareStudioView.vue'
 import TryView from './views/TryView.vue'
 
 export function createAppRouter(history: RouterHistory = createWebHistory()) {
@@ -95,6 +96,12 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         name: 'archive',
         component: ArchiveView,
         meta: { title: pageTitle('档案') },
+      },
+      {
+        path: '/archive/share',
+        name: 'archive-share',
+        component: ShareStudioView,
+        meta: { title: pageTitle('分享工作室'), hideBottomNav: true },
       },
       {
         path: '/archive/profile',
