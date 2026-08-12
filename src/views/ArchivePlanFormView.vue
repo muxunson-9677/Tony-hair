@@ -717,7 +717,7 @@ onBeforeUnmount(() => {
         <div class="archive-section-heading">
           <div>
             <p class="section-index">
-              SELECTED
+              已选方向
             </p>
             <h2>已选择 {{ selectedCandidates.length }} / {{ candidateLimit }}</h2>
           </div>

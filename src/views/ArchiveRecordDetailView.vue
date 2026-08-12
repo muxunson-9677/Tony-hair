@@ -198,9 +198,9 @@ onBeforeUnmount(revokePhotoUrls)
         class="record-outcome-summary"
       >
         <p class="section-index">
-          REPEAT
+          下次照着剪
         </p>
-        <h2>已存为标准发型</h2>
+        <h2>下次可以照着剪</h2>
         <p
           v-for="style in recordStandardStyles"
           :key="style.id"
@@ -214,7 +214,7 @@ onBeforeUnmount(revokePhotoUrls)
         class="record-outcome-summary record-outcome-summary--adjust"
       >
         <p class="section-index">
-          NEXT TIME
+          下次微调
         </p>
         <h2>下次我会记得这些调整</h2>
         <ul>
@@ -232,7 +232,7 @@ onBeforeUnmount(revokePhotoUrls)
         class="record-outcome-summary record-outcome-summary--avoid"
       >
         <p class="section-index">
-          AVOID
+          下次避开
         </p>
         <h2>这次记为避雷</h2>
         <ul>

@@ -275,7 +275,7 @@ onBeforeUnmount(() => {
     role="alert"
   >
     <p class="eyebrow">
-      PRIVATE REFERENCE · READ FAILED
+      私人参考 · 读取失败
     </p>
     <h1>暂时无法读取这份参考</h1>
     <p>{{ store.error }}</p>
@@ -300,7 +300,7 @@ onBeforeUnmount(() => {
     class="style-terminal show-terminal"
   >
     <p class="eyebrow">
-      PRIVATE REFERENCE · UNAVAILABLE
+      私人参考 · 暂不可用
     </p>
     <h1>这份私人参考找不到了</h1>
     <p>它可能已从当前设备删除。我们没有用其他照片替换它。</p>
@@ -314,7 +314,7 @@ onBeforeUnmount(() => {
     class="style-terminal show-terminal"
   >
     <p class="eyebrow">
-      CURATED STYLE · UNAVAILABLE
+      精选发型 · 暂不可用
     </p>
     <h1>这个精选发型暂时不可用</h1>
     <p>这个编号不存在或已经退出精选库。我们没有用其他发型替换它。</p>

@@ -187,7 +187,7 @@ const roleIcon = (role: 'safe' | 'goal' | 'try') => (
       <div class="guided-direction-results__heading">
         <div>
           <p class="section-index">
-            3 DIRECTIONS · LOCAL RULES
+            3 个方向 · 按你的需求筛选
           </p>
           <h2>先比较这三个方向</h2>
         </div>

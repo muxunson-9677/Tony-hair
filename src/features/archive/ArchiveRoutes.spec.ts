@@ -1344,7 +1344,8 @@ describe('archive routes and forms', () => {
     expect(await storedPhoto?.image.text()).toBe('prepared-photo')
     expect(await screen.findByText('¥128.50')).toBeTruthy()
     expect(screen.getByText('5 / 5')).toBeTruthy()
-    expect(screen.getByText('已存为标准发型')).toBeTruthy()
+    expect(screen.getByText('下次可以照着剪')).toBeTruthy()
+    expect(screen.queryByText('REPEAT')).toBeNull()
 
     await fireEvent.click(screen.getByRole('link', { name: '编辑记录' }))
     expect(await screen.findByText('已保留：剪后照片')).toBeTruthy()
@@ -1408,7 +1409,7 @@ describe('archive routes and forms', () => {
     const comparison = await screen.findByRole('group', { name: '剪前剪后对比' })
     expect(within(comparison).getByRole('img', { name: '对比短发的剪前照片' })).toBeTruthy()
     expect(within(comparison).getByRole('img', { name: '对比短发的剪后照片' })).toBeTruthy()
-    expect(comparison.compareDocumentPosition(screen.getByText('已存为标准发型')) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(comparison.compareDocumentPosition(screen.getByText('下次可以照着剪')) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy()
   })
 

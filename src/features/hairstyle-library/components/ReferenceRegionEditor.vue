@@ -76,7 +76,7 @@ const removeArea = () => {
   >
     <header>
       <p class="section-index">
-        ONLY THE PARTS YOU MEAN
+        只记录你明确选择的部位
       </p>
       <h2 id="reference-region-title">
         这张图，具体参考哪里？

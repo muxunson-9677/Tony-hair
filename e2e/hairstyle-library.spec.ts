@@ -551,8 +551,8 @@ test('browses six styles and keeps a keyboard-created favorite folder after relo
   await expect(page.getByRole('link', { name: '查看发型：清爽渐层' })).toBeVisible()
 
   await page.reload()
-  await page.getByRole('button', { name: '下次沟通' }).click()
-  await expect(page.getByRole('button', { name: '下次沟通' })).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: '下次沟通', exact: true }).click()
+  await expect(page.getByRole('button', { name: '下次沟通', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('link', { name: '查看发型：清爽渐层' })).toBeVisible()
   await captureSettled(page, testInfo, 'favorites-390x844.png', { width: 390, height: 844 })
   await captureSettled(page, testInfo, 'favorites-1440x900.png', { width: 1440, height: 900 })
@@ -999,7 +999,7 @@ test('creates a one-snapshot repeat plan and its communication card from an acti
   await page.getByLabel('剪后照片').setInputFiles('public/demo/persona-ran-sidepart.webp')
   await page.getByLabel('就这样').check()
   await page.getByRole('button', { name: '保存剪后记录' }).click()
-  await expect(page.getByText('已存为标准发型')).toBeVisible()
+  await expect(page.getByText('下次可以照着剪')).toBeVisible()
 
   await page.getByRole('link', { name: '返回档案' }).click()
   await page.getByRole('link', { name: '准备下次怎么剪' }).click()

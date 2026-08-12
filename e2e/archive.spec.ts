@@ -178,7 +178,7 @@ test('persists a plan and local haircut record through repeat, avoid, refresh, a
   await expect(page.getByText('5 / 5')).toBeVisible()
   await page.getByText('查看本次店铺与备注').click()
   await expect(page.getByText('静安区南京西路 688 号')).toBeVisible()
-  await expect(page.getByText('已存为标准发型')).toBeVisible()
+  await expect(page.getByText('下次可以照着剪')).toBeVisible()
   await expect(page.getByRole('navigation', { name: '主导航' })).toHaveCount(0)
   await page.screenshot({ path: testInfo.outputPath('record-detail-390x844.png'), fullPage: true })
 

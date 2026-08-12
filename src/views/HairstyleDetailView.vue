@@ -258,7 +258,7 @@ onMounted(loadLibrary)
     aria-labelledby="style-terminal-title"
   >
     <p class="eyebrow">
-      CATALOG · UNAVAILABLE
+      发型库 · 暂不可用
     </p>
     <h1 id="style-terminal-title">
       这个发型暂时不可用

@@ -269,6 +269,8 @@ describe('hairstyle library routes', () => {
     })
 
     await fireEvent.click(folderButton)
+    expect(screen.queryByRole('region', { name: '管理收藏夹' })).toBeNull()
+    await fireEvent.click(screen.getByRole('button', { name: '管理“通勤候选”' }))
     const management = screen.getByRole('region', { name: '管理收藏夹' })
     await fireEvent.update(within(management).getByLabelText('收藏夹新名称'), '下次想剪')
     await fireEvent.click(within(management).getByRole('button', { name: '保存名称' }))

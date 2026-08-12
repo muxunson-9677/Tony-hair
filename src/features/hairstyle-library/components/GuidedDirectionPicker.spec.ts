@@ -37,6 +37,8 @@ describe('GuidedDirectionPicker', () => {
     await fireEvent.click(within(change).getByRole('button', { name: '有变化，但别太冒险' }))
 
     expect(screen.getByRole('heading', { name: '先比较这三个方向' })).toBeTruthy()
+    expect(screen.getByText('3 个方向 · 按你的需求筛选')).toBeTruthy()
+    expect(screen.queryByText('3 DIRECTIONS · LOCAL RULES')).toBeNull()
     expect(screen.getByText('最稳妥')).toBeTruthy()
     expect(screen.getByText('最符合目标')).toBeTruthy()
     expect(screen.getByText('最值得尝试')).toBeTruthy()

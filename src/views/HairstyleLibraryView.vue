@@ -26,6 +26,7 @@ const goals = ref<StyleGoal[]>([])
 const maintenanceLevels = ref<MaintenanceLevel[]>([])
 const selectedFolder = ref<'all' | 'unfiled' | string>('all')
 const folderFormOpen = ref(false)
+const folderManagementOpen = ref(false)
 const folderName = ref('')
 const renameName = ref('')
 const referenceObjectUrls = ref<Record<string, string>>({})
@@ -151,6 +152,7 @@ const createFolder = async () => {
 
 const selectFolder = (id: 'all' | 'unfiled' | string) => {
   selectedFolder.value = id
+  folderManagementOpen.value = false
   const folder = store.folders.find((item) => item.id === id)
   renameName.value = folder?.name ?? ''
 }
@@ -175,6 +177,7 @@ const deleteFolder = async () => {
   if (await store.deleteFolder(activeFolder.value.id)) {
     selectedFolder.value = 'all'
     renameName.value = ''
+    folderManagementOpen.value = false
   }
 }
 
@@ -340,7 +343,7 @@ onBeforeUnmount(releaseReferenceUrls)
       </form>
 
       <form
-        v-if="activeFolder"
+        v-if="activeFolder && folderManagementOpen"
         class="favorite-folder-form favorite-folder-form--manage"
         role="region"
         aria-label="管理收藏夹"
@@ -369,6 +372,15 @@ onBeforeUnmount(releaseReferenceUrls)
           删除收藏夹
         </button>
       </form>
+      <button
+        v-if="activeFolder && !folderManagementOpen"
+        class="favorite-folder-manage-trigger"
+        type="button"
+        :aria-label="`管理“${activeFolder.name}”`"
+        @click="folderManagementOpen = true"
+      >
+        管理当前收藏夹
+      </button>
     </div>
 
     <div

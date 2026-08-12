@@ -116,7 +116,7 @@ onBeforeUnmount(() => {
     <header class="home-hero">
       <div class="home-hero__copy">
         <p class="eyebrow">
-          PERSONAL HAIR EDIT · LOCAL FIRST
+          你的发型记录 · 只存本机
         </p>
         <div
           class="brand-lockup"
@@ -210,7 +210,7 @@ onBeforeUnmount(() => {
           :alt="`${latestRecord.styleName}的${stageLabels[latestPhoto.stage]}照片`"
           fetchpriority="high"
         >
-        <span class="home-visual__index">LAST CUT · LOCAL</span>
+        <span class="home-visual__index">上次理发 · 本机照片</span>
         <span class="home-visual__caption">
           <span>
             上次发型 · {{ latestRecord.styleName }}<br>

@@ -311,7 +311,7 @@ onBeforeUnmount(() => {
     aria-labelledby="mask-workbench-title"
   >
     <header class="mask-editor__header">
-      <p>LOCAL WORKBENCH</p>
+      <p>只在本机处理</p>
       <h2 id="mask-workbench-title">
         遮住后，再导出
       </h2>

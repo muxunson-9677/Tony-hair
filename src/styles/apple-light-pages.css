@@ -860,7 +860,7 @@
 }
 
 .privacy-mask-header h1 {
-  font-size: clamp(2.8rem, 14vw, 4.5rem);
+  font-size: clamp(2.45rem, 12vw, 4rem);
   letter-spacing: -.065em;
   line-height: .9;
 }
@@ -1903,6 +1903,11 @@
   font-weight: 760;
   letter-spacing: -.06em;
   line-height: .95;
+}
+
+.privacy-mask-header h1 {
+  font-size: clamp(2rem, 10vw, 3.25rem);
+  line-height: 1;
 }
 
 .privacy-mask-header > p:last-child,

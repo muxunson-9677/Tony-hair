@@ -4073,6 +4073,19 @@ a:focus-visible {
   background: transparent;
 }
 
+.favorite-folder-manage-trigger {
+  min-height: 45px;
+  margin-top: 10px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--warm-gray);
+  background: rgba(255, 255, 255, .72);
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 750;
+}
+
 .style-detail-view {
   min-height: calc(100svh - var(--nav-height));
   padding-bottom: 104px;

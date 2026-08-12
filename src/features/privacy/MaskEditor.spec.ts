@@ -74,6 +74,9 @@ describe('MaskEditor', () => {
     })
     render(MaskEditor)
 
+    expect(screen.getByText('只在本机处理')).toBeTruthy()
+    expect(screen.queryByText('LOCAL WORKBENCH')).toBeNull()
+
     await selectFile()
 
     expect(localImages.prepareLocalImage).toHaveBeenCalledWith(inputFile)
