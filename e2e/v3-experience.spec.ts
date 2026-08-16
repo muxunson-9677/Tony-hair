@@ -19,12 +19,13 @@ test('completes the V3 choose, compare, barber, and adjustment journey on a phon
   try {
     await page.goto('/')
     await expect(page.getByRole('link', { name: '先认识一下我的头发' })).toBeVisible()
+    await expect(page.getByRole('link', { name: /先看一个对比示例/ })).toBeVisible()
     await page.screenshot({ path: testInfo.outputPath('v3-home-new-390x844.png'), fullPage: true })
 
     await page.getByRole('link', { name: '先认识一下我的头发' }).click()
     await page.getByLabel('称呼').fill('林夏')
     await expect(page.getByText('先保存，其他以后再补')).toBeVisible()
-    await expect(page.getByLabel('发质')).toBeHidden()
+    await expect(page.getByRole('group', { name: '你的头发平时是什么样？' })).toBeHidden()
     await page.screenshot({ path: testInfo.outputPath('v3-profile-minimum-390x844.png'), fullPage: true })
     await page.getByRole('button', { name: '保存档案' }).click()
 

@@ -278,7 +278,9 @@ describe('resolveHomeAction', () => {
 
   test('offers plain-language starting points only when no active task needs attention', () => {
     expect(resolveHomeEntrances({ profile: null, hasRepeatableStyle: false, hasActivePlan: false }))
-      .toEqual([])
+      .toEqual([
+        { kind: 'demo', label: '先看一个对比示例', hint: '不用建档，半分钟看懂这个产品', to: '/try' },
+      ])
 
     expect(resolveHomeEntrances({ profile, hasRepeatableStyle: false, hasActivePlan: false }))
       .toEqual([

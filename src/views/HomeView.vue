@@ -241,7 +241,11 @@ onBeforeUnmount(() => {
                 class="home-entrance__icon"
                 :data-kind="entrance.kind"
               >
-                <AppIcon :name="entrance.kind === 'reference' ? 'photo' : 'scissors'" />
+                <AppIcon
+                  :name="entrance.kind === 'reference'
+                    ? 'photo'
+                    : entrance.kind === 'demo' ? 'eye' : 'scissors'"
+                />
               </span>
               <span>
                 <strong>{{ entrance.label }}</strong>
@@ -277,7 +281,7 @@ onBeforeUnmount(() => {
       </RouterLink>
 
       <RouterLink
-        v-else-if="homeVisualStyle && (store.profile || favoriteStyle)"
+        v-else-if="homeVisualStyle"
         v-tactile
         class="home-visual"
         :to="`/styles/catalog/${homeVisualStyle.id}`"

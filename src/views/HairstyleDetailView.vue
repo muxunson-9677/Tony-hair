@@ -31,9 +31,9 @@ const personalReason = computed(() => (
 
 const textureLabels = {
   straight: '直发',
-  wavy: '微卷',
+  wavy: '有点弯',
   curly: '卷发',
-  coily: '紧密卷',
+  coily: '小卷很密',
   unsure: '不确定',
 } as const
 

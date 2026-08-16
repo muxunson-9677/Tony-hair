@@ -8,34 +8,34 @@ const angleLabels: Record<HairProfilePhoto['angle'], string> = {
 
 const textureLabels: Record<Exclude<HairProfile['hairTexture'], 'unsure'>, string> = {
   straight: '直发',
-  wavy: '微卷',
+  wavy: '有点弯',
   curly: '卷发',
-  coily: '强卷',
+  coily: '小卷很密',
 }
 
 const thicknessLabels: Record<Exclude<HairProfile['strandThickness'], 'unsure'>, string> = {
-  fine: '细发丝',
-  medium: '发丝适中',
-  coarse: '粗发丝',
+  fine: '发丝细',
+  medium: '发丝不粗不细',
+  coarse: '发丝粗',
 }
 
 const densityLabels: Record<Exclude<HairProfile['density'], 'unsure'>, string> = {
-  low: '发量较少',
-  medium: '发量适中',
-  high: '发量较多',
+  low: '发量偏少',
+  medium: '发量正常',
+  high: '发量很多',
 }
 
 const presentationLabels: Record<NonNullable<HairProfile['presentationPreference']>, string> = {
-  feminine: '更喜欢柔和呈现',
-  masculine: '更喜欢利落呈现',
-  androgynous: '更喜欢中性呈现',
-  unspecified: '呈现感觉都可以',
+  feminine: '想要柔和一点',
+  masculine: '想要利落一点',
+  androgynous: '中性都行',
+  unspecified: '柔和利落都可以',
 }
 
 const genderLabels: Record<Exclude<NonNullable<HairProfile['genderIdentity']>, 'unspecified'>, string> = {
   woman: '女',
   man: '男',
-  nonbinary: '非二元',
+  nonbinary: '其他',
 }
 
 export const genderIdentityLabel = (profile: HairProfile) => (

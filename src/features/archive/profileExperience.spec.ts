@@ -38,13 +38,13 @@ describe('personal profile experience', () => {
   test('shows presentation preference without turning gender into a hard style rule', () => {
     expect(genderIdentityLabel(profile())).toBe('女')
     expect(genderIdentityLabel(profile({ genderIdentity: 'unspecified' }))).toBeNull()
-    expect(presentationPreferenceLabel(profile())).toBe('更喜欢中性呈现')
+    expect(presentationPreferenceLabel(profile())).toBe('中性都行')
     expect(presentationPreferenceLabel(profile({ presentationPreference: 'unspecified' })))
-      .toBe('呈现感觉都可以')
+      .toBe('柔和利落都可以')
   })
 
   test('only describes hair facts the user actually confirmed', () => {
-    expect(buildKnownProfileTraits(profile())).toEqual(['直发', '细发丝', '发量适中'])
+    expect(buildKnownProfileTraits(profile())).toEqual(['直发', '发丝细', '发量正常'])
     expect(buildKnownProfileTraits(profile({
       hairTexture: 'unsure',
       strandThickness: 'unsure',

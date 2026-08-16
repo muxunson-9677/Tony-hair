@@ -43,14 +43,24 @@ export interface HomeEntranceInput {
 }
 
 export interface HomeEntrance {
-  readonly kind: 'choose' | 'reference' | 'repeat'
+  readonly kind: 'choose' | 'reference' | 'repeat' | 'demo'
   readonly label: string
   readonly hint: string
   readonly to: string
 }
 
 export const resolveHomeEntrances = (input: HomeEntranceInput): readonly HomeEntrance[] => {
-  if (!input.profile || input.hasActivePlan) {
+  if (!input.profile) {
+    // 先体验后建档：还没建档的人可以直接看一个不需要任何投入的示例。
+    return [{
+      kind: 'demo',
+      label: '先看一个对比示例',
+      hint: '不用建档，半分钟看懂这个产品',
+      to: '/try',
+    }]
+  }
+
+  if (input.hasActivePlan) {
     return []
   }
 

@@ -711,12 +711,9 @@ onBeforeUnmount(() => {
         :open="!isBarberMode"
         :class="['brief-preview__regional-details', { 'brief-barber-details': isBarberMode }]"
       >
-        <summary
-          v-if="isBarberMode"
-          v-tactile
-        >
-          <span>查看顶部、刘海和侧后细节</span>
-          <small>需要时再展开</small>
+        <summary v-tactile>
+          <span>{{ isBarberMode ? '查看顶部、刘海和侧后细节' : '顶部、刘海和侧后的细节说明' }}</span>
+          <small>{{ isBarberMode ? '需要时再展开' : '可以收起' }}</small>
         </summary>
         <template v-if="isBarberMode">
           <dl class="brief-preview__sections">

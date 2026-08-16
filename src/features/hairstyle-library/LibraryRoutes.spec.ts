@@ -303,7 +303,7 @@ describe('hairstyle library routes', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: '齐颌短鲍伯' })).toBeTruthy()
     expect(await screen.findByRole('heading', { level: 2, name: '为什么排在你的前面' })).toBeTruthy()
-    expect(screen.getByText(/适合你的直发/)).toBeTruthy()
+    expect(screen.getByText(/适合直发/)).toBeTruthy()
     expect(screen.getByText(/项目内 AI 合成成年人物正面示例/)).toBeTruthy()
     expect(screen.getByText('适合条件')).toBeTruthy()
     expect(screen.getAllByText('维护成本').length).toBeGreaterThan(0)

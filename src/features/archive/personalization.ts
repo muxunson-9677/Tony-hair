@@ -3,15 +3,15 @@ import type { HairProfile } from './types'
 
 const textureLabels = {
   straight: '直发',
-  wavy: '微卷',
+  wavy: '有点弯的头发',
   curly: '卷发',
-  coily: '强卷',
+  coily: '很密的小卷',
   unsure: '尚未确认的发质',
 } as const
 
 const presentationLabels = {
-  feminine: '偏柔和',
-  masculine: '偏利落',
+  feminine: '柔和',
+  masculine: '利落',
   androgynous: '中性',
   unspecified: '',
 } as const
@@ -33,7 +33,7 @@ const scoreStyle = (style: CuratedHairstyle, profile: HairProfile) => {
 export const personalizedStyleReason = (style: CuratedHairstyle, profile: HairProfile) => {
   const facts: string[] = []
   if (style.hairTextures.includes(profile.hairTexture)) {
-    facts.push(`适合你的${textureLabels[profile.hairTexture]}`)
+    facts.push(`适合${textureLabels[profile.hairTexture]}`)
   }
   const preference = profile.presentationPreference ?? 'unspecified'
   if (preference !== 'unspecified' && style.genderPresentation === preference) {

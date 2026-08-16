@@ -31,7 +31,7 @@ describe('local hairstyle personalization', () => {
   test('explains the match using only facts actually stored in the profile', () => {
     const style = curatedHairstyles.find(({ id }) => id === 'ran-crop')!
 
-    expect(personalizedStyleReason(style, profile)).toContain('微卷')
+    expect(personalizedStyleReason(style, profile)).toContain('有点弯')
     expect(personalizedStyleReason(style, profile)).toContain('5 分钟')
     expect(personalizedStyleReason(style, { ...profile, presentationPreference: 'unspecified' }))
       .not.toContain('中性')

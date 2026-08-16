@@ -85,7 +85,7 @@ function selectAdjustment(adjustment: (typeof adjustments)[number]) {
       >
       <figcaption>
         <span>{{ selectedPersona.name }} · {{ selectedPersona.age }} 岁成年示例</span>
-        <span>预制方向 / 02</span>
+        <span>AI 合成图片</span>
       </figcaption>
     </figure>
 
@@ -94,9 +94,9 @@ function selectAdjustment(adjustment: (typeof adjustments)[number]) {
       aria-labelledby="persona-heading"
     >
       <div class="section-heading">
-        <p>01 · PERSON</p>
+        <p>第一步</p>
         <h2 id="persona-heading">
-          选择虚构人物
+          选一位示例人物
         </h2>
       </div>
       <div
@@ -133,9 +133,9 @@ function selectAdjustment(adjustment: (typeof adjustments)[number]) {
       aria-labelledby="plan-heading"
     >
       <div class="section-heading">
-        <p>02 · CUT</p>
+        <p>第二步</p>
         <h2 id="plan-heading">
-          选择短发方案
+          换一种剪法看看
         </h2>
       </div>
       <div
@@ -165,7 +165,7 @@ function selectAdjustment(adjustment: (typeof adjustments)[number]) {
       aria-labelledby="detail-heading"
     >
       <div class="detail-lead">
-        <p>DEMO_AI · 预制素材</p>
+        <p>这个方案的说明</p>
         <h2 id="detail-heading">
           {{ selectedOption.name }}
         </h2>
@@ -194,9 +194,9 @@ function selectAdjustment(adjustment: (typeof adjustments)[number]) {
       aria-labelledby="adjustment-heading"
     >
       <div class="section-heading">
-        <p>03 · TALK</p>
+        <p>第三步</p>
         <h2 id="adjustment-heading">
-          微调示例
+          想再改一点？这样说
         </h2>
       </div>
       <p class="adjustment-intro">

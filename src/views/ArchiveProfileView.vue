@@ -14,11 +14,20 @@ import {
   POLL_DRAFT_REPOSITORY_KEY,
 } from '../features/polls/pollRuntime'
 import type { PollDraft } from '../features/polls/types'
-import type { HairProfilePhoto } from '../features/archive/types'
+import type {
+  GenderIdentity,
+  HairDensity,
+  HairProfilePhoto,
+  HairTexture,
+  PresentationPreference,
+  StrandThickness,
+  WashFrequency,
+} from '../features/archive/types'
 import {
   ImagePreparationError,
   prepareLocalImage,
 } from '../features/images/prepareLocalImage'
+import OptionCards, { type OptionCardOption } from '../ui/OptionCards.vue'
 import { tactileDirective as vTactile } from '../ui/tactile'
 
 const router = useRouter()
@@ -56,6 +65,82 @@ const form = reactive<HairProfileDraft>({
   preferenceNotes: '',
   profilePhotos: [],
 })
+
+// 看图选择：每个靠眼睛判断的条件都画出来，文字只做确认。
+const genderOptions: readonly OptionCardOption<GenderIdentity>[] = [
+  { value: 'woman', label: '女' },
+  { value: 'man', label: '男' },
+  { value: 'nonbinary', label: '其他' },
+  { value: 'unspecified', label: '不透露' },
+]
+
+const feelOptions: readonly OptionCardOption<PresentationPreference>[] = [
+  { value: 'feminine', label: '柔和一点', hint: '线条圆润，看着温柔', art: 'feel-soft' },
+  { value: 'masculine', label: '利落一点', hint: '线条干净，看着精神', art: 'feel-sharp' },
+  { value: 'androgynous', label: '中性都行', hint: '不偏向哪一边', art: 'feel-neutral' },
+  { value: 'unspecified', label: '都可以', hint: '两种都帮我看看', art: 'feel-any' },
+]
+
+const textureOptions: readonly OptionCardOption<HairTexture>[] = [
+  { value: 'straight', label: '直发', hint: '自然垂下来', art: 'texture-straight' },
+  { value: 'wavy', label: '有点弯', hint: '自然的弯度', art: 'texture-wavy' },
+  { value: 'curly', label: '卷发', hint: '一圈一圈', art: 'texture-curly' },
+  { value: 'coily', label: '小卷很密', hint: '卷得很紧', art: 'texture-coily' },
+  { value: 'unsure', label: '暂不确定', art: 'unsure' },
+]
+
+const thicknessOptions: readonly OptionCardOption<StrandThickness>[] = [
+  { value: 'fine', label: '发丝细', hint: '摸起来软', art: 'thickness-fine' },
+  { value: 'medium', label: '不粗不细', art: 'thickness-medium' },
+  { value: 'coarse', label: '发丝粗', hint: '摸起来硬', art: 'thickness-coarse' },
+  { value: 'unsure', label: '暂不确定', art: 'unsure' },
+]
+
+const densityOptions: readonly OptionCardOption<HairDensity>[] = [
+  { value: 'low', label: '发量偏少', art: 'density-low' },
+  { value: 'medium', label: '发量正常', art: 'density-medium' },
+  { value: 'high', label: '发量很多', art: 'density-high' },
+  { value: 'unsure', label: '暂不确定', art: 'unsure' },
+]
+
+const washOptions: readonly OptionCardOption<WashFrequency>[] = [
+  { value: 'daily', label: '每天洗', art: 'wash-daily' },
+  { value: 'every_other_day', label: '隔天洗', art: 'wash-alternate' },
+  { value: 'two_to_three_per_week', label: '一周两三次', art: 'wash-two-three' },
+  { value: 'weekly_or_less', label: '更少', art: 'wash-weekly' },
+  { value: 'unsure', label: '暂不确定', art: 'unsure' },
+]
+
+type StylingBucket = 'none' | 'five' | 'ten' | 'twenty' | 'unsure'
+
+const stylingOptions: readonly OptionCardOption<StylingBucket>[] = [
+  { value: 'none', label: '基本不打理', hint: '洗完自然干', art: 'time-none' },
+  { value: 'five', label: '5 分钟内', hint: '简单吹一下', art: 'time-five' },
+  { value: 'ten', label: '10 分钟左右', hint: '吹个造型', art: 'time-ten' },
+  { value: 'twenty', label: '20 分钟以上', hint: '认真做造型', art: 'time-twenty' },
+  { value: 'unsure', label: '暂不确定', art: 'unsure' },
+]
+
+const STYLING_BUCKET_MINUTES: Record<StylingBucket, number | null> = {
+  none: 0,
+  five: 5,
+  ten: 10,
+  twenty: 25,
+  unsure: null,
+}
+
+const stylingBucket = computed<StylingBucket>(() => {
+  const minutes = form.stylingMinutes
+  if (minutes === null || minutes === undefined) return 'unsure'
+  if (minutes <= 0) return 'none'
+  if (minutes <= 7) return 'five'
+  if (minutes <= 14) return 'ten'
+  return 'twenty'
+})
+
+const setStylingBucket = (bucket: StylingBucket) => {
+  form.stylingMinutes = STYLING_BUCKET_MINUTES[bucket]
+}
 
 const releaseProfilePhotoUrls = () => {
   Object.values(profilePhotoUrls.value).forEach((url) => URL.revokeObjectURL(url))
@@ -364,31 +449,23 @@ onBeforeUnmount(() => {
           <span class="profile-setup-step__number profile-setup-step__number--coral">2</span>
           <span><b>再告诉我你想呈现的感觉</b><small>性别可以不透露，真正用于排序的是呈现偏好</small></span>
         </summary>
-        <div class="profile-setup-step__body form-grid">
-          <label>
-            <span>性别（用于筛选，可不透露）</span>
-            <select
-              v-model="form.genderIdentity"
-              name="genderIdentity"
-            >
-              <option value="unspecified">不透露</option>
-              <option value="woman">女</option>
-              <option value="man">男</option>
-              <option value="nonbinary">其他 / 非二元</option>
-            </select>
-          </label>
-          <label>
-            <span>更喜欢的呈现感觉</span>
-            <select
-              v-model="form.presentationPreference"
-              name="presentationPreference"
-            >
-              <option value="unspecified">都可以</option>
-              <option value="feminine">偏柔和</option>
-              <option value="masculine">偏利落</option>
-              <option value="androgynous">中性</option>
-            </select>
-          </label>
+        <div class="profile-setup-step__body">
+          <OptionCards
+            legend="想要哪种感觉的发型？"
+            note="不用懂发型词，选一个看着顺眼的就行。"
+            name="presentationPreference"
+            :model-value="form.presentationPreference ?? 'unspecified'"
+            :options="feelOptions"
+            @update:model-value="(value) => { form.presentationPreference = value }"
+          />
+          <OptionCards
+            legend="性别"
+            note="只用来筛选发型，可以不透露。"
+            name="genderIdentity"
+            :model-value="form.genderIdentity ?? 'unspecified'"
+            :options="genderOptions"
+            @update:model-value="(value) => { form.genderIdentity = value }"
+          />
         </div>
       </details>
 
@@ -398,88 +475,50 @@ onBeforeUnmount(() => {
           <span><b>最后补充你确定的头发条件</b><small>不知道就保持“暂不确定”，以后随时可以修改</small></span>
         </summary>
         <div class="profile-setup-step__body">
-          <div class="form-grid">
-            <label>
-              <span>发质</span>
-              <select
-                v-model="form.hairTexture"
-                name="hairTexture"
-                required
-              >
-                <option value="straight">直</option>
-                <option value="wavy">微卷</option>
-                <option value="curly">卷</option>
-                <option value="coily">强卷</option>
-                <option value="unsure">暂不确定</option>
-              </select>
-            </label>
+          <OptionCards
+            v-model="form.hairTexture"
+            legend="你的头发平时是什么样？"
+            name="hairTexture"
+            :options="textureOptions"
+          />
 
-            <label>
-              <span>发丝粗细</span>
-              <select
-                v-model="form.strandThickness"
-                name="strandThickness"
-                required
-              >
-                <option value="fine">细</option>
-                <option value="medium">适中</option>
-                <option value="coarse">粗</option>
-                <option value="unsure">暂不确定</option>
-              </select>
-            </label>
+          <OptionCards
+            v-model="form.strandThickness"
+            legend="单根头发摸起来？"
+            name="strandThickness"
+            :options="thicknessOptions"
+          />
 
-            <label>
-              <span>发量</span>
-              <select
-                v-model="form.density"
-                name="density"
-                required
-              >
-                <option value="low">少</option>
-                <option value="medium">适中</option>
-                <option value="high">多</option>
-                <option value="unsure">暂不确定</option>
-              </select>
-            </label>
+          <OptionCards
+            v-model="form.density"
+            legend="头发整体多不多？"
+            name="density"
+            :options="densityOptions"
+          />
 
-            <label>
-              <span>日常打理分钟</span>
-              <input
-                v-model.number="form.stylingMinutes"
-                name="stylingMinutes"
-                type="number"
-                min="0"
-                max="180"
-                step="1"
-                inputmode="numeric"
-                placeholder="不确定可留空"
-              >
-            </label>
-          </div>
+          <OptionCards
+            v-model="form.washFrequency"
+            legend="多久洗一次头？"
+            name="washFrequency"
+            :options="washOptions"
+          />
+
+          <OptionCards
+            legend="每天愿意花多久打理头发？"
+            name="stylingBucket"
+            :model-value="stylingBucket"
+            :options="stylingOptions"
+            @update:model-value="setStylingBucket"
+          />
 
           <label>
-            <span>洗发频率</span>
-            <select
-              v-model="form.washFrequency"
-              name="washFrequency"
-              required
-            >
-              <option value="daily">每天</option>
-              <option value="every_other_day">隔天</option>
-              <option value="two_to_three_per_week">每周 2—3 次</option>
-              <option value="weekly_or_less">每周 1 次或更少</option>
-              <option value="unsure">暂不确定</option>
-            </select>
-          </label>
-
-          <label>
-            <span>偏好备注</span>
+            <span>还有什么想提前说的？</span>
             <textarea
               v-model="form.preferenceNotes"
               name="preferenceNotes"
               rows="4"
               maxlength="500"
-              placeholder="例如：希望露耳；两侧不要推白"
+              placeholder="例如：希望露耳；两侧不要推太短"
             />
           </label>
         </div>

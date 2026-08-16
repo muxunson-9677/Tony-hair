@@ -351,11 +351,11 @@ const fillProfile = async (page: Page, name: string) => {
   if (await details.getAttribute('open') === null) {
     await details.locator('summary').click()
   }
-  await page.getByLabel('发质').selectOption('wavy')
-  await page.getByLabel('发丝粗细').selectOption('fine')
-  await page.getByLabel('发量').selectOption('medium')
-  await page.getByLabel('日常打理分钟').fill('8')
-  await page.getByLabel('洗发频率').selectOption('every_other_day')
+  await page.getByRole('radio', { name: /有点弯/ }).check()
+  await page.getByRole('radio', { name: /发丝细/ }).check()
+  await page.getByRole('radio', { name: /发量正常/ }).check()
+  await page.getByRole('radio', { name: /10 分钟左右/ }).check()
+  await page.getByRole('radio', { name: /隔天洗/ }).check()
   await page.getByRole('button', { name: '保存档案' }).click()
 }
 
@@ -593,7 +593,13 @@ test('browses six styles and keeps a keyboard-created favorite folder after relo
   const baselineHeadingSize = await page.locator('.style-library-header h1').evaluate((element) => (
     Number.parseFloat(getComputedStyle(element).fontSize)
   ))
-  const zoomStyle = await page.addStyleTag({ content: 'html { font-size: 200% !important; }' })
+  // 相对当前根字号翻倍（应用基准是 106.25%），检验“字号翻倍不裁切不重叠”的不变量。
+  const rootFontPx = await page.evaluate(() => (
+    Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
+  ))
+  const zoomStyle = await page.addStyleTag({
+    content: `html { font-size: ${rootFontPx * 2}px !important; }`,
+  })
   await settlePage(page)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   const zoomEvidence = await page.evaluate(({ selectors, baselineSizes, baselineHeading }) => {

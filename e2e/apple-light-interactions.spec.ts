@@ -4,7 +4,7 @@ test('uses the confirmed light mobile system and gives controls physical feedbac
   await page.goto('/styles')
 
   await expect(page.locator('.app-shell')).toHaveAttribute('data-visual-system', 'apple-light')
-  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(246, 247, 249)')
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(233, 237, 242)')
 
   const favorite = page.getByRole('button', { name: '收藏：齐颌短鲍伯' })
   await expect(page.locator('.route-enter-active')).toHaveCount(0)

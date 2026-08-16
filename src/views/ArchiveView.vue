@@ -168,11 +168,29 @@ onBeforeUnmount(() => {
       v-else-if="!store.profile"
       class="archive-empty"
     >
-      <p class="section-index">
-        01 / 本机档案
-      </p>
+      <div
+        class="archive-empty__fan"
+        aria-hidden="true"
+      >
+        <img
+          :src="'/demo/persona-lin-bob.webp'"
+          alt=""
+          loading="lazy"
+        >
+        <img
+          :src="'/demo/persona-ran-sidepart.webp'"
+          alt=""
+          fetchpriority="high"
+        >
+        <img
+          :src="'/demo/persona-qiao-taper.webp'"
+          alt=""
+          loading="lazy"
+        >
+      </div>
+      <p class="archive-empty__disclosure">示例均为 AI 生成的虚构人物</p>
       <h2>这台设备还没有发型档案</h2>
-      <p>先记下你的发质和日常习惯，之后建立的计划与剪后记录才有归属。</p>
+      <p>你的理发记忆会从这里开始：剪过什么、哪次满意、哪里千万别再剪。</p>
       <RouterLink
         v-tactile
         class="archive-primary-link"
@@ -180,8 +198,16 @@ onBeforeUnmount(() => {
       >
         <span>建立档案</span><span aria-hidden="true">→</span>
       </RouterLink>
+      <ul
+        class="archive-trust-list"
+        aria-label="档案的三个承诺"
+      >
+        <li><b>不上传</b><span>只存这台设备</span></li>
+        <li><b>不注册</b><span>不要手机号</span></li>
+        <li><b>不推销</b><span>没有广告办卡</span></li>
+      </ul>
       <p class="archive-trust-note">
-        只保存在当前设备，不会创建账号或同步。清理浏览器数据、使用无痕模式或更换设备，都可能让档案丢失。
+        清理浏览器数据、使用无痕模式或更换设备，都可能让档案丢失。
       </p>
     </div>
 

@@ -96,9 +96,11 @@ describe('app shell', () => {
       screen.getByText('清理浏览器数据、使用无痕模式或更换设备，都可能让记录丢失。'),
     ).toBeTruthy()
 
-    expect(screen.queryByRole('link', { name: '查看发型：柔和侧分' })).toBeNull()
-    expect(screen.queryByRole('img', { name: /AI 生成的虚构成年人物短发造型示例/ }))
-      .toBeNull()
+    // 首开即有照片主视觉：预制示例照片必须诚实标注来源，且提供零门槛的示例入口。
+    const heroVisual = screen.getByRole('link', { name: '查看发型：柔和侧分' })
+    expect(within(heroVisual).getByText('精选方向 · 预制示例')).toBeTruthy()
+    expect(screen.getByRole('img', { name: /AI 生成的虚构成年人物短发造型示例/ })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /先看一个对比示例/ }).getAttribute('href')).toBe('/try')
   })
 
   test('keeps the four destinations visible and exposes the current route', async () => {
@@ -232,7 +234,7 @@ describe('app shell', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: '档案' })).toBeTruthy()
     expect(await screen.findByText('这台设备还没有发型档案')).toBeTruthy()
-    expect(screen.getByText(/只保存在当前设备/)).toBeTruthy()
+    expect(screen.getByText(/只存这台设备/)).toBeTruthy()
     expect(screen.getByText(/清理浏览器数据.*丢失/)).toBeTruthy()
   })
 

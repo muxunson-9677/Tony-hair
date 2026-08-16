@@ -125,12 +125,18 @@ describe('archive routes and forms', () => {
 
   test('does not invent hair facts before a new user has answered', async () => {
     await renderAt('/archive/profile')
+    await screen.findByRole('group', { name: '你的头发平时是什么样？' })
 
-    expect((await screen.findByLabelText('发质') as HTMLSelectElement).value).toBe('unsure')
-    expect((screen.getByLabelText('发丝粗细') as HTMLSelectElement).value).toBe('unsure')
-    expect((screen.getByLabelText('发量') as HTMLSelectElement).value).toBe('unsure')
-    expect((screen.getByLabelText('洗发频率') as HTMLSelectElement).value).toBe('unsure')
-    expect((screen.getByLabelText('日常打理分钟') as HTMLInputElement).value).toBe('')
+    const expectUnsureChecked = (groupName: string) => {
+      const group = screen.getByRole('group', { name: groupName })
+      const checked = within(group).getByRole('radio', { checked: true }) as HTMLInputElement
+      expect(checked.value).toBe('unsure')
+    }
+    expectUnsureChecked('你的头发平时是什么样？')
+    expectUnsureChecked('单根头发摸起来？')
+    expectUnsureChecked('头发整体多不多？')
+    expectUnsureChecked('多久洗一次头？')
+    expectUnsureChecked('每天愿意花多久打理头发？')
   })
 
   test('reveals profile setup in three calm stages instead of one long form', async () => {
@@ -187,9 +193,9 @@ describe('archive routes and forms', () => {
     expect(within(wall).getByRole('img', { name: '我的头发正面照片' })).toBeTruthy()
     expect(within(wall).getByText('正面')).toBeTruthy()
     expect(screen.getByText('性别：女')).toBeTruthy()
-    expect(screen.getByText('更喜欢中性呈现')).toBeTruthy()
+    expect(screen.getByText('中性都行')).toBeTruthy()
     expect(screen.getByText('已保存正面照；以后可以再补侧面、后脑。')).toBeTruthy()
-    expect(screen.getByText('直发 · 细发丝 · 发量适中')).toBeTruthy()
+    expect(screen.getByText('直发 · 发丝细 · 发量正常')).toBeTruthy()
   })
 
   test('gives a photo-less legacy profile one clear personalisation action', async () => {
@@ -496,7 +502,7 @@ describe('archive routes and forms', () => {
     const router = await renderAt('/archive')
 
     expect(await screen.findByText('这台设备还没有发型档案')).toBeTruthy()
-    expect(screen.getByText(/只保存在当前设备/)).toBeTruthy()
+    expect(screen.getByText(/只存这台设备/)).toBeTruthy()
     await fireEvent.click(screen.getByRole('link', { name: '建立档案' }))
     await waitFor(() => expect(router.currentRoute.value.path).toBe('/archive/profile'))
 
@@ -507,17 +513,17 @@ describe('archive routes and forms', () => {
     expect(document.querySelectorAll('input[type="file"]')).toHaveLength(3)
 
     await fireEvent.update(screen.getByLabelText('称呼'), '小林')
-    await fireEvent.update(screen.getByLabelText('发质'), 'wavy')
-    await fireEvent.update(screen.getByLabelText('发丝粗细'), 'fine')
-    await fireEvent.update(screen.getByLabelText('发量'), 'medium')
-    await fireEvent.update(screen.getByLabelText('日常打理分钟'), '12')
-    await fireEvent.update(screen.getByLabelText('洗发频率'), 'every_other_day')
-    await fireEvent.update(screen.getByLabelText('偏好备注'), '希望露耳，但两侧不要推白')
+    await fireEvent.click(screen.getByRole('radio', { name: /有点弯/ }))
+    await fireEvent.click(screen.getByRole('radio', { name: /发丝细/ }))
+    await fireEvent.click(screen.getByRole('radio', { name: /发量正常/ }))
+    await fireEvent.click(screen.getByRole('radio', { name: /10 分钟左右/ }))
+    await fireEvent.click(screen.getByRole('radio', { name: /隔天洗/ }))
+    await fireEvent.update(screen.getByLabelText('还有什么想提前说的？'), '希望露耳，但两侧不要推白')
     await fireEvent.click(screen.getByRole('button', { name: '保存档案' }))
 
     await waitFor(() => expect(router.currentRoute.value.path).toBe('/archive'))
     expect(await screen.findByRole('heading', { level: 2, name: '小林的发型档案' })).toBeTruthy()
-    expect(screen.getByText('微卷 · 细发丝 · 发量适中')).toBeTruthy()
+    expect(screen.getByText('有点弯 · 发丝细 · 发量正常')).toBeTruthy()
     expect(screen.getByRole('region', { name: '下一步' })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: '最近剪后记录' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '还没有Tony卡' })).toBeNull()
